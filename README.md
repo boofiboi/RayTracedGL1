@@ -14,6 +14,13 @@ Removed FSR2 and added FSR3 support - FSR3 works on exactly the same devices, bu
 ## Build
 
 1. Requirements:
+    * 64-bit CPU
+    * GPU with a ray tracing support
+    * [Git](https://github.com/git-for-windows/git/releases)
+    * [CMake](https://cmake.org/download/)
+    * [Vulkan SDK](https://vulkan.lunarg.com/)
+    * [Python 3](https://www.python.org/downloads/) (for building the shaders)
+ 
 
 * 64-bit CPU
 
@@ -28,12 +35,29 @@ Removed FSR2 and added FSR3 support - FSR3 works on exactly the same devices, bu
 * [Python 3](https://www.python.org/downloads/) (for building the shaders)
 
 1. Clone the repository
+    * `git clone https://github.com/sultim-t/RayTracedGL1.git`
 
 *  `git clone https://github.com/sultim-t/RayTracedGL1.git`
 
   
 
 1. Configure with CMake
+    * on Windows, with Visual Studio: 
+        * open the folder as CMake project
+    * otherwise:
+        * specify windowing systems to build the library with, by enabling some of the CMake options:
+            * `RG_WITH_SURFACE_WIN32`
+            * `RG_WITH_SURFACE_METAL`
+            * `RG_WITH_SURFACE_WAYLAND`
+            * `RG_WITH_SURFACE_XCB`
+            * `RG_WITH_SURFACE_XLIB`  
+        * configure
+        ```
+        mkdir Build
+        cd Build
+        cmake ..
+        ```
+        * but make sure that projects that use RTGL1 can find the compiled dynamic library, as it usually assumed that it's in `Build/x64-Debug` or `Build/x64-Release`
 
 * on Windows, with Visual Studio:
 
@@ -70,6 +94,7 @@ cmake ..
   
 
 1. Build
+    * `cmake --build .`
 
 *  `cmake --build .`
 
@@ -107,7 +132,9 @@ Then assign hotkeys to `shaderBuild` and `shaderGenAndBuild` commands in `File->
   
 
 ### Textures
+Some games don't have PBR materials, but to add them, RTGL1 provides 'texture overriding' functionality: application requests to upload an original texture and specifies its name, then RTGL1 tries to find files with such name (appending some suffixes, e.g. `_n` for normal maps, or none for albedo maps) and loads them instead of original ones. These files are in `.ktx2` format with a specific compression and contain image data. 
 
+To generate such textures: 
 Some games don't have PBR materials, but to add them, RTGL1 provides 'texture overriding' functionality: application requests to upload an original texture and specifies its name, then RTGL1 tries to find files with such name (appending some suffixes, e.g. `_n` for normal maps, or none for albedo maps) and loads them instead of original ones. These files are in `.ktx2` format with a specific compression and contain image data.
 
   
@@ -119,7 +146,10 @@ To generate such textures:
 1. Create a folder, put `Tools/CreateKTX2.py`, create folder named `Raw` and `Compressed`.
 
 1. The script:
+   1. scans files (with `INPUT_EXTENSIONS`) in `Raw` folder
+   1. generates corresponding `.ktx2` file to `Compressed` folder, preserving the hierarchy
 
+On RTGL1 initialization, `RgInstanceCreateInfo::pOverridenTexturesFolderPath` should contain a path to the `Compressed` folder. 
 1. scans files (with `INPUT_EXTENSIONS`) in `Raw` folder
 
 1. generates corresponding `.ktx2` file to `Compressed` folder, preserving the hierarchy
