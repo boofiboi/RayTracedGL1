@@ -25,6 +25,8 @@
 
 #include "Framebuffers.h"
 
+#include <FidelityFX/host/ffx_interface.h>
+
 struct FfxFsr3UpscalerContext;
 
 namespace RTGL1
@@ -59,11 +61,20 @@ public:
 
     static bool IsFsr3Available();
 private:
+    void DestroyResources();
+
     VkDevice               device;
     VkPhysicalDevice       physDevice;
 
     std::unique_ptr< FfxFsr3UpscalerContext > context;
     std::vector< uint8_t >                    scratchBuffer;
+    FfxInterface                              backendInterface{};
+    FfxResourceInternal                       dilatedDepthInternal{};
+    FfxResourceInternal                       dilatedMotionVectorsInternal{};
+    FfxResourceInternal                       reconstructedPrevNearestDepthInternal{};
+    FfxResource                               dilatedDepthRes{};
+    FfxResource                               dilatedMotionVectorsRes{};
+    FfxResource                               reconstructedPrevNearestDepthRes{};
     bool                                      isContextCreated{ false };
 };
 }

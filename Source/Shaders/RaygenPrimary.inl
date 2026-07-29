@@ -68,8 +68,13 @@ vec2 getMotionVectorForUpscaler(const vec2 motionCurToPrev)
 
 vec2 getMotionForInfinitePoint(const ivec2 pix)
 {
-    // treat as a point with .w=0, i.e. at infinite distance
-    vec3 rayDir = getRayDir(getPixelUVWithJitter(pix));
+    // treat as a point with .w=0, i.e. at infinite distance.
+    // IMPORTANT: use the unjittered pixel center UV, NOT getPixelUVWithJitter.
+    // Jitter shifts the ray direction, which would bake the sub-pixel jitter offset
+    // into screenSpaceCur. FSR3 would then interpret that per-frame jitter as real
+    // camera motion and smear sky pixels whenever the camera moves.
+    const vec2 pixelCenterUV = (vec2(pix) + vec2(0.5)) / vec2(globalUniform.renderWidth, globalUniform.renderHeight);
+    vec3 rayDir = getRayDir(pixelCenterUV);
 
     vec3 viewSpacePosCur   = mat3(globalUniform.view)     * rayDir;
     vec3 viewSpacePosPrev  = mat3(globalUniform.viewPrev) * rayDir;

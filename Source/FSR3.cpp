@@ -50,14 +50,43 @@ RTGL1::FSR3::FSR3( VkDevice _device, VkPhysicalDevice _physDevice )
 
 RTGL1::FSR3::~FSR3()
 {
+    DestroyResources();
+
     if( isContextCreated && context )
     {
         ffxFsr3UpscalerContextDestroy( context.get() );
     }
 }
 
+void RTGL1::FSR3::DestroyResources()
+{
+    if( backendInterface.fpDestroyResource )
+    {
+        if( dilatedDepthInternal.internalIndex != 0 )
+        {
+            backendInterface.fpDestroyResource( &backendInterface, dilatedDepthInternal, 0 );
+            dilatedDepthInternal = {};
+            dilatedDepthRes = {};
+        }
+        if( dilatedMotionVectorsInternal.internalIndex != 0 )
+        {
+            backendInterface.fpDestroyResource( &backendInterface, dilatedMotionVectorsInternal, 0 );
+            dilatedMotionVectorsInternal = {};
+            dilatedMotionVectorsRes = {};
+        }
+        if( reconstructedPrevNearestDepthInternal.internalIndex != 0 )
+        {
+            backendInterface.fpDestroyResource( &backendInterface, reconstructedPrevNearestDepthInternal, 0 );
+            reconstructedPrevNearestDepthInternal = {};
+            reconstructedPrevNearestDepthRes = {};
+        }
+    }
+}
+
 void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
 {
+    DestroyResources();
+
     if( isContextCreated && context )
     {
         ffxFsr3UpscalerContextDestroy( context.get() );
@@ -68,7 +97,7 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
     FfxFsr3UpscalerContextDescription contextDesc = {
         .flags         = FFX_FSR3UPSCALER_ENABLE_HIGH_DYNAMIC_RANGE |
                          FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE,
-        .maxRenderSize = { resolutionState.renderWidth, resolutionState.renderHeight },
+        .maxRenderSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .maxUpscaleSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .fpMessage     = nullptr,
         .backendInterface = {},
@@ -92,8 +121,22 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         FFX_FSR3UPSCALER_CONTEXT_COUNT );
     CheckError( r );
 
+    backendInterface = contextDesc.backendInterface;
+
     r = ffxFsr3UpscalerContextCreate( context.get(), &contextDesc );
     CheckError( r );
+
+    FfxFsr3UpscalerSharedResourceDescriptions sharedDescs = {};
+    r = ffxFsr3UpscalerGetSharedResourceDescriptions( context.get(), &sharedDescs );
+    CheckError( r );
+
+    backendInterface.fpCreateResource( &backendInterface, &sharedDescs.dilatedDepth, 0, &dilatedDepthInternal );
+    backendInterface.fpCreateResource( &backendInterface, &sharedDescs.dilatedMotionVectors, 0, &dilatedMotionVectorsInternal );
+    backendInterface.fpCreateResource( &backendInterface, &sharedDescs.reconstructedPrevNearestDepth, 0, &reconstructedPrevNearestDepthInternal );
+
+    dilatedDepthRes = backendInterface.fpGetResource( &backendInterface, dilatedDepthInternal );
+    dilatedMotionVectorsRes = backendInterface.fpGetResource( &backendInterface, dilatedMotionVectorsInternal );
+    reconstructedPrevNearestDepthRes = backendInterface.fpGetResource( &backendInterface, reconstructedPrevNearestDepthInternal );
 
     isContextCreated = true;
 }
@@ -217,6 +260,7 @@ RTGL1::FramebufferImageIndex RTGL1::FSR3::Apply(
         FI::FB_IMAGE_INDEX_REACTIVITY, OUTPUT_IMAGE_INDEX,
     };
     InsertBarriers( cmd, frameIndex, *framebuffers, rs, false );
+    // Note: FB_IMAGE_INDEX_REACTIVITY is already included in the barrier above and passed to FSR3
 
     // clang-format off
     FfxFsr3UpscalerDispatchDescription info = {
@@ -225,11 +269,11 @@ RTGL1::FramebufferImageIndex RTGL1::FSR3::Apply(
         .depth                      = ToFSR3Resource( FI::FB_IMAGE_INDEX_DEPTH_NDC, frameIndex, *framebuffers, renderResolution.GetResolutionState(), FFX_RESOURCE_STATE_COMPUTE_READ, L"FSR3_InputDepth" ),
         .motionVectors              = ToFSR3Resource( FI::FB_IMAGE_INDEX_MOTION_DLSS, frameIndex, *framebuffers, renderResolution.GetResolutionState(), FFX_RESOURCE_STATE_COMPUTE_READ, L"FSR3_InputMotionVectors" ),
         .exposure                   = {},
-        .reactive                   = ToFSR3Resource( FI::FB_IMAGE_INDEX_REACTIVITY, frameIndex, *framebuffers, renderResolution.GetResolutionState(), FFX_RESOURCE_STATE_COMPUTE_READ, L"FSR3_InputReactive" ),
+        .reactive                   = ToFSR3Resource( FI::FB_IMAGE_INDEX_REACTIVITY, frameIndex, *framebuffers, renderResolution.GetResolutionState(), FFX_RESOURCE_STATE_COMPUTE_READ, L"FSR3_InputReactivity" ),
         .transparencyAndComposition = {},
-        .dilatedDepth               = {},
-        .dilatedMotionVectors       = {},
-        .reconstructedPrevNearestDepth = {},
+        .dilatedDepth               = dilatedDepthRes,
+        .dilatedMotionVectors       = dilatedMotionVectorsRes,
+        .reconstructedPrevNearestDepth = reconstructedPrevNearestDepthRes,
         .output                     = ToFSR3Resource( OUTPUT_IMAGE_INDEX, frameIndex, *framebuffers, renderResolution.GetResolutionState(), FFX_RESOURCE_STATE_UNORDERED_ACCESS, L"FSR3_OutputColor" ),
         .jitterOffset               = { -jitterOffset.data[ 0 ], -jitterOffset.data[ 1 ] },
         .motionVectorScale          = { float( renderResolution.GetResolutionState().renderWidth ), float( renderResolution.GetResolutionState().renderHeight ) },
