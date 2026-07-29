@@ -62,7 +62,7 @@ public:
             {
                 case RG_RENDER_UPSCALE_TECHNIQUE_NEAREST:
                 case RG_RENDER_UPSCALE_TECHNIQUE_LINEAR:
-                case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2:
+                case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3:
                 case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: break;
                 default:
                     throw RgException(
@@ -95,12 +95,12 @@ public:
         }
 
 
-        if( upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2 )
+        if( upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 )
         {
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_ULTRA_QUALITY )
             {
                 resolutionMode = RG_RENDER_RESOLUTION_MODE_QUALITY;
-                assert( 0 && "Ultra quality should not be used with FSR2" );
+                assert( 0 && "Ultra quality should not be used with FSR3" );
             }
 
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_CUSTOM )
@@ -181,28 +181,28 @@ public:
     uint32_t UpscaledWidth() const { return upscaledWidth; }
     uint32_t UpscaledHeight() const { return upscaledHeight; }
 
-    bool     IsAmdFsr2Enabled() const
+    bool     IsAmdFsr3Enabled() const
     {
-        return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2;
+        return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3;
     }
     bool IsNvDlssEnabled() const
     {
         return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS;
     }
-    bool  IsUpscaleEnabled() const { return IsAmdFsr2Enabled() || IsNvDlssEnabled(); }
+    bool  IsUpscaleEnabled() const { return IsAmdFsr3Enabled() || IsNvDlssEnabled(); }
 
     float GetAmdFsrSharpness() const { return 1.0f; } // 0.0 - max, 1.0 - min
 
-    bool  IsCASInsideFSR2() const
+    bool  IsCASInsideFSR3() const
     {
-        return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2 &&
+        return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 &&
                sharpenTechnique == RG_RENDER_SHARPEN_TECHNIQUE_AMD_CAS;
     }
 
     // For the additional sharpening pass
     bool IsDedicatedSharpeningEnabled() const
     {
-        return IsCASInsideFSR2() ? false : sharpenTechnique != RG_RENDER_SHARPEN_TECHNIQUE_NONE;
+        return IsCASInsideFSR3() ? false : sharpenTechnique != RG_RENDER_SHARPEN_TECHNIQUE_NONE;
     }
     RgRenderSharpenTechnique GetSharpeningTechnique() const { return sharpenTechnique; }
     float                    GetSharpeningIntensity() const { return 1.0f; }

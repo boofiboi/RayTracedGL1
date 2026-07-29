@@ -21,6 +21,7 @@
 #include "MemoryAllocator.h"
 
 #include "Const.h"
+#include "RgException.h"
 
 RTGL1::MemoryAllocator::MemoryAllocator( VkInstance                        _instance,
                                          VkDevice                          _device,
@@ -245,7 +246,7 @@ VkDeviceMemory RTGL1::MemoryAllocator::AllocDedicated( const VkMemoryRequirement
                                                        AllocType                   allocType,
                                                        const char* pDebugName ) const
 {
-    VkDeviceMemory       memory;
+    VkDeviceMemory       memory = VK_NULL_HANDLE;
 
     VkMemoryAllocateInfo memAllocInfo = {
         .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -265,7 +266,12 @@ VkDeviceMemory RTGL1::MemoryAllocator::AllocDedicated( const VkMemoryRequirement
 
     VkResult r = vkAllocateMemory( device, &memAllocInfo, nullptr, &memory );
 
-    VK_CHECKERROR( r );
+    if( r != VK_SUCCESS )
+    {
+        throw RgException( RG_RESULT_GRAPHICS_API_ERROR,
+                           "vkAllocateMemory failed in AllocDedicated with VkResult: " + std::to_string( r ) );
+    }
+
     SET_DEBUG_NAME( device, memory, VK_OBJECT_TYPE_DEVICE_MEMORY, pDebugName );
     return memory;
 }

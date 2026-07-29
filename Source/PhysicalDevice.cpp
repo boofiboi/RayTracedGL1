@@ -98,38 +98,18 @@ VkPhysicalDevice PhysicalDevice::Get() const
 uint32_t PhysicalDevice::GetMemoryTypeIndex( uint32_t memoryTypeBits,
                                              VkFlags  requirementsMask ) const
 {
-    VkMemoryPropertyFlags flagsToIgnore = 0;
-
-    if( requirementsMask & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT )
-    {
-        // device-local memory must not be host visible
-        flagsToIgnore = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    }
-    else
-    {
-        // host visible memory must not be device-local
-        flagsToIgnore = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    }
-
-
-    // for each memory type available for this device
+    // First pass: try to find memory type matching requirementsMask
     for( uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++ )
     {
-        // if type is available
-        if( ( memoryTypeBits & 1u ) == 1 )
+        if( ( memoryTypeBits & ( 1u << i ) ) != 0 )
         {
             VkMemoryPropertyFlags flags = memoryProperties.memoryTypes[ i ].propertyFlags;
 
-            bool                  isSuitable = ( flags & requirementsMask ) == requirementsMask;
-            bool                  isIgnored  = ( flags & flagsToIgnore ) == flagsToIgnore;
-
-            if( isSuitable && !isIgnored )
+            if( ( flags & requirementsMask ) == requirementsMask )
             {
                 return i;
             }
         }
-
-        memoryTypeBits >>= 1u;
     }
 
     throw RgException( RG_RESULT_GRAPHICS_API_ERROR,

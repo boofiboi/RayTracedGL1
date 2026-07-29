@@ -119,6 +119,14 @@ void RTGL1::RasterPass::CreateFramebuffers( uint32_t              renderWidth,
                 depthViews[ i ],
             };
 
+            for( size_t k = 0; k < std::size( attchs ); k++ )
+            {
+                if( attchs[ k ] == VK_NULL_HANDLE )
+                {
+                    throw RgException( RG_RESULT_GRAPHICS_API_ERROR, "World framebuffer attachment " + std::to_string( k ) + " is VK_NULL_HANDLE!" );
+                }
+            }
+
             VkFramebufferCreateInfo fbInfo = {
                 .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                 .renderPass      = worldRenderPass,
@@ -130,7 +138,10 @@ void RTGL1::RasterPass::CreateFramebuffers( uint32_t              renderWidth,
             };
 
             VkResult r = vkCreateFramebuffer( device, &fbInfo, nullptr, &worldFramebuffers[ i ] );
-            VK_CHECKERROR( r );
+            if( r != VK_SUCCESS )
+            {
+                throw RgException( RG_RESULT_GRAPHICS_API_ERROR, "vkCreateFramebuffer worldFramebuffers failed with VkResult: " + std::to_string( r ) );
+            }
 
             SET_DEBUG_NAME( device,
                             worldFramebuffers[ i ],
@@ -145,6 +156,14 @@ void RTGL1::RasterPass::CreateFramebuffers( uint32_t              renderWidth,
                 depthViews[ i ],
             };
 
+            for( size_t k = 0; k < std::size( attchs ); k++ )
+            {
+                if( attchs[ k ] == VK_NULL_HANDLE )
+                {
+                    throw RgException( RG_RESULT_GRAPHICS_API_ERROR, "Sky framebuffer attachment " + std::to_string( k ) + " is VK_NULL_HANDLE!" );
+                }
+            }
+
             VkFramebufferCreateInfo fbInfo = {
                 .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
                 .renderPass      = skyRenderPass,
@@ -156,7 +175,10 @@ void RTGL1::RasterPass::CreateFramebuffers( uint32_t              renderWidth,
             };
 
             VkResult r = vkCreateFramebuffer( device, &fbInfo, nullptr, &skyFramebuffers[ i ] );
-            VK_CHECKERROR( r );
+            if( r != VK_SUCCESS )
+            {
+                throw RgException( RG_RESULT_GRAPHICS_API_ERROR, "vkCreateFramebuffer skyFramebuffers failed with VkResult: " + std::to_string( r ) );
+            }
 
             SET_DEBUG_NAME( device,
                             skyFramebuffers[ i ],

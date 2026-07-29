@@ -7,7 +7,7 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE )
 
 include(CheckIPOSupported)
 check_ipo_supported()
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
 # Vulkan
 message(STATUS "Adding Vulkan. VulkanSDK: $ENV{VULKAN_SDK}")
@@ -81,7 +81,7 @@ set(Sources
     "Source/DecalManager.cpp"
     "Source/EffectBase.cpp"
     "Source/LightGrid.cpp"
-    "Source/FSR2.cpp"
+    "Source/FSR3.cpp"
     "Source/Stb/stb_image.cpp"
     "Source/Stb/stb_image_write.cpp"
     "Source/ImageLoaderDev.cpp"
@@ -124,7 +124,7 @@ set(KTXSources
 
 option(RG_WITH_EXPORTS          "Compile library for export"                ON)
 
-option(RG_WITH_SURFACE_WIN32    "Build with Win32 VkSurfaceKHR support"     OFF)
+option(RG_WITH_SURFACE_WIN32 "Build with Win32 VkSurfaceKHR support" ON)
 option(RG_WITH_SURFACE_METAL    "Build with Metal VkSurfaceKHR support"     OFF)
 option(RG_WITH_SURFACE_WAYLAND  "Build with Wayland VkSurfaceKHR support"   OFF)
 option(RG_WITH_SURFACE_XCB      "Build with Xcb VkSurfaceKHR support"       OFF)
@@ -132,7 +132,7 @@ option(RG_WITH_SURFACE_XLIB     "Build with Xlib VkSurfaceKHR support"      OFF)
 
 option(RG_WITH_NVIDIA_DLSS      "Build RTGL1 with Nvidia DLSS"              OFF)
 option(RG_WITH_IMGUI            "Build RTGL1 with ImGui debug windows"      ON)
-option(RG_WITH_AMD_FSR2         "Build RTGL1 with AMD FSR2"                 ON)
+option(RG_WITH_AMD_FSR3 "Build RTGL1 with AMD FSR3 Upscaling" ON)
 
 option(RG_WITH_EXAMPLES         "Build with examples executable"            ON)
 option(RG_WITH_SHADERS          "Compile shaders during build"              ON)
@@ -148,7 +148,7 @@ if (RG_WITH_EXPORTS)
     add_definitions(-DRG_LIBRARY_EXPORTS)
 endif()
 
-if (RG_WITH_SURFACE_WIN32)
+if (RG_WITH_SURFACE_WIN32 OR RG_USE_SURFACE_WIN32)
     message(STATUS "RG_WITH_SURFACE_WIN32 enabled")
     add_definitions(-DNOMINMAX)
     add_definitions(-DRG_USE_SURFACE_WIN32)
@@ -244,22 +244,25 @@ endif()
 target_link_libraries(RayTracedGL1 PUBLIC Vulkan)
 target_include_directories(RayTracedGL1 PUBLIC "Include")
 
-# FSR2
-if (RG_WITH_AMD_FSR2)
-    message(STATUS "RG_WITH_AMD_FSR2 enabled")
-    add_definitions(-DRG_USE_AMD_FSR2)
-    target_include_directories(RayTracedGL1 PRIVATE "Source/FSR2/include" )
-    if (WIN32)
-        if (BUILD_TYPE STREQUAL "DEBUG")
-            target_link_libraries(RayTracedGL1 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR2/win32/ffx_fsr2_api_x64d.lib" )
-            target_link_libraries(RayTracedGL1 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR2/win32/ffx_fsr2_api_vk_x64d.lib" )
-        else()
-            target_link_libraries(RayTracedGL1 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR2/win32/ffx_fsr2_api_x64.lib" )
-            target_link_libraries(RayTracedGL1 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR2/win32/ffx_fsr2_api_vk_x64.lib" )
-        endif()
-    else()
-        message(FATAL_ERROR "On non-WIN32, please, provide static libraries of FSR2 or disable FSR2")
-    endif()
+# FSR3
+if (RG_WITH_AMD_FSR3)
+    message(STATUS "RG_WITH_AMD_FSR3 enabled")
+    add_definitions(-DRG_USE_AMD_FSR3)
+    set(FFX_API_BACKEND "VK_X64" CACHE STRING "" FORCE)
+    set(FFX_FSR3UPSCALER ON CACHE BOOL "" FORCE)
+    set(FFX_FSR3 OFF CACHE BOOL "" FORCE)
+    set(FFX_FI OFF CACHE BOOL "" FORCE)
+    set(FFX_OF OFF CACHE BOOL "" FORCE)
+    set(FFX_AUTO_COMPILE_SHADERS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(Source/FSR3/sdk)
+    target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include")
+    target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_backend_vk_x64)
+
+    # Copy FSR3 Vulkan DLL to output directory
+    add_custom_command(TARGET RayTracedGL1 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/Source/FSR3/PrebuiltSignedDLL/amd_fidelityfx_vk.dll"
+            "$<TARGET_FILE_DIR:RayTracedGL1>")
 endif()
 
 # Debug windows - ImGui
@@ -304,3 +307,5 @@ if (RG_WITH_SHADERS)
 
     add_dependencies(RayTracedGL1 Shaders)
 endif()
+
+

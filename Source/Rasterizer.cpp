@@ -516,6 +516,12 @@ void RTGL1::Rasterizer::OnShaderReload( const ShaderManager* shaderManager )
 
 void RTGL1::Rasterizer::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
 {
+    if( resolutionState.renderWidth == 0 || resolutionState.renderHeight == 0 ||
+        resolutionState.upscaledWidth == 0 || resolutionState.upscaledHeight == 0 )
+    {
+        return;
+    }
+
     rasterPass->DestroyFramebuffers();
     swapchainPass->DestroyFramebuffers();
 

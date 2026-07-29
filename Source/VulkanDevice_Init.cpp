@@ -412,7 +412,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         *textureManager,
         *tonemapping );
 
-    amdFsr2 = std::make_shared< FSR2 >( 
+    amdFsr3 = std::make_shared< FSR3 >( 
         device, 
         physDevice->Get() );
 
@@ -486,7 +486,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
-    framebuffers->Subscribe( amdFsr2 );
+    framebuffers->Subscribe( amdFsr3 );
     framebuffers->Subscribe( restirBuffers );
 
     if( observer )
@@ -513,7 +513,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
     tonemapping.reset();
     imageComposition.reset();
     bloom.reset();
-    amdFsr2.reset();
+    amdFsr3.reset();
     nvDlss.reset();
     sharpening.reset();
     effectWipe.reset();
@@ -795,6 +795,34 @@ void RTGL1::VulkanDevice::CreateDevice()
         .inheritedQueries                        = 1,
     };
 
+    std::vector< VkExtensionProperties > supportedDeviceExtensions;
+    {
+        uint32_t count = 0;
+        if( vkEnumerateDeviceExtensionProperties( physDevice->Get(), nullptr, &count, nullptr ) ==
+            VK_SUCCESS )
+        {
+            supportedDeviceExtensions.resize( count );
+            vkEnumerateDeviceExtensionProperties(
+                physDevice->Get(), nullptr, &count, supportedDeviceExtensions.data() );
+        }
+    }
+
+    std::vector< const char* > deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
+    };
+
+    const bool hasRobustness2 = std::any_of( supportedDeviceExtensions.cbegin(),
+                                             supportedDeviceExtensions.cend(),
+                                             []( const VkExtensionProperties& ext ) {
+                                                 return !std::strcmp( ext.extensionName, VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
+                                             } );
+
     VkPhysicalDeviceRobustness2FeaturesEXT robustness = {
         .sType               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
         .pNext               = nullptr,
@@ -803,9 +831,14 @@ void RTGL1::VulkanDevice::CreateDevice()
         .nullDescriptor      = true,
     };
 
+    if( hasRobustness2 )
+    {
+        deviceExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
+    }
+
     VkPhysicalDeviceVulkan12Features vulkan12Features = {
         .sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext                    = &robustness,
+        .pNext                    = hasRobustness2 ? &robustness : nullptr,
         .samplerMirrorClampToEdge = 1,
         .drawIndirectCount        = 1,
         .shaderFloat16            = 1,
@@ -849,29 +882,6 @@ void RTGL1::VulkanDevice::CreateDevice()
         .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext    = &asFeatures,
         .features = features,
-    };
-
-
-    std::vector< VkExtensionProperties > supportedDeviceExtensions;
-    {
-        uint32_t count = 0;
-        if( vkEnumerateDeviceExtensionProperties( physDevice->Get(), nullptr, &count, nullptr ) ==
-            VK_SUCCESS )
-        {
-            supportedDeviceExtensions.resize( count );
-            vkEnumerateDeviceExtensionProperties(
-                physDevice->Get(), nullptr, &count, supportedDeviceExtensions.data() );
-        }
-    }
-
-    std::vector deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
-        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
     };
 
     for( const char* n : DLSS::GetDlssVulkanDeviceExtensions() )
@@ -1068,3 +1078,4 @@ void RTGL1::VulkanDevice::ValidateCreateInfo( const RgInstanceCreateInfo* pInfo 
                            "worldForward vector is too small to represent direction" );
     }
 }
+

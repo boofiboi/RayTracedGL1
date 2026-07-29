@@ -926,4 +926,8 @@ void Framebuffers::NotifySubscribersAboutResize( const ResolutionState& resoluti
 void Framebuffers::Subscribe( std::shared_ptr< IFramebuffersDependency > subscriber )
 {
     subscribers.emplace_back( subscriber );
+    if( subscriber && currentResolution.renderWidth > 0 && currentResolution.renderHeight > 0 )
+    {
+        subscriber->OnFramebuffersSizeChange( currentResolution );
+    }
 }

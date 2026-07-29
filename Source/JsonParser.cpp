@@ -40,7 +40,6 @@ template<>                                          \
 struct glz::meta< Type >                            \
 {                                                   \
     using T = Type;                                 \
-    static constexpr std::string_view name = #Type; \
     static constexpr auto value = glz::object(   
 
 #define JSON_TYPE_END                         ); }

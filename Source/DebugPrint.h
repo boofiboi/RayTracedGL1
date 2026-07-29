@@ -63,7 +63,7 @@ namespace debug
             }
 
             auto str =
-                std::vformat( msg, std::make_format_args( std::forward< Args >( args )... ) );
+                std::vformat( msg, std::make_format_args( args... ) );
 
             Print( severity, std::string_view( str ) );
         }

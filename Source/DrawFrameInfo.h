@@ -38,7 +38,7 @@ namespace detail
         constexpr static RgDrawFrameRenderResolutionParams value = {
             .sType                = sType,
             .pNext                = nullptr,
-            .upscaleTechnique     = RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2,
+            .upscaleTechnique     = RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3,
             .sharpenTechnique     = RG_RENDER_SHARPEN_TECHNIQUE_NONE,
             .resolutionMode       = RG_RENDER_RESOLUTION_MODE_QUALITY,
             .customRenderSize     = {},
@@ -398,3 +398,4 @@ private:
 };
 
 }
+

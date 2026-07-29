@@ -63,48 +63,16 @@ void RTGL1::InitDeviceExtensionFunctions_DebugUtils( VkDevice device )
 
 void RTGL1::AddDebugName( VkDevice device, uint64_t obj, VkObjectType type, const char* pName )
 {
-    if( svkSetDebugUtilsObjectNameEXT == nullptr || pName == nullptr )
-    {
-        return;
-    }
-
-    VkDebugUtilsObjectNameInfoEXT nameInfo = {
-        .sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .objectType   = type,
-        .objectHandle = obj,
-        .pObjectName  = pName,
-    };
-
-    VkResult r = svkSetDebugUtilsObjectNameEXT( device, &nameInfo );
-    VK_CHECKERROR( r );
+    // Do not call un-enabled debug utils function pointers
+    return;
 }
 
 void RTGL1::BeginCmdLabel( VkCommandBuffer cmd, const char* pName, const float pColor[ 4 ] )
 {
-    if( svkCmdBeginDebugUtilsLabelEXT == nullptr || pName == nullptr )
-    {
-        return;
-    }
-
-    VkDebugUtilsLabelEXT labelInfo = {
-        .sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
-        .pLabelName = pName,
-    };
-
-    if( pColor != nullptr )
-    {
-        memcpy( labelInfo.color, pColor, sizeof( float ) * 4 );
-    }
-
-    svkCmdBeginDebugUtilsLabelEXT( cmd, &labelInfo );
+    return;
 }
 
 void RTGL1::EndCmdLabel( VkCommandBuffer cmd )
 {
-    if( svkCmdEndDebugUtilsLabelEXT == nullptr )
-    {
-        return;
-    }
-
-    svkCmdEndDebugUtilsLabelEXT( cmd );
+    return;
 }

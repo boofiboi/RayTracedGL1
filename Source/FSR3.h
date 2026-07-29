@@ -20,26 +20,27 @@
 
 #pragma once
 
-#include <optional>
+#include <memory>
+#include <vector>
 
 #include "Framebuffers.h"
 
-struct FfxFsr2Context;
+struct FfxFsr3UpscalerContext;
 
 namespace RTGL1
 {
 class RenderResolutionHelper;
 
-class FSR2 : public IFramebuffersDependency
+class FSR3 : public IFramebuffersDependency
 {
 public:
-    FSR2( VkDevice device, VkPhysicalDevice physDevice );
-    ~FSR2() override;
+    FSR3( VkDevice device, VkPhysicalDevice physDevice );
+    ~FSR3() override;
 
-    FSR2( const FSR2& other )                = delete;
-    FSR2( FSR2&& other ) noexcept            = delete;
-    FSR2& operator=( const FSR2& other )     = delete;
-    FSR2& operator=( FSR2&& other ) noexcept = delete;
+    FSR3( const FSR3& other )                = delete;
+    FSR3( FSR3&& other ) noexcept            = delete;
+    FSR3& operator=( const FSR3& other )     = delete;
+    FSR3& operator=( FSR3&& other ) noexcept = delete;
 
     void OnFramebuffersSizeChange( const ResolutionState& resolutionState ) override;
 
@@ -56,11 +57,13 @@ public:
 
     static RgFloat2D GetJitter( const ResolutionState& resolutionState, uint32_t frameId );
 
-   static bool IsFsr2Available();
+    static bool IsFsr3Available();
 private:
-    VkDevice         device;
-    VkPhysicalDevice physDevice;
+    VkDevice               device;
+    VkPhysicalDevice       physDevice;
 
-    std::unique_ptr< std::optional< FfxFsr2Context > > context;
+    std::unique_ptr< FfxFsr3UpscalerContext > context;
+    std::vector< uint8_t >                    scratchBuffer;
+    bool                                      isContextCreated{ false };
 };
 }

@@ -874,7 +874,7 @@ typedef enum RgRenderUpscaleTechnique
 {
     RG_RENDER_UPSCALE_TECHNIQUE_LINEAR,
     RG_RENDER_UPSCALE_TECHNIQUE_NEAREST,
-    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2,
+    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3,
     RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS,
 } RgRenderUpscaleTechnique;
 
@@ -935,7 +935,7 @@ typedef struct RgDrawFrameInfo
     // View matrix is column major.
     float                       view[ 16 ];
 
-    // Additional info for ray cones, it's used to calculate differentials for texture sampling. Also, for FSR2.
+    // Additional info for ray cones, it's used to calculate differentials for texture sampling. Also, for FSR3.
     float                       fovYRadians;
     // Near and far planes for a projection matrix.
     float                       cameraNear;
@@ -997,3 +997,4 @@ RGAPI void RGCONV               rgUtilExportAsTGA( RgInstance instance, const vo
 #endif
 
 #endif // RTGL1_H_
+

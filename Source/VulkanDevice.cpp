@@ -191,8 +191,8 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
 
         RgFloat2D jitter = renderResolution.IsNvDlssEnabled()
                                ? HaltonSequence::GetJitter_Halton23( frameId )
-                           : renderResolution.IsAmdFsr2Enabled()
-                               ? FSR2::GetJitter( renderResolution.GetResolutionState(), frameId )
+                           : renderResolution.IsAmdFsr3Enabled()
+                               ? FSR3::GetJitter( renderResolution.GetResolutionState(), frameId )
                                : RgFloat2D{ 0, 0 };
 
         gu->jitterX = jitter.data[ 0 ];
@@ -635,9 +635,9 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                    timeDelta,
                                    params.resetUpscalerHistory );
         }
-        else if( renderResolution.IsAmdFsr2Enabled() )
+        else if( renderResolution.IsAmdFsr3Enabled() )
         {
-            accum = amdFsr2->Apply( cmd,
+            accum = amdFsr3->Apply( cmd,
                                     frameIndex,
                                     framebuffers,
                                     renderResolution,
@@ -1267,7 +1267,7 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
         case RG_RENDER_UPSCALE_TECHNIQUE_NEAREST:
         case RG_RENDER_UPSCALE_TECHNIQUE_LINEAR: return true;
 
-        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR2: return amdFsr2->IsFsr2Available();
+        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3: return amdFsr3->IsFsr3Available();
 
         case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: return nvDlss->IsDlssAvailable();
 
@@ -1302,3 +1302,4 @@ void RTGL1::VulkanDevice::Print( std::string_view msg, RgMessageSeverityFlags se
         userPrint->Print( msg.data(), severity );
     }
 }
+
