@@ -326,8 +326,8 @@ struct ShGeometryInstance
     uint firstVertex_Layer1;
     uint firstVertex_Layer2;
     uint firstVertex_Layer3;
-    uint _unused3;
-    uint _unused4;
+    uint waterColorPacked;
+    float waterDensity;
     uint _unused5;
     uint _unused6;
     uint _unused7;

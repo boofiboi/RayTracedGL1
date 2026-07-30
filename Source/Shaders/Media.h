@@ -43,13 +43,24 @@ float getIndexOfRefraction(uint media)
     }
 }
 
-vec3 getMediaTransmittance( uint media, float distance )
+vec3 getMediaTransmittance( uint media, float distance, vec3 perMatWaterColor, float perMatWaterDensity )
 {
     vec3 extinction = vec3( 0.0 );
 
     if( media == MEDIA_TYPE_WATER )
     {
-        extinction = -log( globalUniform.waterColorAndDensity.rgb );
+        float density = ( perMatWaterDensity >= 0.0 ) ? perMatWaterDensity : globalUniform.waterColorAndDensity.a;
+        if( density <= 0.0001f )
+        {
+            // waterDensity == 0: completely crystal clear water
+            return vec3( 1.0 );
+        }
+
+        vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : globalUniform.waterColorAndDensity.rgb;
+        color = max( vec3( 0.001 ), color );
+
+        // Standard extinction coefficient scale: allows normal density values (0.1 - 2.0) to produce natural fog
+        extinction = -log( clamp( color, vec3( 0.01 ), vec3( 0.99 ) ) ) * ( density * 0.5 );
     }
     else if( media == MEDIA_TYPE_ACID )
     {
@@ -58,6 +69,31 @@ vec3 getMediaTransmittance( uint media, float distance )
     }
 
     return exp( -distance * extinction );
+}
+
+vec3 getMediaTransmittance( uint media, float distance )
+{
+    return getMediaTransmittance( media, distance, vec3( -1.0 ), -1.0 );
+}
+
+vec3 getWaterVolumetricFog( uint media, float distance, vec3 perMatWaterColor, float perMatWaterDensity, vec3 transmittance )
+{
+    if( media != MEDIA_TYPE_WATER )
+    {
+        return vec3( 0.0 );
+    }
+
+    float density = ( perMatWaterDensity >= 0.0 ) ? perMatWaterDensity : globalUniform.waterColorAndDensity.a;
+    if( density <= 0.0001f )
+    {
+        return vec3( 0.0 );
+    }
+
+    vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : globalUniform.waterColorAndDensity.rgb;
+
+    // Single scattering albedo fog factor
+    vec3 inscattering = ( vec3( 1.0 ) - transmittance ) * color * 0.15;
+    return inscattering;
 }
 
 #if SHIPPING_HACK

@@ -46,6 +46,9 @@ struct ShTriangle
     uint    emissiveTexture;                    // layerTexCoord[ 0 ]
     
     uint    portalIndex;
+
+    vec3    waterColor;
+    float   waterDensity;
 };
 
 struct ShPayload
@@ -70,6 +73,8 @@ struct ShHitInfo
     uint    instCustomIndex;
     uint    geometryInstanceFlags;
     uint    portalIndex;
+    vec3    waterColor;
+    float   waterDensity;
 };
 
 #endif // STRUCTS_H_

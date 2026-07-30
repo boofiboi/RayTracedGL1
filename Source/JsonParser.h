@@ -73,6 +73,9 @@ struct TextureMeta
 
     bool isThinMedia = false;
 
+    std::optional< std::array< uint8_t, 3 > > waterColor;
+    std::optional< float >                    waterDensity;
+
     float metallicDefault  = 0.0f;
     float roughnessDefault = 1.0f;
     float emissiveMult     = 0.0f;
@@ -129,6 +132,9 @@ struct PrimitiveExtraInfo
     int isSkyVisibility = 0;
     int isAcid          = 0;
     int isThinMedia     = 0;
+
+    std::optional< std::array< uint8_t, 3 > > waterColor;
+    std::optional< float >                    waterDensity;
 };
 
 

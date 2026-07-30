@@ -185,6 +185,20 @@ bool RTGL1::TextureMetaManager::Modify( RgMeshPrimitiveInfo& prim,
             }
         }
 
+        if( meta->waterColor )
+        {
+            editor.waterColorExists = true;
+            editor.waterColor       = { float( ( *meta->waterColor )[ 0 ] ) / 255.0f,
+                                        float( ( *meta->waterColor )[ 1 ] ) / 255.0f,
+                                        float( ( *meta->waterColor )[ 2 ] ) / 255.0f };
+        }
+
+        if( meta->waterDensity )
+        {
+            editor.waterDensityExists = true;
+            editor.waterDensity       = *meta->waterDensity;
+        }
+
         if( ( meta->isWater ) || ( meta->isWaterIfTranslucent && isTranslucent ) )
         {
             prim.flags |= RG_MESH_PRIMITIVE_WATER;

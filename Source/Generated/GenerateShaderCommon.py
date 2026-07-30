@@ -659,8 +659,8 @@ GEOM_INSTANCE_STRUCT = [
     (TYPE_UINT32,       1,      "firstVertex_Layer2",   1),
     (TYPE_UINT32,       1,      "firstVertex_Layer3",   1),
 
-    (TYPE_UINT32,       1,      "_unused3",             1),
-    (TYPE_UINT32,       1,      "_unused4",             1),
+    (TYPE_UINT32,       1,      "waterColorPacked",     1),
+    (TYPE_FLOAT32,      1,      "waterDensity",         1),
     (TYPE_UINT32,       1,      "_unused5",             1),
     (TYPE_UINT32,       1,      "_unused6",             1),
 

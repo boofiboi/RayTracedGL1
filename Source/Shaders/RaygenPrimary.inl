@@ -324,13 +324,23 @@ void main()
 
 
     vec3 throughput = vec3(1.0);
-    throughput *= getMediaTransmittance(currentRayMedia, firstHitDepthLinear);
+    vec3 primaryWaterFog = vec3(0.0);
+    if( currentRayMedia == MEDIA_TYPE_WATER )
+    {
+        vec3 trans = getMediaTransmittance(currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity);
+        throughput *= trans;
+        primaryWaterFog = getWaterVolumetricFog(currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity, trans);
+    }
+    else
+    {
+        throughput *= getMediaTransmittance(currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity);
+    }
 
 
     imageStore(framebufIsSky,               pix, ivec4(0));
     imageStore(framebufAlbedo,              getRegularPixFromCheckerboardPix(pix), vec4(h.albedo, 0.0));
     imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix(pix), vec4(screenEmission * throughput , 0.0));
-    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(getGlowingMediaFog(currentRayMedia, firstHitDepthLinear), 0));
+    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(getGlowingMediaFog(currentRayMedia, firstHitDepthLinear) + primaryWaterFog, 0));
     imageStoreNormal(                       pix, h.normal);
     imageStore(framebufMetallicRoughness,   pix, vec4(h.metallic, h.roughness, 0, 0));
     imageStore(framebufDepthWorld,          pix, vec4(firstHitDepthLinear));
@@ -389,6 +399,16 @@ void main()
         h.metallic                          = mr.r;
         h.roughness                         = mr.g;
     }
+    {
+        int instId, instCustomIndex;
+        int geomIndex, primIndex;
+        unpackInstanceIdAndCustomIndex(primaryToReflRefrBuf.g, instId, instCustomIndex);
+        uint visPacked = floatBitsToUint(texelFetch(framebufVisibilityBuffer_Sampler, pix, 0).r);
+        unpackGeometryAndPrimitiveIndex(visPacked, geomIndex, primIndex);
+        ShTriangle tr = getTriangle(instId, instCustomIndex, geomIndex, primIndex);
+        h.waterColor = ( tr.waterColor.r >= 0.0 ) ? tr.waterColor : globalUniform.waterColorAndDensity.rgb;
+        h.waterDensity = ( tr.waterDensity >= 0.0 ) ? tr.waterDensity : globalUniform.waterColorAndDensity.a;
+    }
     const vec3  motionBuf                   = texelFetch(framebufMotion_Sampler, pix, 0).rgb;
     vec2        motionCurToPrev             = motionBuf.rg;
     float       motionDepthLinearCurToPrev  = motionBuf.b;
@@ -396,6 +416,7 @@ void main()
     vec3        screenEmission              = texelFetch(framebufScreenEmisRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
     vec3        acidFog                     = texelFetch(framebufAcidFogRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
     vec3        throughput                  = texelFetch(framebufThroughput_Sampler, pix, 0).rgb;
+    vec3        waterFogAccum               = acidFog;
     ShPayload currentPayload;
     currentPayload.instIdAndIndex           = primaryToReflRefrBuf.g;
 
@@ -418,6 +439,9 @@ void main()
     propagateRayCone(rayCone, firstHitDepthLinear);
 
 
+
+    vec3 currentWaterColor = h.waterColor;
+    float currentWaterDensity = h.waterDensity;
 
     for (int i = 0; i < globalUniform.reflectRefractMaxDepth; i++)
     {
@@ -482,7 +506,7 @@ void main()
                 float len = globalUniform.thinMediaWidth / max( 0.001, -dot( normal, rayDir ) );
 
                 rayOrigin += rayDir * len;
-                throughput *= getMediaTransmittance( newRayMedia, len );
+                throughput *= getMediaTransmittance( newRayMedia, len, h.waterColor, h.waterDensity );
                 fullPathLength += len;
                 
                 // change media back
@@ -499,6 +523,8 @@ void main()
 
             // change media
             currentRayMedia = newRayMedia;
+            currentWaterColor = h.waterColor;
+            currentWaterDensity = h.waterDensity;
         }
         else if (isPortal)
         {
@@ -554,7 +580,7 @@ void main()
         
         if (!doesPayloadContainHitInfo(currentPayload))
         {
-            throughput *= getMediaTransmittance(currentRayMedia, pow(abs(dot(rayDir, globalUniform.worldUpVector.xyz)), -3));
+            throughput *= getMediaTransmittance(currentRayMedia, pow(abs(dot(rayDir, globalUniform.worldUpVector.xyz)), -3), currentWaterColor, currentWaterDensity);
 
             storeSky(pix, rayDir, true, throughput, wasSplit);
             return;  
@@ -574,16 +600,23 @@ void main()
 
 
         hitInfoWasOverwritten = true;
-        throughput *= getMediaTransmittance(currentRayMedia, rayLen);
+        vec3 trans = getMediaTransmittance(currentRayMedia, rayLen, currentWaterColor, currentWaterDensity);
+        vec3 waterFogInscattering = getWaterVolumetricFog(currentRayMedia, rayLen, currentWaterColor, currentWaterDensity, trans);
+        screenEmission += scrEmis * trans * throughput;
+        // Accumulate fog inscattering (scaled by current throughput so nested refractions work)
+        waterFogAccum += waterFogInscattering * throughput;
+        // Only apply absorption to throughput, NOT the fog color
+        throughput *= trans;
         propagateRayCone(rayCone, rayLen);
         fullPathLength += rayLen;
-        screenEmission += scrEmis * throughput;
         acidFog += getGlowingMediaFog(currentRayMedia, rayLen) * (doSplit ? 2.0 : 1.0);
     }
 
 
     if (!hitInfoWasOverwritten)
     {
+        imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(waterFogAccum, 0));
+        imageStore(framebufThroughput,          pix, vec4(throughput, 0.0));
         return;
     }
 
@@ -591,7 +624,8 @@ void main()
     imageStore(framebufIsSky,               pix, ivec4(0));
     imageStore(framebufAlbedo,              getRegularPixFromCheckerboardPix(pix), vec4(h.albedo, 0.0));
     imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix(pix), vec4(screenEmission + ( globalUniform.cameraMediaType != MEDIA_TYPE_ACID ? acidFog * 0.05 : vec3( 0.0 ) ), 0.0));
-    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(acidFog, 0));
+    // Store water fog (or acid fog) in acidFogRT (blended into illuminated in CmSVGFAtrous before tonemapping)
+    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(waterFogAccum, 0));
     imageStoreNormal(                       pix, h.normal);
     imageStore(framebufMetallicRoughness,   pix, vec4(h.metallic, h.roughness, 0, 0));
     imageStore(framebufDepthWorld,          pix, vec4(fullPathLength));

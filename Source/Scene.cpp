@@ -107,6 +107,7 @@ RTGL1::UploadResult RTGL1::Scene::UploadPrimitive( uint32_t                   fr
                                                    const RgMeshInfo&          mesh,
                                                    const RgMeshPrimitiveInfo& primitive,
                                                    const TextureManager&      textureManager,
+                                                   const TextureMetaManager& textureMeta,
                                                    bool                       isStatic )
 {
     uint64_t uniqueID = UniqueID::MakeForPrimitive( mesh, primitive );
@@ -133,8 +134,17 @@ RTGL1::UploadResult RTGL1::Scene::UploadPrimitive( uint32_t                   fr
         return UploadResult::Fail;
     }
 
+    RgMeshPrimitiveInfo primCopy = primitive;
+    RgEditorInfo        editorDummy = {};
+    if( primCopy.pEditorInfo )
+    {
+        editorDummy = *primCopy.pEditorInfo;
+    }
+    primCopy.pEditorInfo = &editorDummy;
+    textureMeta.Modify( primCopy, editorDummy, isStatic );
+
     if( !asManager->AddMeshPrimitive(
-            frameIndex, mesh, primitive, uniqueID, isStatic, textureManager, *geomInfoMgr ) )
+            frameIndex, mesh, primCopy, uniqueID, isStatic, textureManager, *geomInfoMgr ) )
     {
         return UploadResult::Fail;
     }

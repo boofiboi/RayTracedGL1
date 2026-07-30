@@ -982,7 +982,7 @@ void RTGL1::VulkanDevice::UploadMeshPrimitive( const RgMeshInfo*          pMesh,
     else
     {
         UploadResult r = scene->UploadPrimitive(
-            currentFrameState.GetFrameIndex(), *pMesh, prim, *textureManager, false );
+            currentFrameState.GetFrameIndex(), *pMesh, prim, *textureManager, *textureMetaManager, false );
 
         if( devmode && devmode->primitivesTableMode == Devmode::DebugPrimMode::RayTraced )
         {

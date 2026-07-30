@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Sultim Tsyrendashiev
+﻿// Copyright (c) 2020-2021 Sultim Tsyrendashiev
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -379,6 +379,10 @@ typedef struct RgEditorInfo
     RgBool32                        attachedLightExists;
     RgBool32                        attachedLightEvenOnDynamic;
     RgEditorAttachedLightInfo       attachedLight;
+      RgBool32                        waterColorExists;
+      RgFloat3D                       waterColor;
+      RgBool32                        waterDensityExists;
+      float                           waterDensity;
 } RgEditorInfo;
 
 // Primitive is an indexed or non-indexed geometry with a material.
@@ -712,7 +716,7 @@ typedef struct RgDrawFrameVolumetricParams
     RgFloat3D       ambientColor;
     // Default: 0.2
     float           scaterring;
-    // g parameter [-1..1] for the Henyey�Greenstein phase function.
+    // g parameter [-1..1] for the Henyey–Greenstein phase function.
     // Default: 0.0 (isotropic)
     float           assymetry;
     // If true, maintain a world-space grid, each cell of which contains

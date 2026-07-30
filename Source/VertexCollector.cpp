@@ -331,6 +331,16 @@ bool RTGL1::VertexCollector::AddPrimitive( uint32_t                          fra
         .firstVertex_Layer1 = texcIndex_1,
         .firstVertex_Layer2 = texcIndex_2,
         .firstVertex_Layer3 = texcIndex_3,
+
+        .waterColorPacked = ( info.pEditorInfo && info.pEditorInfo->waterColorExists )
+                                ? ( Utils::PackColorFromFloat( info.pEditorInfo->waterColor.data[ 0 ],
+                                                             info.pEditorInfo->waterColor.data[ 1 ],
+                                                             info.pEditorInfo->waterColor.data[ 2 ],
+                                                             1.0f ) | 0xFF000000u )
+                                : 0,
+        .waterDensity = ( info.pEditorInfo && info.pEditorInfo->waterDensityExists )
+                            ? std::max( 0.0f, info.pEditorInfo->waterDensity )
+                            : -1.0f,
     };
 
 

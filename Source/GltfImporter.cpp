@@ -879,7 +879,21 @@ void RTGL1::GltfImporter::UploadToScene( VkCommandBuffer           cmd,
                 dstPrim.flags |= RG_MESH_PRIMITIVE_THIN_MEDIA;
             }
 
-            auto r = scene.UploadPrimitive( frameIndex, dstMesh, dstPrim, textureManager, true );
+            if( primitiveExtra.waterColor )
+            {
+                editorInfo.waterColorExists = true;
+                editorInfo.waterColor       = { float( ( *primitiveExtra.waterColor )[ 0 ] ) / 255.0f,
+                                                float( ( *primitiveExtra.waterColor )[ 1 ] ) / 255.0f,
+                                                float( ( *primitiveExtra.waterColor )[ 2 ] ) / 255.0f };
+            }
+
+            if( primitiveExtra.waterDensity )
+            {
+                editorInfo.waterDensityExists = true;
+                editorInfo.waterDensity       = *primitiveExtra.waterDensity;
+            }
+
+            auto r = scene.UploadPrimitive( frameIndex, dstMesh, dstPrim, textureManager, textureMeta, true );
 
 
             if( !( r == UploadResult::Static || r == UploadResult::ExportableStatic ) )

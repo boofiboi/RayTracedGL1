@@ -496,6 +496,11 @@ ShTriangle getTriangle(int instanceID, int instanceCustomIndex, int localGeometr
     tr.geometryInstanceFlags = inst.flags;
     tr.portalIndex = 0;
 
+    tr.waterColor = ( inst.waterColorPacked != 0 )
+                        ? pow( unpackUintColor( inst.waterColorPacked ).rgb, vec3( 2.2 ) )
+                        : vec3( -1.0 );
+    tr.waterDensity = inst.waterDensity;
+
     return tr;
 }
 

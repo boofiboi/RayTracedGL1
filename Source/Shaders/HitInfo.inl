@@ -461,6 +461,8 @@ ShHitInfo getHitInfoBounce(
     h.instCustomIndex = instCustomIndex;
     h.geometryInstanceFlags = tr.geometryInstanceFlags;
     h.portalIndex = tr.portalIndex;
+    h.waterColor = tr.waterColor;
+    h.waterDensity = tr.waterDensity;
 
     return h;
 }

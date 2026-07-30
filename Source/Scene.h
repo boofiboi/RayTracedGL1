@@ -72,6 +72,7 @@ public:
                                   const RgMeshInfo&          mesh,
                                   const RgMeshPrimitiveInfo& primitive,
                                   const TextureManager&      textureManager,
+                                  const TextureMetaManager& textureMeta,
                                   bool                       isStatic );
 
     UploadResult UploadLight( uint32_t               frameIndex,

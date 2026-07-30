@@ -158,6 +158,8 @@ JSON_TYPE( RTGL1::TextureMeta )
     , "isGlassIfSmooth", &T::isGlassIfSmooth
     , "isMirrorIfSmooth", &T::isMirrorIfSmooth
     , "isThinMedia", &T::isThinMedia
+    , "waterColor", &T::waterColor
+    , "waterDensity", &T::waterDensity
     , "metallicDefault", &T::metallicDefault
     , "roughnessDefault", &T::roughnessDefault
     , "emissiveMult", &T::emissiveMult
@@ -268,6 +270,8 @@ JSON_TYPE( RTGL1::PrimitiveExtraInfo )
     , "isSkyVisibility", &T::isSkyVisibility
     , "isAcid", &T::isAcid
     , "isThinMedia", &T::isThinMedia
+    , "waterColor", &T::waterColor
+    , "waterDensity", &T::waterDensity
 JSON_TYPE_END;
 // clang-format on
 
