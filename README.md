@@ -20,6 +20,7 @@ It is intended to be used in addition to my fork of xash-rt, which also includes
 ## Improvements over original RTGL1
 
 Removed FSR2 and added FSR3 support - FSR3 works on exactly the same devices, but with better performance and better visual quality.
+
 Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
   
 
