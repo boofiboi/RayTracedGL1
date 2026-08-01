@@ -20,10 +20,8 @@
 
 #pragma once
 
-#include <format>
+#include <fmt/format.h>
 #include <string_view>
-
-// TODO: fmt instead of std::format? for compile-time checks
 
 namespace RTGL1
 {
@@ -63,7 +61,7 @@ namespace debug
             }
 
             auto str =
-                std::vformat( msg, std::make_format_args( args... ) );
+                fmt::vformat( msg, fmt::make_format_args( args... ) );
 
             Print( severity, std::string_view( str ) );
         }

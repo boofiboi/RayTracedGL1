@@ -1249,6 +1249,7 @@ bool RTGL1::VulkanDevice::IsSuspended() const
 {
     if( !swapchain )
     {
+        debug::Info( "IsSuspended: no swapchain yet\n" );
         return false;
     }
 
@@ -1257,7 +1258,30 @@ bool RTGL1::VulkanDevice::IsSuspended() const
         return false;
     }
 
-    return !swapchain->IsExtentOptimal();
+    bool extentOptimal = swapchain->IsExtentOptimal();
+    if( !extentOptimal )
+    {
+        VkSurfaceCapabilitiesKHR surfCapabilities;
+        if( physDevice && surface != VK_NULL_HANDLE )
+        {
+            VkResult r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+                physDevice->Get(), surface, &surfCapabilities );
+            if( r == VK_SUCCESS )
+            {
+                debug::Info( "IsSuspended: extent not optimal. "
+                    "currentExtent=(%u,%u) maxImageExtent=(%u,%u) "
+                    "swapchain=%p\n",
+                    surfCapabilities.currentExtent.width,
+                    surfCapabilities.currentExtent.height,
+                    surfCapabilities.maxImageExtent.width,
+                    surfCapabilities.maxImageExtent.height,
+                    (void*)swapchain.get() );
+            }
+        }
+        return true;
+    }
+
+    return false;
 }
 
 bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique technique ) const
