@@ -26,7 +26,7 @@ Ability to set color of brushes/textures marked with "isWater:true" with "waterC
 
 ## Build
 
-  
+
 
 1. Requirements:
 
@@ -44,50 +44,16 @@ Ability to set color of brushes/textures marked with "isWater:true" with "waterC
 
 * [FSR3 SDK](https://gpuopen.com/fidelityfx-super-resolution-3/#:~:text=Download%20the%20latest%20version%20%2D%20v3.1.5)
 
-  
 
-* 64-bit CPU
 
-  
-
-* GPU with a ray tracing support
-
-  
-
-* [Git](https://github.com/git-for-windows/git/releases)
-
-  
-
-* [CMake](https://cmake.org/download/)
-
-  
-
-* [Vulkan SDK](https://vulkan.lunarg.com/)
-
-  
-
-* [Python 3](https://www.python.org/downloads/) (for building the shaders)
-
-  
-
-* [FSR3 SDK](https://gpuopen.com/fidelityfx-super-resolution-3/#:~:text=Download%20the%20latest%20version%20%2D%20v3.1.5)
-
-  
 
 1. Clone the repository
 
-*  `git clone https://github.com/boofiboi/RayTracedGL1.git`
-
+*  `git clone https://github.com/boofiboi/RayTracedGL1.git --recursive`
   
-
-*  `git clone https://github.com/boofiboi/RayTracedGL1.git`
-
-  
-
-  
-
 1. Extract the FSR3 sdk into Source/FSR3
-2. Configure with CMake
+2. 
+3. Configure with CMake
 
 * on Windows, with Visual Studio:
 
@@ -107,21 +73,17 @@ Ability to set color of brushes/textures marked with "isWater:true" with "waterC
 
 *  `RG_WITH_SURFACE_XLIB`
 
-* configure
+* configure (Command defaults to WIN32)
+
+```
+cmake -S E:/Xash/RayTracedGL1 -B E:/Xash/RayTracedGL1/Build/x64-Release -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DRG_WITH_NRD=ON -DRG_WITH_AMD_FSR3=ON -DRG_WITH_EXPORTS=ON -DRG_WITH_SHADERS=ON -DRG_WITH_IMGUI=ON -DRG_WITH_SURFACE_WIN32=ON -DSHADERMAKE_FIND_DXC=OFF -DSHADERMAKE_FIND_DXC_VK=ON
 
 ```
 
-mkdir Build
+* Compile
 
-cd Build
+*  `cmake --build E:/Xash/RayTracedGL1/Build/x64-Release -j` - Builds "Release with debug info" build.
 
-cmake ..
-
-```
-
-* but make sure that projects that use RTGL1 can find the compiled dynamic library, as it usually assumed that it's in `Build/x64-Debug` or `Build/x64-Release`
-
-  
   
 
 ### Notes:
