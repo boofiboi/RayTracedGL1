@@ -160,6 +160,7 @@ JSON_TYPE( RTGL1::TextureMeta )
     , "isThinMedia", &T::isThinMedia
     , "waterColor", &T::waterColor
     , "waterDensity", &T::waterDensity
+    , "waterReflectivity", &T::waterReflectivity
     , "metallicDefault", &T::metallicDefault
     , "roughnessDefault", &T::roughnessDefault
     , "emissiveMult", &T::emissiveMult
@@ -272,6 +273,7 @@ JSON_TYPE( RTGL1::PrimitiveExtraInfo )
     , "isThinMedia", &T::isThinMedia
     , "waterColor", &T::waterColor
     , "waterDensity", &T::waterDensity
+    , "waterReflectivity", &T::waterReflectivity
 JSON_TYPE_END;
 // clang-format on
 

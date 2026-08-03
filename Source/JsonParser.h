@@ -75,6 +75,7 @@ struct TextureMeta
 
     std::optional< std::array< uint8_t, 3 > > waterColor;
     std::optional< float >                    waterDensity;
+    std::optional< float >                    waterReflectivity;
 
     float metallicDefault  = 0.0f;
     float roughnessDefault = 1.0f;
@@ -135,6 +136,7 @@ struct PrimitiveExtraInfo
 
     std::optional< std::array< uint8_t, 3 > > waterColor;
     std::optional< float >                    waterDensity;
+    std::optional< float >                    waterReflectivity;
 };
 
 
