@@ -434,6 +434,7 @@ void main()
         ShTriangle tr = getTriangle(instId, instCustomIndex, geomIndex, primIndex);
         h.waterColor = ( tr.waterColor.r >= 0.0 ) ? tr.waterColor : globalUniform.waterColorAndDensity.rgb;
         h.waterDensity = ( tr.waterDensity >= 0.0 ) ? tr.waterDensity : globalUniform.waterColorAndDensity.a;
+        h.waterReflectivity = ( tr.waterReflectivity >= 0.0 ) ? tr.waterReflectivity : 1.0;
     }
     const vec3  motionBuf                   = texelFetch(framebufMotion_Sampler, pix, 0).rgb;
     vec2        motionCurToPrev             = motionBuf.rg;
@@ -519,6 +520,11 @@ void main()
             doRefraction = false;
             doSplit = false;
             F = 1.0;
+        }
+
+        if( isWater )
+        {
+            F *= ( h.waterReflectivity >= 0.0 ) ? clamp( h.waterReflectivity, 0.0, 1.0 ) : 1.0;
         }
         
         if (doRefraction)
