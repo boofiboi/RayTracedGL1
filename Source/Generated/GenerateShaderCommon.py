@@ -405,6 +405,7 @@ CONST = {
     "DEBUG_SHOW_FLAG_LIGHT_GRID"            : BIT( 8 ),
     "DEBUG_SHOW_FLAG_ALBEDO_WHITE"          : BIT( 9 ),
     "DEBUG_SHOW_FLAG_NORMALS"               : BIT( 10 ),
+    "DEBUG_SHOW_FLAG_REFRACT_RAW"           : BIT( 11 ),
     
     "MAX_RAY_LENGTH"                        : "10000.0",
 
