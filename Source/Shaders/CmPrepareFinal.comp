@@ -221,6 +221,25 @@ vec3 processDebug(const ivec2 pix, const vec3 fallback)
         vec3 n = texelFetchNormal( getCheckerboardPix( pix ) ).rgb;
         return ( n * 0.5 + 0.5 );
     }
+    else if( ( globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_REFRACT_RAW ) != 0 )
+    {
+        // Show exactly what the reflection/refraction pass stored in the G-buffer.
+        // - wasSplit == 1.0: refraction overwrote the pixel with a traced hit (shown at full brightness)
+        // - wasSplit == -1.0: glass/water pixel handled by refl/refr pass, but no split happened
+        // - wasSplit == 0.0: not a glass/water pixel (primary data only, dimmed)
+        const ivec2 cbp     = getCheckerboardPix( pix );
+        const vec3  albedo  = texelFetch( framebufAlbedo_Sampler, getRegularPixFromCheckerboardPix( pix ), 0 ).rgb;
+        const float wasSplit = texelFetch( framebufThroughput_Sampler, cbp, 0 ).a;
+        if( wasSplit == 1.0 )
+        {
+            return albedo;
+        }
+        else if( wasSplit == -1.0 )
+        {
+            return albedo * 0.5 + vec3( 1.0, 0.2, 0.2 ) * 0.5;
+        }
+        return albedo * 0.15;
+    }
 
     return fallback;
 }

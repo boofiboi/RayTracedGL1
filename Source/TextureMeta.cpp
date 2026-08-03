@@ -71,21 +71,45 @@ auto RTGL1::TextureMetaManager::Access( const char* pTextureName ) const
         return std::nullopt;
     }
 
+    auto Find = [ this ]( const std::string& name ) -> std::optional< TextureMeta > {
+        if( auto found = dataScene.find( name ); found != dataScene.end() )
+        {
+            return found->second;
+        }
+        if( auto found = dataGlobal.find( name ); found != dataGlobal.end() )
+        {
+            return found->second;
+        }
+        return std::nullopt;
+    };
+
     auto strTextureName = std::string( pTextureName );
+    if( auto meta = Find( strTextureName ) )
     {
-        auto found = dataScene.find( strTextureName );
-        if( found != dataScene.end() )
-        {
-            return found->second;
-        }
+        return meta;
     }
+
+    // The engine may pass the texture name in a different form than the
+    // textures.json key, e.g. "#maps/!watergreen.mip" vs "!watergreen".
+    // Try a normalized form before giving up.
+    constexpr std::string_view MAPS_PREFIX = "#maps/";
+    constexpr std::string_view MIP_SUFFIX  = ".mip";
+
+    std::string normalized = strTextureName;
+    if( normalized.starts_with( MAPS_PREFIX ) )
     {
-        auto found = dataGlobal.find( strTextureName );
-        if( found != dataGlobal.end() )
-        {
-            return found->second;
-        }
+        normalized.erase( 0, MAPS_PREFIX.size() );
     }
+    if( normalized.ends_with( MIP_SUFFIX ) )
+    {
+        normalized.erase( normalized.size() - MIP_SUFFIX.size(), MIP_SUFFIX.size() );
+    }
+
+    if( normalized != strTextureName )
+    {
+        return Find( normalized );
+    }
+
     return std::nullopt;
 }
 

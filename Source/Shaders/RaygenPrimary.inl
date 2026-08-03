@@ -327,13 +327,39 @@ void main()
     vec3 primaryWaterFog = vec3(0.0);
     if( currentRayMedia == MEDIA_TYPE_WATER )
     {
-        vec3 trans = getMediaTransmittance(currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity);
+        // while the camera is inside water, the first hit is usually the floor
+        // or walls, whose material carries no water properties. Probe the water
+        // surface above the camera to resolve the enclosing water's color and
+        // density (e.g. waterColor / waterDensity from the texture JSON).
+        vec3 waterColor = h.waterColor;
+        float waterDensity = h.waterDensity;
+        if( waterDensity < 0.0 )
+        {
+            const ShPayload upProbe = tracePrimaryRay( cameraOrigin, globalUniform.worldUpVector.xyz );
+            if( doesPayloadContainHitInfo( upProbe ) )
+            {
+                int instId, instCustomIndex;
+                unpackInstanceIdAndCustomIndex( upProbe.instIdAndIndex, instId, instCustomIndex );
+                int geomIndex, primIndex;
+                unpackGeometryAndPrimitiveIndex( upProbe.geomAndPrimIndex, geomIndex, primIndex );
+                const ShTriangle tr = getTriangle( instId, instCustomIndex, geomIndex, primIndex );
+                if( tr.waterDensity >= 0.0 )
+                {
+                    waterDensity = tr.waterDensity;
+                    if( tr.waterColor.r >= 0.0 )
+                    {
+                        waterColor = tr.waterColor;
+                    }
+                }
+            }
+        }
+        vec3 trans = getMediaTransmittance( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity );
         throughput *= trans;
-        primaryWaterFog = getWaterVolumetricFog(currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity, trans);
+        primaryWaterFog = getWaterVolumetricFog( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity, trans );
     }
     else
     {
-        throughput *= getMediaTransmittance(currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity);
+        throughput *= getMediaTransmittance( currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity );
     }
 
 

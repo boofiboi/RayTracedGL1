@@ -299,8 +299,14 @@ ShHitInfo getHitInfoBounce(
 #if defined(HITINFO_INL_RFL)
     virtualPosForMotion += viewDir * rayLen;
 
+    // account for the hit geometry's own motion between frames; without it the motion
+    // vector only reflects camera movement, so the temporal accumulation rejects the
+    // reprojected history of moving geometry, and such models vanish when seen through
+    // reflecting/refracting surfaces (e.g. crushers and barnacle tongues below water)
+    const vec3 hitPosPrev = tr.prevPositions * baryCoords;
+
     const vec4 viewSpacePosCur   = globalUniform.view     * vec4(virtualPosForMotion, 1.0);
-    const vec4 viewSpacePosPrev  = globalUniform.viewPrev * vec4(virtualPosForMotion, 1.0);
+    const vec4 viewSpacePosPrev  = globalUniform.viewPrev * vec4(virtualPosForMotion - (h.hitPosition - hitPosPrev), 1.0);
     const vec4 clipSpacePosCur   = globalUniform.projection     * viewSpacePosCur;
     const vec4 clipSpacePosPrev  = globalUniform.projectionPrev * viewSpacePosPrev;
     const vec3 ndcCur            = clipSpacePosCur.xyz  / clipSpacePosCur.w;

@@ -177,7 +177,9 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
         gu->frameId   = frameId;
         gu->timeDelta = static_cast< float >(
             std::max< double >( currentFrameTime - previousFrameTime, 0.001 ) );
-        gu->time = static_cast< float >( currentFrameTime );
+        // monotonic clock, see RenderFrame: post-effect transitions must not
+        // depend on the (resettable) game clock
+        gu->time = static_cast< float >( currentFrameTime + postEffectTimeOffset );
     }
 
     {
@@ -660,7 +662,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                                 uniform,
                                                 renderResolution.UpscaledWidth(),
                                                 renderResolution.UpscaledHeight(),
-                                                float( currentFrameTime ) };
+                                                float( currentFrameTime + postEffectTimeOffset ) };
     {
         if( renderResolution.IsDedicatedSharpeningEnabled() )
         {
@@ -867,6 +869,18 @@ void RTGL1::VulkanDevice::DrawFrame( const RgDrawFrameInfo* pOriginalInfo )
 
     previousFrameTime = currentFrameTime;
     currentFrameTime  = info.currentTime;
+
+    // The game clock (info.currentTime) is not monotonic: it resets to a small
+    // value on level change / save load. If a post-effect transition is in
+    // progress at that moment, comparing the new clock against the recorded
+    // begin time yields a large negative delta: EffectSimple::Setup would keep
+    // dispatching the effect and the shader's progress would clamp to full
+    // strength until the clock catches up. Accumulate the rewind and drive
+    // transitions (and globalUniform.time) with a monotonic clock instead.
+    if( currentFrameTime < previousFrameTime )
+    {
+        postEffectTimeOffset += previousFrameTime - currentFrameTime;
+    }
 
     renderResolution.Setup( AccessParams< RgDrawFrameRenderResolutionParams >( info ),
                             swapchain->GetWidth(),

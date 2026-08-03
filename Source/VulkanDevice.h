@@ -242,6 +242,10 @@ private:
 
     double previousFrameTime;
     double currentFrameTime;
+    // post-effect transitions (waves, teleport, tint, ...) must not be driven
+    // by the game clock directly: it is not monotonic, it resets to a small
+    // value on level change / save load. Keeps transitions continuous in such cases.
+    double postEffectTimeOffset;
 
     bool vsync;
 };
