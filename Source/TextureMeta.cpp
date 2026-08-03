@@ -223,6 +223,12 @@ bool RTGL1::TextureMetaManager::Modify( RgMeshPrimitiveInfo& prim,
             editor.waterDensity       = *meta->waterDensity;
         }
 
+        if( meta->waterReflectivity )
+        {
+            editor.waterReflectivityExists = true;
+            editor.waterReflectivity       = *meta->waterReflectivity;
+        }
+
         if( ( meta->isWater ) || ( meta->isWaterIfTranslucent && isTranslucent ) )
         {
             prim.flags |= RG_MESH_PRIMITIVE_WATER;

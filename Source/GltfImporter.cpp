@@ -893,6 +893,12 @@ void RTGL1::GltfImporter::UploadToScene( VkCommandBuffer           cmd,
                 editorInfo.waterDensity       = *primitiveExtra.waterDensity;
             }
 
+            if( primitiveExtra.waterReflectivity )
+            {
+                editorInfo.waterReflectivityExists = true;
+                editorInfo.waterReflectivity       = *primitiveExtra.waterReflectivity;
+            }
+
             auto r = scene.UploadPrimitive( frameIndex, dstMesh, dstPrim, textureManager, textureMeta, true );
 
 
