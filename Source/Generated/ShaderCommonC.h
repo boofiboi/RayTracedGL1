@@ -162,7 +162,6 @@ namespace RTGL1
 #define DEBUG_SHOW_FLAG_LIGHT_GRID (1 << 8)
 #define DEBUG_SHOW_FLAG_ALBEDO_WHITE (1 << 9)
 #define DEBUG_SHOW_FLAG_NORMALS (1 << 10)
-#define DEBUG_SHOW_FLAG_REFRACT_RAW (1 << 11)
 #define MAX_RAY_LENGTH (10000.0)
 #define MEDIA_TYPE_VACUUM (0)
 #define MEDIA_TYPE_WATER (1)
@@ -334,7 +333,7 @@ struct ShGeometryInstance
     uint32_t firstVertex_Layer3;
     uint32_t waterColorPacked;
     float waterDensity;
-    uint32_t _unused5;
+    float waterReflectivity;
     uint32_t _unused6;
     uint32_t _unused7;
     uint32_t _unused8;
