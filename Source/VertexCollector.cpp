@@ -341,6 +341,9 @@ bool RTGL1::VertexCollector::AddPrimitive( uint32_t                          fra
         .waterDensity = ( info.pEditorInfo && info.pEditorInfo->waterDensityExists )
                             ? std::max( 0.0f, info.pEditorInfo->waterDensity )
                             : -1.0f,
+        .waterReflectivity = ( info.pEditorInfo && info.pEditorInfo->waterReflectivityExists )
+                                 ? std::clamp( info.pEditorInfo->waterReflectivity, 0.0f, 1.0f )
+                                 : -1.0f,
     };
 
 
