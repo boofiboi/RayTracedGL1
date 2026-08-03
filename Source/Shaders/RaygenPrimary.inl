@@ -429,7 +429,7 @@ void main()
         int instId, instCustomIndex;
         int geomIndex, primIndex;
         unpackInstanceIdAndCustomIndex(primaryToReflRefrBuf.g, instId, instCustomIndex);
-        uint visPacked = floatBitsToUint(texelFetch(framebufVisibilityBuffer_Sampler, pix, 0).r);
+        uint visPacked = floatBitsToUint(texelFetch(framebufVisibilityBuffer_Sampler, pix, 0).g);
         unpackGeometryAndPrimitiveIndex(visPacked, geomIndex, primIndex);
         ShTriangle tr = getTriangle(instId, instCustomIndex, geomIndex, primIndex);
         h.waterColor = ( tr.waterColor.r >= 0.0 ) ? tr.waterColor : globalUniform.waterColorAndDensity.rgb;
