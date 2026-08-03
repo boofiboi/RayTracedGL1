@@ -469,6 +469,7 @@ ShHitInfo getHitInfoBounce(
     h.portalIndex = tr.portalIndex;
     h.waterColor = tr.waterColor;
     h.waterDensity = tr.waterDensity;
+    h.waterReflectivity = tr.waterReflectivity;
 
     return h;
 }

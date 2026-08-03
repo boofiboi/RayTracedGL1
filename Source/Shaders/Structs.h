@@ -49,6 +49,7 @@ struct ShTriangle
 
     vec3    waterColor;
     float   waterDensity;
+    float   waterReflectivity;
 };
 
 struct ShPayload
@@ -75,6 +76,7 @@ struct ShHitInfo
     uint    portalIndex;
     vec3    waterColor;
     float   waterDensity;
+    float   waterReflectivity;
 };
 
 #endif // STRUCTS_H_

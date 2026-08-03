@@ -500,6 +500,7 @@ ShTriangle getTriangle(int instanceID, int instanceCustomIndex, int localGeometr
                         ? pow( unpackUintColor( inst.waterColorPacked ).rgb, vec3( 2.2 ) )
                         : vec3( -1.0 );
     tr.waterDensity = inst.waterDensity;
+    tr.waterReflectivity = inst.waterReflectivity;
 
     return tr;
 }
