@@ -383,6 +383,8 @@ typedef struct RgEditorInfo
       RgFloat3D                       waterColor;
       RgBool32                        waterDensityExists;
       float                           waterDensity;
+      RgBool32                        waterReflectivityExists;
+      float                           waterReflectivity;
 } RgEditorInfo;
 
 // Primitive is an indexed or non-indexed geometry with a material.
