@@ -670,6 +670,7 @@ VkExtent2D RTGL1::Framebuffers::GetFramebufSize( const ResolutionState& resoluti
     {
         switch( index )
         {
+            case FB_IMAGE_INDEX_BLOOM_RESULT: downscale = 2; break;
             case FB_IMAGE_INDEX_BLOOM_INPUT: downscale = 2; break;
             case FB_IMAGE_INDEX_BLOOM_MIP1: downscale = 4; break;
             case FB_IMAGE_INDEX_BLOOM_MIP2: downscale = 8; break;

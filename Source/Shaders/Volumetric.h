@@ -28,20 +28,6 @@
 
 #define VOLUMETRIC_DISTANCE_POW 2.5
 
-float volume_getSlabThickness( const int cellZ )
-{
-    float n = globalUniform.volumeCameraNear;
-    float f = globalUniform.volumeCameraFar;
-
-    float z0 = float( cellZ ) / float( VOLUMETRIC_SIZE_Z );
-    float z1 = float( cellZ + 1 ) / float( VOLUMETRIC_SIZE_Z );
-
-    z0 = pow( z0, VOLUMETRIC_DISTANCE_POW );
-    z1 = pow( z1, VOLUMETRIC_DISTANCE_POW );
-
-    return ( f - n ) * ( z1 - z0 );
-}
-
 vec3 volume_getCenter_T( const ivec3 cell, const mat4 viewprojInv, const vec3 origin )
 {
     vec3 local =
