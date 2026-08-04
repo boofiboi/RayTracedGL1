@@ -31,7 +31,6 @@ struct SampleIndirect
 struct ReservoirIndirect
 {
     SampleIndirect  selected;
-    float           selected_targetPdf; // todo: remove? as it's easily calculated
     float           weightSum;
     uint            M;
 };
@@ -53,7 +52,6 @@ ReservoirIndirect emptyReservoirIndirect()
     r.selected.position = vec3(0.0);
     r.selected.normal = vec3(0.0);
     r.selected.radiance = vec3(0.0);
-    r.selected_targetPdf = 0.0;
     r.weightSum = 0.0;
     r.M = 0;
     return r;
@@ -61,7 +59,7 @@ ReservoirIndirect emptyReservoirIndirect()
 
 float calcSelectedSampleWeightIndirect(const ReservoirIndirect r)
 {
-    return safePositiveRcp(r.selected_targetPdf) * (r.weightSum / float(max(1, r.M)));
+    return safePositiveRcp(getLuminance(r.selected.radiance)) * (r.weightSum / float(max(1, r.M)));
 }
 
 void normalizeReservoirIndirect(inout ReservoirIndirect r, uint maxM)
@@ -85,14 +83,12 @@ void updateReservoirIndirect(
     if (rnd * r.weightSum < weight)
     {
         r.selected = newSample;
-        r.selected_targetPdf = targetPdf;
     }
 }
 
 void initCombinedReservoirIndirect(out ReservoirIndirect combined, const ReservoirIndirect base)
 {
     combined.selected = base.selected;
-    combined.selected_targetPdf = base.selected_targetPdf;
     combined.weightSum = base.weightSum;
     combined.M = base.M;
 }
@@ -106,7 +102,6 @@ bool updateCombinedReservoirIndirect(inout ReservoirIndirect combined, const Res
     if (rnd * combined.weightSum < weight)
     {
         combined.selected = b.selected;
-        combined.selected_targetPdf = b.selected_targetPdf;
 
         return true;
     }
@@ -117,16 +112,15 @@ bool updateCombinedReservoirIndirect(inout ReservoirIndirect combined, const Res
 void updateCombinedReservoirIndirect_newSurf(inout ReservoirIndirect combined, const ReservoirIndirect b, float targetPdf_b, float rnd)
 {
     // targetPdf_b is targetPdf(b.selected) for pixel q
-    // but b.selected_targetPdf was calculated for pixel q'
+    // but b.selected was sampled for pixel q'
     // so need to renormalize weight
-    float weight = targetPdf_b * safePositiveRcp(b.selected_targetPdf) * b.weightSum;
+    float weight = targetPdf_b * safePositiveRcp(getLuminance(b.selected.radiance)) * b.weightSum;
 
     combined.weightSum += weight;
     combined.M += b.M;
     if (rnd * combined.weightSum < weight)
     {
         combined.selected = b.selected;
-        combined.selected_targetPdf = targetPdf_b;
     }
 }
 
@@ -175,9 +169,8 @@ void restirIndirect_StoreReservoir(const ivec2 pix, ReservoirIndirect r)
         g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 2] = floatBitsToUint(r.selected.position.z);
         g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 3] = encodeNormal(r.selected.normal);
         g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 4] = encodeE5B9G9R9(r.selected.radiance);
-        g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 5] = floatBitsToUint(r.selected_targetPdf);
-        g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 6] = floatBitsToUint(r.weightSum);
-        g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 7] = r.M;
+        g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 5] = floatBitsToUint(r.weightSum);
+        g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 6] = r.M;
     }
     else
     {
@@ -188,10 +181,9 @@ void restirIndirect_StoreReservoir(const ivec2 pix, ReservoirIndirect r)
         g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 4] = 0;
         g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 5] = 0;
         g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 6] = 0;
-        g_restirIndirectReservoirs[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 7] = 0;
     }
 
-#if PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS != 8
+#if PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS != 7
     #error "Size mismatch"
 #endif
 }
@@ -223,9 +215,8 @@ SampleIndirect restirIndirect_LoadInitialSample( const ivec2 pix, out float oneO
     r.selected.position.z   = uintBitsToFloat(BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 2]); \
     r.selected.normal       =    decodeNormal(BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 3]); \
     r.selected.radiance     =  decodeE5B9G9R9(BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 4]); \
-    r.selected_targetPdf    = uintBitsToFloat(BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 5]); \
-    r.weightSum             = uintBitsToFloat(BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 6]); \
-    r.M                     =                (BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 7]);
+    r.weightSum             = uintBitsToFloat(BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 5]); \
+    r.M                     =                (BUFFER_T[offset * PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS + 6]);
 
 ReservoirIndirect restirIndirect_LoadReservoir(const ivec2 pix)
 {

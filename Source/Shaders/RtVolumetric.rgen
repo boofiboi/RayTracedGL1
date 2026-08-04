@@ -100,7 +100,7 @@ void main()
     {
         vec3  s      = volume_getCenter( cell + ivec3( 0, 0, 1 ) );
         vec3  radius = ( center - s ) * 0.5;
-        uint  seed   = getRandomSeed( cell.xy, globalUniform.frameId );
+        uint  seed   = getRandomSeed( ivec2( cell.x + cell.z * 7, cell.y + cell.z * 13 ), globalUniform.frameId );
         float rnd    = rndBlueNoise8( seed, 0 ).x * 2 - 1;
         center += radius * rnd;
     }

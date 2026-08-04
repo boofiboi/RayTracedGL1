@@ -97,34 +97,25 @@ void ASBuilder::AddBLAS( VkAccelerationStructureKHR                      as,
                          const VkAccelerationStructureGeometryKHR*       pGeometries,
                          const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos,
                          const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
-                         bool                                            fastTrace,
-                         bool                                            update,
-                         bool                                            isBLASUpdateable )
+                         bool                                            fastTrace )
 {
     // while building bottom level, top level must be not
     assert( topLBuildInfo.geomInfos.empty() && topLBuildInfo.rangeInfos.empty() );
 
     assert( geometryCount > 0 );
 
-    VkDeviceSize scratchSize =
-        std::max( buildSizes.updateScratchSize, buildSizes.buildScratchSize );
+    VkDeviceSize scratchSize = buildSizes.buildScratchSize;
 
     VkBuildAccelerationStructureFlagsKHR flags =
         fastTrace ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR
                   : VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
 
-    if( isBLASUpdateable || update )
-    {
-        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    }
-
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
         .type  = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
         .flags = flags,
-        .mode  = update ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
-                        : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
-        .srcAccelerationStructure = update ? as : VK_NULL_HANDLE,
+        .mode  = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+        .srcAccelerationStructure = VK_NULL_HANDLE,
         .dstAccelerationStructure = as,
         .geometryCount            = geometryCount,
         .pGeometries              = pGeometries,
@@ -158,13 +149,10 @@ void ASBuilder::AddTLAS( VkAccelerationStructureKHR                      as,
                          const VkAccelerationStructureGeometryKHR*       pGeometry,
                          const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo,
                          const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
-                         bool                                            fastTrace,
-                         bool                                            update )
+                         bool                                            fastTrace )
 {
     // while building top level, bottom level must be not
     assert( bottomLBuildInfo.geomInfos.empty() && bottomLBuildInfo.rangeInfos.empty() );
-
-    VkDeviceSize scratchSize = update ? buildSizes.updateScratchSize : buildSizes.buildScratchSize;
 
     VkBuildAccelerationStructureFlagsKHR flags =
         fastTrace ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR
@@ -174,15 +162,14 @@ void ASBuilder::AddTLAS( VkAccelerationStructureKHR                      as,
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
         .type  = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
         .flags = flags,
-        .mode  = update ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
-                        : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
-        .srcAccelerationStructure = update ? as : VK_NULL_HANDLE,
+        .mode  = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+        .srcAccelerationStructure = VK_NULL_HANDLE,
         .dstAccelerationStructure = as,
         .geometryCount            = 1,
         .pGeometries              = pGeometry,
         .ppGeometries             = nullptr,
         .scratchData = {
-            .deviceAddress = scratchBuffer->GetScratchAddress( scratchSize ),
+            .deviceAddress = scratchBuffer->GetScratchAddress( buildSizes.buildScratchSize ),
         },
     };
 

@@ -650,47 +650,9 @@ bool RTGL1::ASManager::SetupBLAS( BLASComponent& blas, const VertexCollector& ve
                         geoms.data(),
                         ranges.data(),
                         buildSizes,
-                        fastTrace,
-                        update,
-                        blas.GetFilter() & VertexCollectorFilterTypeFlagBits::CF_STATIC_MOVABLE );
+                        fastTrace );
 
     return true;
-}
-
-void RTGL1::ASManager::UpdateBLAS( BLASComponent& blas, const VertexCollector& vertCollector )
-{
-    const auto  filter = blas.GetFilter();
-    const auto& geoms  = vertCollector.GetASGeometries( filter );
-
-    blas.SetGeometryCount( static_cast< uint32_t >( geoms.size() ) );
-
-    if( blas.IsEmpty() )
-    {
-        return;
-    }
-
-    const auto& ranges     = vertCollector.GetASBuildRangeInfos( filter );
-    const auto& primCounts = vertCollector.GetPrimitiveCounts( filter );
-
-    const bool fastTrace = !IsFastBuild( filter );
-    // must be just updated
-    const bool update = true;
-
-    const auto buildSizes =
-        asBuilder->GetBottomBuildSizes( geoms.size(), geoms.data(), primCounts.data(), fastTrace );
-
-    assert( blas.IsValid( buildSizes ) );
-    assert( blas.GetAS() != VK_NULL_HANDLE );
-
-    // add BLAS, all passed arrays must be alive until BuildBottomLevel() call
-    asBuilder->AddBLAS( blas.GetAS(),
-                        geoms.size(),
-                        geoms.data(),
-                        ranges.data(),
-                        buildSizes,
-                        fastTrace,
-                        update,
-                        blas.GetFilter() & VertexCollectorFilterTypeFlagBits::CF_STATIC_MOVABLE );
 }
 
 RTGL1::StaticGeometryToken RTGL1::ASManager::BeginStaticGeometry()
@@ -1099,7 +1061,7 @@ void RTGL1::ASManager::BuildTLAS( VkCommandBuffer          cmd,
 
     // get AS size and create buffer for AS
     VkAccelerationStructureBuildSizesInfoKHR buildSizes =
-        asBuilder->GetTopBuildSizes( &instGeom, r.instanceCount, false );
+        asBuilder->GetTopBuildSizes( &instGeom, r.instanceCount, true );
 
     // if previous buffer's size is not enough
     pCurrentTLAS->RecreateIfNotValid( buildSizes, allocator );
@@ -1112,7 +1074,7 @@ void RTGL1::ASManager::BuildTLAS( VkCommandBuffer          cmd,
     assert( asBuilder->IsEmpty() );
 
     assert( pCurrentTLAS->GetAS() != VK_NULL_HANDLE );
-    asBuilder->AddTLAS( pCurrentTLAS->GetAS(), &instGeom, &range, buildSizes, true, false );
+    asBuilder->AddTLAS( pCurrentTLAS->GetAS(), &instGeom, &range, buildSizes, true );
 
     asBuilder->BuildTopLevel( cmd );
 

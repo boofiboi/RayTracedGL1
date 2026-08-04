@@ -59,6 +59,7 @@ RTGL1::Bloom::Bloom( VkDevice                        _device,
     : device( _device )
     , framebuffers( std::move( _framebuffers ) )
     , pipelineLayout( VK_NULL_HANDLE )
+    , bloomInputPipeline( VK_NULL_HANDLE )
     , downsamplePipelines{}
     , upsamplePipelines{}
     , applyPipelines{}
@@ -96,20 +97,6 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
                             const GlobalUniform& uniform,
                             const Tonemapping&   tonemapping )
 {
-    VkMemoryBarrier2KHR memoryBarrier = {
-        .sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2_KHR,
-        .srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR,
-        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT_KHR,
-        .dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR,
-        .dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT_KHR,
-    };
-
-    VkDependencyInfoKHR dependencyInfo = {
-        .sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-        .memoryBarrierCount = 1,
-        .pMemoryBarriers    = &memoryBarrier,
-    };
-
     // bind desc sets
     VkDescriptorSet sets[] = {
         framebuffers->GetDescSet( frameIndex ),
@@ -126,12 +113,33 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
                              0,
                              nullptr );
 
+    {
+        CmdLabel label( cmd, "Bloom input extraction" );
+
+        const float w = uniform.GetData()->renderWidth / 2.0f;
+        const float h = uniform.GetData()->renderHeight / 2.0f;
+
+        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, bloomInputPipeline );
+
+        FramebufferImageIndex fs[] = {
+            FB_IMAGE_INDEX_FINAL,
+            FB_IMAGE_INDEX_SCREEN_EMISSION,
+            FB_IMAGE_INDEX_SCATTERING,
+        };
+        framebuffers->BarrierMultiple( cmd, frameIndex, fs );
+
+        vkCmdDispatch( cmd,
+                       Utils::GetWorkGroupCount( w, COMPUTE_BLOOM_DOWNSAMPLE_GROUP_SIZE_X ),
+                       Utils::GetWorkGroupCount( h, COMPUTE_BLOOM_DOWNSAMPLE_GROUP_SIZE_Y ),
+                       1 );
+    }
+
     for( int i = 0; i < COMPUTE_BLOOM_STEP_COUNT; i++ )
     {
         CmdLabel label( cmd, "Bloom downsample iteration" );
 
-        const float w = uniform.GetData()->renderWidth / float( 1 << ( i + 1 ) );
-        const float h = uniform.GetData()->renderHeight / float( 1 << ( i + 1 ) );
+        const float w = uniform.GetData()->renderWidth / float( 1 << ( i + 2 ) );
+        const float h = uniform.GetData()->renderHeight / float( 1 << ( i + 2 ) );
 
         vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, downsamplePipelines[ i ] );
 
@@ -143,8 +151,6 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
             case 3: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3 ); break;
             case 4: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4 ); break;
             case 5: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5 ); break;
-            case 6: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP6 ); break;
-            case 7: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP7 ); break;
             default: assert( 0 );
         }
 
@@ -155,23 +161,18 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
     }
 
 
-    svkCmdPipelineBarrier2KHR( cmd, &dependencyInfo );
-
-
     // start from the other side
     for( int i = COMPUTE_BLOOM_STEP_COUNT - 1; i >= 0; i-- )
     {
         CmdLabel label( cmd, "Bloom upsample iteration" );
 
-        const float w = uniform.GetData()->renderWidth / float( 1 << i );
-        const float h = uniform.GetData()->renderHeight / float( 1 << i );
+        const float w = uniform.GetData()->renderWidth / float( 1 << ( i + 1 ) );
+        const float h = uniform.GetData()->renderHeight / float( 1 << ( i + 1 ) );
 
         vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, upsamplePipelines[ i ] );
 
         switch( i )
         {
-            case 7: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP8 ); break;
-            case 6: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP7 ); break;
             case 5: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP6 ); break;
             case 4: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5 ); break;
             case 3: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4 ); break;
@@ -186,9 +187,6 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
                        Utils::GetWorkGroupCount( h, COMPUTE_BLOOM_UPSAMPLE_GROUP_SIZE_Y ),
                        1 );
     }
-
-
-    svkCmdPipelineBarrier2KHR( cmd, &dependencyInfo );
 }
 
 RTGL1::FramebufferImageIndex RTGL1::Bloom::Apply( VkCommandBuffer       cmd,
@@ -256,17 +254,29 @@ void RTGL1::Bloom::CreateStepPipelines( const ShaderManager* shaderManager )
 {
     assert( pipelineLayout != VK_NULL_HANDLE );
 
+    {
+        VkComputePipelineCreateInfo info = {
+            .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage  = shaderManager->GetStageInfo( "CBloomInput" ),
+            .layout = pipelineLayout,
+        };
+
+        VkResult r = vkCreateComputePipelines(
+            device, VK_NULL_HANDLE, 1, &info, nullptr, &bloomInputPipeline );
+
+        VK_CHECKERROR( r );
+        SET_DEBUG_NAME( device, bloomInputPipeline, VK_OBJECT_TYPE_PIPELINE, "Bloom input pipeline" );
+    }
+
     const char* dnsmplDebugNames[] = {
         "Bloom downsample 0 pipeline", "Bloom downsample 1 pipeline", "Bloom downsample 2 pipeline",
         "Bloom downsample 3 pipeline", "Bloom downsample 4 pipeline", "Bloom downsample 5 pipeline",
-        "Bloom downsample 6 pipeline", "Bloom downsample 7 pipeline",
     };
     static_assert( COMPUTE_BLOOM_STEP_COUNT == std::size( dnsmplDebugNames ) );
 
     const char* upsmplDebugNames[] = {
         "Bloom upsample 0 pipeline", "Bloom upsample 1 pipeline", "Bloom upsample 2 pipeline",
         "Bloom upsample 3 pipeline", "Bloom upsample 4 pipeline", "Bloom upsample 5 pipeline",
-        "Bloom upsample 6 pipeline", "Bloom upsample 7 pipeline",
     };
     static_assert( COMPUTE_BLOOM_STEP_COUNT == std::size( upsmplDebugNames ) );
 
@@ -368,6 +378,9 @@ void RTGL1::Bloom::CreateApplyPipelines( const ShaderManager* shaderManager )
 
 void RTGL1::Bloom::DestroyPipelines()
 {
+    vkDestroyPipeline( device, bloomInputPipeline, nullptr );
+    bloomInputPipeline = VK_NULL_HANDLE;
+
     for( VkPipeline& p : downsamplePipelines )
     {
         vkDestroyPipeline( device, p, nullptr );

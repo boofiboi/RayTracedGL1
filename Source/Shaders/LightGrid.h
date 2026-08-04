@@ -86,7 +86,7 @@ ivec3 worldToCell(const vec3 worldPos)
     return clamp(
         ivec3((worldPos - getGridMinExtentWorld()) / getGridDelta()),
         ivec3(0),
-        ivec3(LIGHT_GRID_SIZE_X, LIGHT_GRID_SIZE_Y, LIGHT_GRID_SIZE_Z));
+        ivec3(LIGHT_GRID_SIZE_X - 1, LIGHT_GRID_SIZE_Y - 1, LIGHT_GRID_SIZE_Z - 1));
 }
 
 

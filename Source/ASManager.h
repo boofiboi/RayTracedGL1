@@ -116,8 +116,6 @@ private:
 
     bool SetupBLAS( BLASComponent& as, const VertexCollector& vertCollector );
 
-    void UpdateBLAS( BLASComponent& as, const VertexCollector& vertCollector );
-
     static bool SetupTLASInstanceFromBLAS( const BLASComponent& as,
                                            uint32_t             rayCullMaskWorld,
                                            bool                 allowGeometryWithSkyFlag,

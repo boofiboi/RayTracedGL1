@@ -33,12 +33,12 @@ layout(constant_id = 0) const uint stepIndex = 0;
 
 vec2 getInverseSrcSize()
 {
-    return vec2(float(1 << stepIndex) / globalUniform.renderWidth, float(1 << stepIndex) / globalUniform.renderHeight);
+    return vec2(float(1 << (stepIndex + 1)) / globalUniform.renderWidth, float(1 << (stepIndex + 1)) / globalUniform.renderHeight);
 }
 
 vec2 getInverseDownsampledSize()
 {
-    return vec2(float(1 << (stepIndex + 1)) / globalUniform.renderWidth, float(1 << (stepIndex + 1)) / globalUniform.renderHeight);
+    return vec2(float(1 << (stepIndex + 2)) / globalUniform.renderWidth, float(1 << (stepIndex + 2)) / globalUniform.renderHeight);
 }
 
 // get UV coords in [0..1] range
@@ -133,11 +133,9 @@ void main()
         case 3: imageStore(framebufBloom_Mip4, downsampledPix, vec4(downsample13tap(framebufBloom_Mip3_Sampler, srcUV), 0.0)); break;
         case 4: imageStore(framebufBloom_Mip5, downsampledPix, vec4(downsample13tap(framebufBloom_Mip4_Sampler, srcUV), 0.0)); break;
         case 5: imageStore(framebufBloom_Mip6, downsampledPix, vec4(downsample13tap(framebufBloom_Mip5_Sampler, srcUV), 0.0)); break;
-        case 6: imageStore(framebufBloom_Mip7, downsampledPix, vec4(downsample13tap(framebufBloom_Mip6_Sampler, srcUV), 0.0)); break;
-        case 7: imageStore(framebufBloom_Mip8, downsampledPix, vec4(downsample13tap(framebufBloom_Mip7_Sampler, srcUV), 0.0)); break;
     }
 }
 
-#if COMPUTE_BLOOM_STEP_COUNT != 8
+#if COMPUTE_BLOOM_STEP_COUNT != 6
     #error Recheck COMPUTE_BLOOM_STEP_COUNT
 #endif

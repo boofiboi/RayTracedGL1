@@ -102,41 +102,39 @@ DirectionAndLength calcDirectionAndLengthSafe(const vec3 start, const vec3 end)
 
 
 
-#define ENCODE_NORMAL_N_PHI 1 << 16
-#define ENCODE_NORMAL_N_THETA 1 << 16
+#define NORMAL_QUANTIZATION 65535.0
+
+vec2 signNotZero(vec2 v)
+{
+    return vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0);
+}
 
 uint encodeNormal(vec3 n)
 {
-    const uint N_phi = ENCODE_NORMAL_N_PHI;
-    const uint N_theta = ENCODE_NORMAL_N_THETA;
+    n /= max(abs(n.x) + abs(n.y) + abs(n.z), 0.0001);
 
-    float phi = acos(n.z);
-    // atan -> [-pi, pi], need [0, 2pi]
-	float theta = atan(n.y, n.x);
-    theta = theta < 0 ? theta + 2 * M_PI : theta;
+    if (n.z < 0.0)
+    {
+        n.xy = (1.0 - abs(n.yx)) * signNotZero(n.xy);
+    }
 
-    uint j = uint(round(phi * (N_phi - 1) / M_PI));
-    uint k = uint(round(theta * N_theta / (2 * M_PI))) % N_theta;
+    const vec2 p = n.xy * 0.5 + 0.5;
 
-    return (j << 16) | k;
+    return (uint(round(p.x * NORMAL_QUANTIZATION)) << 16) | uint(round(p.y * NORMAL_QUANTIZATION));
 }
 
 vec3 decodeNormal(uint _packed)
 {
-    const uint N_phi = ENCODE_NORMAL_N_PHI;
-    const uint N_theta = ENCODE_NORMAL_N_THETA;
+    const vec2 p = vec2(_packed >> 16, _packed & 0xFFFF) / NORMAL_QUANTIZATION * 2.0 - 1.0;
 
-    uint j = _packed >> 16;
-    uint k = _packed & 0xFFFF;
+    vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
 
-    float phi = j * M_PI / (N_phi - 1);
-    float theta = k * 2 * M_PI / N_theta;
+    if (n.z < 0.0)
+    {
+        n.xy = (1.0 - abs(n.yx)) * signNotZero(p);
+    }
 
-    return vec3(
-        sin(phi) * cos(theta),
-        sin(phi) * sin(theta),
-        cos(phi)
-    );
+    return normalize(n);
 }
 
 vec3 safeNormalize(const vec3 v)

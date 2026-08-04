@@ -48,9 +48,7 @@ public:
                   const VkAccelerationStructureGeometryKHR*       pGeometries,
                   const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos,
                   const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
-                  bool                                            fastTrace,
-                  bool                                            update,
-                  bool                                            isBLASUpdateable );
+                  bool                                            fastTrace );
 
     void BuildBottomLevel( VkCommandBuffer cmd );
 
@@ -62,8 +60,7 @@ public:
                   const VkAccelerationStructureGeometryKHR*       pGeometry,
                   const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo,
                   const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
-                  bool                                            fastTrace,
-                  bool                                            update );
+                  bool                                            fastTrace );
 
     void BuildTopLevel( VkCommandBuffer cmd );
 

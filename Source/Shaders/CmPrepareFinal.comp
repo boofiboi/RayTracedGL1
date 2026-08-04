@@ -120,24 +120,6 @@ vec3 finalizeColor( const vec3 hdr, const vec3 screenEmis, const ivec2 regularPi
 }
 
 
-vec3 getBloomInput( const vec3 hdr, const vec3 screenEmis )
-{
-    float evBloom = getCurrentEV100() + globalUniform.bloomEmissionMultiplier;
-
-    vec3 bloom = ( hdr + screenEmis * ev100ToLuminance( evBloom ) ) *
-                 ev100ToLuminousExposure( getCurrentEV100() );
-
-    if( any( isnan( bloom ) ) || any( isinf( bloom ) ) )
-    {
-        bloom = vec3( 0 );
-    }
-
-    return bloom * smoothstep( 0,
-                               globalUniform.bloomThreshold,
-                               getLuminance( bloom ) );
-}
-
-
 vec3 processDebug( const ivec2 pix, const vec3 fallback );
 
 
@@ -158,7 +140,6 @@ void main()
     }
 
     vec3 color = finalizeColor( hdr, screenEmis, pix );
-    vec3 bloom = getBloomInput( hdr, screenEmis );
 
 #if SHIPPING_HACK
     color += texelFetch( framebufAcidFog_Sampler, pix, 0 ).rgb;
@@ -171,7 +152,6 @@ void main()
     }
 
     imageStore( framebufFinal, pix, vec4( color, 0 ) );
-    imageStore( framebufBloomInput, pix, vec4( bloom, 0.0 ) );
 }
 
 

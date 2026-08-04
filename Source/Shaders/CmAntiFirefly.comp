@@ -31,6 +31,18 @@ layout( local_size_x = COMPUTE_ANTIFIREFLY_GROUP_SIZE_X,
 #define FILTER_RADIUS 2
 #define MAXFLOAT      1000000
 
+vec3 clampLuminance( const vec3 color, const float lmin, const float lmax )
+{
+    const float luma = getLuminance( color );
+
+    if( luma <= 0.0 )
+    {
+        return color;
+    }
+
+    return color * ( clamp( luma, lmin, lmax ) / luma );
+}
+
 
 
 const int SHARED_WIDTH = FILTER_RADIUS + COMPUTE_ANTIFIREFLY_GROUP_SIZE_X + FILTER_RADIUS;
@@ -117,15 +129,12 @@ void main()
     }
 
 
-    Data smin;
-    smin.diffuse  = vec3( +MAXFLOAT );
-    smin.specular = vec3( +MAXFLOAT );
-    smin.indir    = vec3( +MAXFLOAT );
-
-    Data smax;
-    smax.diffuse  = vec3( -MAXFLOAT );
-    smax.specular = vec3( -MAXFLOAT );
-    smax.indir    = vec3( -MAXFLOAT );
+    float diffLumaMin = MAXFLOAT;
+    float diffLumaMax = -MAXFLOAT;
+    float specLumaMin = MAXFLOAT;
+    float specLumaMax = -MAXFLOAT;
+    float indirLumaMin = MAXFLOAT;
+    float indirLumaMax = -MAXFLOAT;
 
     for( int i = -FILTER_RADIUS; i <= FILTER_RADIUS; i++ )
     {
@@ -138,20 +147,19 @@ void main()
 
             const Data other = GET_SDATA( i, j );
 
-            smin.diffuse  = min( smin.diffuse, other.diffuse );
-            smin.specular = min( smin.specular, other.specular );
-            smin.indir    = min( smin.indir, other.indir );
-
-            smax.diffuse  = max( smax.diffuse, other.diffuse );
-            smax.specular = max( smax.specular, other.specular );
-            smax.indir    = max( smax.indir, other.indir );
+            diffLumaMin = min( diffLumaMin, getLuminance( other.diffuse ) );
+            diffLumaMax = max( diffLumaMax, getLuminance( other.diffuse ) );
+            specLumaMin = min( specLumaMin, getLuminance( other.specular ) );
+            specLumaMax = max( specLumaMax, getLuminance( other.specular ) );
+            indirLumaMin = min( indirLumaMin, getLuminance( other.indir ) );
+            indirLumaMax = max( indirLumaMax, getLuminance( other.indir ) );
         }
     }
 
     Data c     = GET_SDATA( 0, 0 );
-    c.diffuse  = clamp( c.diffuse, smin.diffuse, smax.diffuse );
-    c.specular = clamp( c.specular, smin.specular, smax.specular );
-    c.indir    = clamp( c.indir, smin.indir, smax.indir );
+    c.diffuse  = clampLuminance( c.diffuse, diffLumaMin, diffLumaMax );
+    c.specular = clampLuminance( c.specular, specLumaMin, specLumaMax );
+    c.indir    = clampLuminance( c.indir, indirLumaMin, indirLumaMax );
 
     imageStoreDiffAccumColor( pix, c.diffuse );
     imageStoreSpecPingColor( pix, c.specular );

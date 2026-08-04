@@ -72,7 +72,9 @@ vec3 demodulateSpecular(const vec3 contrib, const vec3 surfSpecularColor)
 // specularColor -- reflectance color at zero angle
 vec3 getFresnelSchlick(float nl, const vec3 specularColor)
 {
-    return specularColor + (vec3(1.0) - specularColor) * pow(1 - max(nl, 0), 5);
+    const float t = 1.0 - max(nl, 0);
+    const float t5 = square(square(t)) * t;
+    return specularColor + (vec3(1.0) - specularColor) * t5;
 }
 
 float getFresnelSchlick(float n1, float n2, const vec3 V, const vec3 N)
@@ -80,7 +82,10 @@ float getFresnelSchlick(float n1, float n2, const vec3 V, const vec3 N)
     float R0 = (n1 - n2) / (n1 + n2);
     R0 *= R0;
 
-    return mix(R0, 1.0, pow(1.0 - abs(dot(N, V)), 5.0));
+    const float t = 1.0 - abs(dot(N, V));
+    const float t5 = square(square(t)) * t;
+
+    return mix(R0, 1.0, t5);
 }
 
 // GGX distribution
@@ -97,7 +102,8 @@ float D_GGX( float nm, float alpha )
     const float alphaSq = square( alpha );
 
     nm = max( 0.0, nm );
-    return alphaSq / M_PI / square( nm * nm * ( alphaSq - 1 ) + 1 );
+    const float nm2 = nm * nm;
+    return alphaSq / M_PI / square( nm2 * ( alphaSq - 1 ) + 1 );
 }
 
 // Smith G1 for GGX, Karis' approximation ("Real Shading in Unreal Engine 4")

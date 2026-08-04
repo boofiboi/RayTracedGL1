@@ -505,6 +505,37 @@ ShTriangle getTriangle(int instanceID, int instanceCustomIndex, int localGeometr
     return tr;
 }
 
+#ifdef DESC_SET_TEXTURES
+vec4 getAlphaTestColor(int instanceID, int instanceCustomIndex, int localGeometryIndex, int primitiveId, vec2 bary)
+{
+    const int globalGeometryIndex = getGeometryIndex(instanceID, localGeometryIndex);
+    const ShGeometryInstance inst = geometryInstances[globalGeometryIndex];
+
+    const bool isDynamic = (instanceCustomIndex & INSTANCE_CUSTOM_INDEX_FLAG_DYNAMIC) == INSTANCE_CUSTOM_INDEX_FLAG_DYNAMIC;
+
+    uvec3 vertIndices;
+    vec2 uv0, uv1, uv2;
+    if (isDynamic)
+    {
+        vertIndices = getVertIndicesDynamic(inst.baseVertexIndex, inst.baseIndexIndex, primitiveId);
+        uv0 = g_dynamicVertices[vertIndices[0]].texCoord;
+        uv1 = g_dynamicVertices[vertIndices[1]].texCoord;
+        uv2 = g_dynamicVertices[vertIndices[2]].texCoord;
+    }
+    else
+    {
+        vertIndices = getVertIndicesStatic(inst.baseVertexIndex, inst.baseIndexIndex, primitiveId);
+        uv0 = g_staticVertices[vertIndices[0]].texCoord;
+        uv1 = g_staticVertices[vertIndices[1]].texCoord;
+        uv2 = g_staticVertices[vertIndices[2]].texCoord;
+    }
+
+    const vec2 texCoord = uv0 * (1.0 - bary.x - bary.y) + uv1 * bary.x + uv2 * bary.y;
+
+    return getTextureSample(inst.texture_base, texCoord) * unpackUintColor(inst.colorFactor_base);
+}
+#endif // DESC_SET_TEXTURES
+
 mat3 getOnlyCurPositions(int globalGeometryIndex, int instanceCustomIndex, int primitiveId)
 {
     mat3 positions;

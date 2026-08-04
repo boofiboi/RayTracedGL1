@@ -251,7 +251,7 @@ bool RTGL1::VertexCollector::AddPrimitive( uint32_t                          fra
                 .deviceAddress = bufVertices.deviceLocal->GetAddress() + vertIndex * sizeof( ShVertex ) + offsetof( ShVertex, position ),
             },
             .vertexStride  = sizeof( ShVertex ),
-            .maxVertex     = info.vertexCount,
+            .maxVertex     = info.vertexCount > 0 ? info.vertexCount - 1 : 0,
 
             .indexType     = VK_INDEX_TYPE_NONE_KHR,
             .indexData     = {},
@@ -358,7 +358,7 @@ void RTGL1::VertexCollector::CopyVertexDataToStaging( const RgMeshPrimitiveInfo&
                                                       uint32_t                   vertIndex )
 {
     assert( bufVertices.mapped );
-    assert( ( vertIndex + info.vertexCount ) * sizeof( ShVertex ) < bufVertices.staging.GetSize() );
+    assert( ( vertIndex + info.vertexCount ) * sizeof( ShVertex ) <= bufVertices.staging.GetSize() );
 
     ShVertex* const pDst = &bufVertices.mapped[ vertIndex ];
 

@@ -160,7 +160,7 @@ vec3 getHitInfoAlbedoOnly( ShPayload pl )
 // "Ray Traced Reflections in 'Wolfenstein: Youngblood'", Jiho Choi, Jim Kjellin, Patrik Willbo, Dmitry Zhdan
 float getBounceLOD(float roughness, float viewDist, float hitDist, float screenWidth, float bounceMipBias)
 {    
-    const float range = 300.0 * pow((1.0 - roughness) * 0.9 + 0.1, 4.0);
+    const float range = 300.0 * square(square((1.0 - roughness) * 0.9 + 0.1));
 
     vec2 f = vec2(viewDist, hitDist);
     f = clamp(f / range, vec2(0.0), vec2(1.0));
@@ -314,7 +314,6 @@ ShHitInfo getHitInfoBounce(
     const vec2 screenSpaceCur    = ndcCur.xy  * 0.5 + 0.5;
     const vec2 screenSpacePrev   = ndcPrev.xy * 0.5 + 0.5;
 
-    const float clipSpaceDepth   = clipSpacePosCur[2];
 #endif // HITINFO_INL_RFL
 
 

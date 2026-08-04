@@ -54,6 +54,11 @@ void atrous(sampler2D samplerDISGradient, out vec3 outDISGradient)
         { 0.5, 0.25 }
     };
 
+    const ivec2 fullResCenter = gradPix * COMPUTE_ASVGF_STRATA_SIZE;
+    const float depthCenter = texelFetch(framebufDepthWorld_Sampler, fullResCenter, 0).r;
+    const float gradDepthCenter = texelFetch(framebufDepthGrad_Sampler, fullResCenter, 0).r;
+    const uint normalCenter = texelFetchEncNormal(fullResCenter);
+
     for (int yy = -FilterSize; yy <= FilterSize; yy++)
     {
         for (int xx = -FilterSize; xx <= FilterSize; xx++)
@@ -63,8 +68,20 @@ void atrous(sampler2D samplerDISGradient, out vec3 outDISGradient)
 
             const vec3 grad_q = texelFetch(samplerDISGradient, gradPix_q, 0).xyz;
 
-            const float w = waveletKernel[abs(yy)][abs(xx)] *
-                            float(testPixInRenderArea(gradPix_q, gradArea));
+            float w = waveletKernel[abs(yy)][abs(xx)] *
+                      float(testPixInRenderArea(gradPix_q, gradArea));
+
+            if (w > 0.0 && depthCenter > 0.0)
+            {
+                const ivec2 fullRes_q = gradPix_q * COMPUTE_ASVGF_STRATA_SIZE;
+                const float depth_q = texelFetch(framebufDepthWorld_Sampler, fullRes_q, 0).r;
+                const uint normal_q = texelFetchEncNormal(fullRes_q);
+
+                const float w_z = abs(depthCenter - depth_q) / max(gradDepthCenter * (abs(xx) + abs(yy)), 0.01);
+                const float n_n = max(0.0, dot(decodeNormal(normalCenter), decodeNormal(normal_q)));
+
+                w *= exp(-w_z * w_z) * pow(n_n, 128.0);
+            }
 
             outDISGradient += grad_q * w;
             weightSum += w;

@@ -240,17 +240,13 @@ void atrous0(
     float weightSumSpec = 1.0;
     float weightSumIndir = 1.0;
 
-    for (int yy = -FILTER_RADIUS; yy <= FILTER_RADIUS; yy++)
+    for (int i = 0; i < 4; i++)
     {
-        for (int xx = -FILTER_RADIUS; xx <= FILTER_RADIUS; xx++)
-        {
-            if (xx == 0 && yy == 0)
-            {
-                continue;
-            }
+        const int xx = (i % 2) * 2 - 1;
+        const int yy = (i / 2) * 2 - 1;
 
-            const ivec2 offset = ivec2(xx * STEP_SIZE, yy * STEP_SIZE);
-            const ivec2 pix_q = pix + offset;
+        const ivec2 offset = ivec2(xx * STEP_SIZE, yy * STEP_SIZE);
+        const ivec2 pix_q = pix + offset;
 
 
             const AtrousData other = GET_ATROUS_DATA(offset.x, offset.y);
@@ -290,7 +286,6 @@ void atrous0(
             weightSum += wDiff;
             weightSumSpec += wSpec;
             weightSumIndir += wDiffIndir;
-        }
     }
 
     const float invWeightSum = 1.0 / weightSum;

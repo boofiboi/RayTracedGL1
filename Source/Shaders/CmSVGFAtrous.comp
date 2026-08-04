@@ -123,7 +123,7 @@ void atrous(sampler2D samplerDiff,
         { 0.5, 0.25 }
     };
 
-#define ATROUS_BOX3 1
+#define ATROUS_BOX3 0
 #if ATROUS_BOX3
     // o o o
     // o 0 o

@@ -153,6 +153,7 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer                               cmd
 
 
     // antifirefly
+    if( uniform->GetData()->antiFireflyEnabled != 0 )
     {
         uint32_t x = Utils::GetWorkGroupCount( uniform->GetData()->renderWidth,
                                                COMPUTE_ANTIFIREFLY_GROUP_SIZE_X );

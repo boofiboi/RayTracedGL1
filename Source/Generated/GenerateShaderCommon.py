@@ -366,7 +366,7 @@ CONST = {
     "COMPUTE_BLOOM_DOWNSAMPLE_GROUP_SIZE_Y" : 16,
     "COMPUTE_BLOOM_APPLY_GROUP_SIZE_X"      : 16,
     "COMPUTE_BLOOM_APPLY_GROUP_SIZE_Y"      : 16,
-    "COMPUTE_BLOOM_STEP_COUNT"              : 8,
+    "COMPUTE_BLOOM_STEP_COUNT"              : 6,
 
     "COMPUTE_EFFECT_GROUP_SIZE_X"           : 16,
     "COMPUTE_EFFECT_GROUP_SIZE_Y"           : 16,
@@ -438,7 +438,7 @@ CONST = {
     "PORTAL_MAX_COUNT"                      : 63,
 
     "PACKED_INDIRECT_SAMPLE_SIZE_IN_WORDS"    : 6,
-    "PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS" : 8,
+    "PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS" : 7,
 
     "VOLUMETRIC_SIZE_X"                     : 160,
     "VOLUMETRIC_SIZE_Y"                     : 88,
@@ -817,6 +817,7 @@ FRAMEBUFFERS = {
     "VisibilityBuffer"                  : (TYPE_FLOAT32,    COMPONENT_RGBA, FRAMEBUF_FLAGS_STORE_PREV),
     "ViewDirection"                     : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "PrimaryToReflRefr"                 : (TYPE_UINT32,     COMPONENT_RGBA, 0),
+    "WaterParams"                       : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "Throughput"                        : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "PreFinal"                          : (TYPE_PACK_11,    COMPONENT_RGB,  0),
     "Final"                             : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_IS_ATTACHMENT),
@@ -861,21 +862,19 @@ FRAMEBUFFERS = {
     
     "ScreenEmisRT"                      : (TYPE_PACK_11,    COMPONENT_RGB,  0),
     "ScreenEmission"                    : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_IS_ATTACHMENT),
-    "BloomInput"                        : (TYPE_PACK_11,    COMPONENT_RGB,  0),
-    "Bloom_Mip1"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip2"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip3"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip4"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip5"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip6"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip7"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Mip8"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
-    "Bloom_Result"                      : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"BloomInput"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM),
+"Bloom_Mip1"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"Bloom_Mip2"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"Bloom_Mip3"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"Bloom_Mip4"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"Bloom_Mip5"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"Bloom_Mip6"                        : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM | FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
+"Bloom_Result"                      : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_BILINEAR_SAMPLER),
     
     "WipeEffectSource"                  : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_UPSCALED_SIZE | FRAMEBUF_FLAGS_USAGE_TRANSFER), # dst to copy in
     
-    "Reservoirs"                        : (TYPE_UINT32,     COMPONENT_RGBA, FRAMEBUF_FLAGS_STORE_PREV),
-    "ReservoirsInitial"                 : (TYPE_UINT32,     COMPONENT_RGBA, 0),
+"Reservoirs"                        : (TYPE_UINT32,     COMPONENT_RG,   FRAMEBUF_FLAGS_STORE_PREV),
+"ReservoirsInitial"                 : (TYPE_UINT32,     COMPONENT_RG,   0),
 }
 
 if GRADIENT_ESTIMATION_ENABLED:

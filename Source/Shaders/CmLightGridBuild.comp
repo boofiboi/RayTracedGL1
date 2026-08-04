@@ -55,17 +55,20 @@ void main()
     uint salt = RANDOM_SALT_LIGHT_GRID_BASE;
 
     Reservoir regularReservoir = emptyReservoir();
-    for (int i = 0; i < LIGHT_GRID_INITIAL_SAMPLES; i++)
+    if (globalUniform.lightCount > 0)
     {
-        // uniform distribution as a coarse source pdf
-        float rnd = rnd16(seed, salt++);
-        uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0, globalUniform.lightCount - 1);
-        float oneOverSourcePdf_xi = globalUniform.lightCount;
+        for (int i = 0; i < LIGHT_GRID_INITIAL_SAMPLES; i++)
+        {
+            // stratified sampling without replacement
+            float rnd = (rnd16(seed, salt++) + float(i)) / float(LIGHT_GRID_INITIAL_SAMPLES);
+            uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0u, globalUniform.lightCount - 1u);
+            float oneOverSourcePdf_xi = globalUniform.lightCount;
 
-        float targetPdf_xi = getLightWeight(lightSources[xi], cellCenter, cellRadius);
+            float targetPdf_xi = getLightWeight(lightSources[xi], cellCenter, cellRadius);
 
-        float rndRis = rnd16(seed, salt++);
-        updateReservoir(regularReservoir, xi, targetPdf_xi, oneOverSourcePdf_xi, rndRis);
+            float rndRis = rnd16(seed, salt++);
+            updateReservoir(regularReservoir, xi, targetPdf_xi, oneOverSourcePdf_xi, rndRis);
+        }
     }
 
 

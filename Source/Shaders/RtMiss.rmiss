@@ -26,4 +26,8 @@
 layout(location = PAYLOAD_INDEX_DEFAULT) rayPayloadInEXT ShPayload g_payload;
 
 void main()
-{}
+{
+    g_payload.baryCoords = vec2(0.0);
+    g_payload.instIdAndIndex = UINT32_MAX;
+    g_payload.geomAndPrimIndex = UINT32_MAX;
+}

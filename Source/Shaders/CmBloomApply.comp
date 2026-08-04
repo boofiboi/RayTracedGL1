@@ -70,7 +70,7 @@ void main()
         globalUniform.bloomIntensity * textureLod( framebufBloom_Result_Sampler, uv, 0 ).rgb;
 
     bloom += globalUniform.lensDirtIntensity * sampleDirtTexture( uv ) *
-             textureLod( framebufBloom_Mip8_Sampler, uv, 0 ).rgb;
+             textureLod( framebufBloom_Mip6_Sampler, uv, 0 ).rgb;
 
     vec3 c = effect_loadFromSource( pix ) + bloom;
     effect_storeToTarget( c, pix );

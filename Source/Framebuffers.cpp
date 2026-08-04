@@ -670,14 +670,13 @@ VkExtent2D RTGL1::Framebuffers::GetFramebufSize( const ResolutionState& resoluti
     {
         switch( index )
         {
-            case FB_IMAGE_INDEX_BLOOM_MIP1: downscale = 2; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP2: downscale = 4; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP3: downscale = 8; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP4: downscale = 16; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP5: downscale = 32; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP6: downscale = 64; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP7: downscale = 128; break;
-            case FB_IMAGE_INDEX_BLOOM_MIP8: downscale = 256; break;
+            case FB_IMAGE_INDEX_BLOOM_INPUT: downscale = 2; break;
+            case FB_IMAGE_INDEX_BLOOM_MIP1: downscale = 4; break;
+            case FB_IMAGE_INDEX_BLOOM_MIP2: downscale = 8; break;
+            case FB_IMAGE_INDEX_BLOOM_MIP3: downscale = 16; break;
+            case FB_IMAGE_INDEX_BLOOM_MIP4: downscale = 32; break;
+            case FB_IMAGE_INDEX_BLOOM_MIP5: downscale = 64; break;
+            case FB_IMAGE_INDEX_BLOOM_MIP6: downscale = 128; break;
 
             default: assert( 0 ); break;
         }

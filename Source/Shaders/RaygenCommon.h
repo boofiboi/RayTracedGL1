@@ -419,23 +419,25 @@ Reservoir calcInitialReservoir(uint seed, uint salt, const Surface surf, const v
             uint xi = r.selected;
             float oneOverSourcePdf_xi = r.weightSum * safePositiveRcp(r.selected_targetPdf);
 
-            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd);
+            vec2 pointRnd_xi = vec2(rnd16(seed, salt++), rnd16(seed, salt++));
+            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd_xi);
             float targetPdf_xi = targetPdfForLightSample(lightSample, surf);
 
             float rndRis = rnd16(seed, salt++);
             updateReservoir(regularReservoir, xi, targetPdf_xi, oneOverSourcePdf_xi, rndRis);
         }
     }
-    else
+    else if (globalUniform.lightCount > 0)
     {      
         for (int i = 0; i < INITIAL_SAMPLES; i++)
         {
             // uniform distribution as a coarse source pdf
             float rnd = rnd16(seed, salt++);
-            uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0, globalUniform.lightCount - 1);
+            uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0u, globalUniform.lightCount - 1u);
             float oneOverSourcePdf_xi = globalUniform.lightCount;
 
-            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd);
+            vec2 pointRnd_xi = vec2(rnd16(seed, salt++), rnd16(seed, salt++));
+            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd_xi);
             float targetPdf_xi = targetPdfForLightSample(lightSample, surf);
 
             float rndRis = rnd16(seed, salt++);
@@ -583,10 +585,16 @@ Reservoir selectLight_Direct(const ivec2 pix, uint seed, const Surface surf, con
 
         Reservoir spatial = imageLoadReservoirInitial(pp);
 
+        float spatialTargetPdf_curSurf = 0.0;
+        if (spatial.selected != LIGHT_INDEX_NONE)
+        {
+            spatialTargetPdf_curSurf = targetPdfForLightSample(spatial.selected, surf, pointRnd);
+        }
+
         float rnd = rnd16(seed, salt++);
-        updateCombinedReservoir(
+        updateCombinedReservoir_newSurf(
             combined, 
-            spatial, rnd);
+            spatial, spatialTargetPdf_curSurf, rnd);
     }
 
 

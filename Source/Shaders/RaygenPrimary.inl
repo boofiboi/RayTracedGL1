@@ -379,7 +379,8 @@ void main()
     imageStore(framebufThroughput,          pix, vec4(throughput, 0.0));
 
     // save some info for refl/refr shader
-    imageStore(framebufPrimaryToReflRefr,   pix, uvec4(h.geometryInstanceFlags, primaryPayload.instIdAndIndex, h.portalIndex, 0));
+    imageStore(framebufPrimaryToReflRefr,   pix, uvec4(h.geometryInstanceFlags, primaryPayload.instIdAndIndex, h.portalIndex, floatBitsToUint(( h.waterReflectivity >= 0.0 ) ? h.waterReflectivity : 1.0)));
+    imageStore(framebufWaterParams,         getRegularPixFromCheckerboardPix(pix), vec4(( h.waterColor.r >= 0.0 ) ? h.waterColor.rgb : globalUniform.waterColorAndDensity.rgb, ( h.waterDensity >= 0.0 ) ? h.waterDensity : globalUniform.waterColorAndDensity.a));
 
     // save info for rasterization and upscalers (FSR/DLSS), but only about primary surface,
     // as reflections/refraction only may be losely represented via rasterization
@@ -413,7 +414,7 @@ void main()
 
 
     // restore state from primary shader
-    const uvec3 primaryToReflRefrBuf        = texelFetch(framebufPrimaryToReflRefr_Sampler, pix, 0).rgb;
+    const uvec4 primaryToReflRefrBuf        = texelFetch(framebufPrimaryToReflRefr_Sampler, pix, 0);
     ShHitInfo h;
     h.albedo                                = texelFetch(framebufAlbedo_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
     h.hitPosition                           = texelFetch(framebufSurfacePosition_Sampler, pix, 0).xyz;
@@ -426,15 +427,10 @@ void main()
         h.roughness                         = mr.g;
     }
     {
-        int instId, instCustomIndex;
-        int geomIndex, primIndex;
-        unpackInstanceIdAndCustomIndex(primaryToReflRefrBuf.g, instId, instCustomIndex);
-        uint visPacked = floatBitsToUint(texelFetch(framebufVisibilityBuffer_Sampler, pix, 0).g);
-        unpackGeometryAndPrimitiveIndex(visPacked, geomIndex, primIndex);
-        ShTriangle tr = getTriangle(instId, instCustomIndex, geomIndex, primIndex);
-        h.waterColor = ( tr.waterColor.r >= 0.0 ) ? tr.waterColor : globalUniform.waterColorAndDensity.rgb;
-        h.waterDensity = ( tr.waterDensity >= 0.0 ) ? tr.waterDensity : globalUniform.waterColorAndDensity.a;
-        h.waterReflectivity = ( tr.waterReflectivity >= 0.0 ) ? tr.waterReflectivity : 1.0;
+        const vec4 waterParams              = texelFetch(framebufWaterParams_Sampler, getRegularPixFromCheckerboardPix(pix), 0);
+        h.waterColor                        = waterParams.rgb;
+        h.waterDensity                      = waterParams.a;
+        h.waterReflectivity                 = uintBitsToFloat(primaryToReflRefrBuf.a);
     }
     const vec3  motionBuf                   = texelFetch(framebufMotion_Sampler, pix, 0).rgb;
     vec2        motionCurToPrev             = motionBuf.rg;
@@ -583,7 +579,7 @@ void main()
         }
         else
         {
-            rayDir = reflect( normalize( rayDir ), normal );
+            rayDir = reflect( rayDir, normal );
 
             if( !isWater )
             {
@@ -612,7 +608,8 @@ void main()
         
         if (!doesPayloadContainHitInfo(currentPayload))
         {
-            throughput *= getMediaTransmittance(currentRayMedia, pow(abs(dot(rayDir, globalUniform.worldUpVector.xyz)), -3), currentWaterColor, currentWaterDensity);
+            const float updot = abs(dot(rayDir, globalUniform.worldUpVector.xyz));
+            throughput *= getMediaTransmittance(currentRayMedia, 1.0 / (updot * updot * updot), currentWaterColor, currentWaterDensity);
 
             storeSky(pix, rayDir, true, throughput, wasSplit);
             return;  
