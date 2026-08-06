@@ -101,7 +101,7 @@ void atrous(sampler2D samplerDiff,
     const vec3 normal = texelFetchNormal(pix);
 
     const float l = getLuminance(outDiff);
-    const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * getPrefilteredLuminanceVariance(pix) + 0.00001);
+    const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * getPrefilteredLuminanceVariance(pix) + 0.01);
    
     // the rougher the surface, the more blur to apply
     const float roughness = texelFetch(framebufMetallicRoughness_Sampler, pix, 0).g;

@@ -222,7 +222,7 @@ void atrous0(
     outIndir    = decodeE5B9G9R9(center.encIndirColor);
 
     const float l = getLuminance(outDiff);
-    const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * prefilterLuminanceVariance() + 0.00001);
+    const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * prefilterLuminanceVariance() + 0.01);
    
     // the rougher the surface, the more blur to apply
     const float wRoughMultiplier = clamp(center.roughness * 30, 0, 1);

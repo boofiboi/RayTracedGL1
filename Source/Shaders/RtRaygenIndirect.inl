@@ -89,7 +89,7 @@ vec3 processSecondDiffuseBounce(const uint seed, const Surface surf, const vec3 
                                         bounceDir,
                                         SECOND_BOUNCE_MIP_BIAS,
                                         emis);
-    emis *= globalUniform.emissionMapBoost;
+    emis *= min(globalUniform.emissionMapBoost, 10.0);
 
     if (hitSurf.isSky)
     {
@@ -125,7 +125,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
                                         bounceDir, 
                                         FIRST_BOUNCE_MIP_BIAS,
                                         emis);
-    emis *= globalUniform.emissionMapBoost;
+    emis *= min(globalUniform.emissionMapBoost, 10.0);
 
     if (hitSurf.isSky)
     {
@@ -190,7 +190,7 @@ bool testSurfaceForReuseIndirect(
     const vec3 curNormal, const vec3 otherNormal)
 {
     const float DepthThreshold = 0.05;
-    const float NormalThreshold = 0.0;
+    const float NormalThreshold = 0.5;
 
     return 
         testPixInRenderArea(otherPix, curChRenderArea) &&
