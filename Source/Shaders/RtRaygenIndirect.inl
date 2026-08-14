@@ -93,13 +93,13 @@ vec3 processSecondDiffuseBounce(const uint seed, const Surface surf, const vec3 
 
     if (hitSurf.isSky)
     {
-        return getSky(bounceDir) * oneOverPdf;
+        return clamp( getSky(bounceDir) * min(oneOverPdf, 10.0), vec3(0), vec3(20) );
     }
 
     // calculate direct illumination in a hit position
     const vec3 diffuse = processDirectIllumination(seed, hitSurf, 2);
 
-    return (emis + diffuse) * hitSurf.albedo * oneOverPdf;
+    return clamp( (emis + diffuse) * hitSurf.albedo * min(oneOverPdf, 10.0), vec3(0), vec3(20) );
 }
 
 SampleIndirect processIndirect( const uint seed, const Surface surf, out float oneOverSourcePdf )
@@ -117,6 +117,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
 #else
     bounceDir = getDiffuseBounce( seed, 1, surf.normal, oneOverSourcePdf );
 #endif
+    oneOverSourcePdf = clamp( oneOverSourcePdf, 0.0, 30.0 );
 
     vec3 emis;
     const Surface hitSurf = traceBounce(surf.position + surf.normal * 0.01, 
@@ -132,7 +133,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
         SampleIndirect s;
         s.position  = surf.position + bounceDir * MAX_RAY_LENGTH;
         s.normal    = -bounceDir;
-        s.radiance  = getSky(bounceDir);
+        s.radiance  = clamp( getSky(bounceDir), vec3(0), vec3(20) );
         
         return s;
     }
@@ -154,7 +155,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
     SampleIndirect s;
     s.position  = hitSurf.position;
     s.normal    = hitSurf.normal;
-    s.radiance  = (emis + diffuse) * hitSurf.albedo;
+    s.radiance  = clamp( (emis + diffuse) * hitSurf.albedo, vec3(0), vec3(25) );
 
     return s;
 }
@@ -174,8 +175,9 @@ void shade(const Surface surf, const SampleIndirect indir, float oneOverPdf,
     diffuse  = nl * indir.radiance * evalBRDFLambertian(1.0);
     specular = nl * indir.radiance * evalBRDFSmithGGX(surf.normal, surf.toViewerDir, l, surf.roughness, surf.specularColor);
 
-    diffuse  *= oneOverPdf;
-    specular *= oneOverPdf;
+    oneOverPdf = clamp(oneOverPdf, 0.0, 20.0);
+    diffuse  = clamp(diffuse * oneOverPdf, vec3(0.0), vec3(25.0));
+    specular = clamp(specular * oneOverPdf, vec3(0.0), vec3(25.0));
 }
 
 float targetPdfForIndirectSample(const SampleIndirect s)

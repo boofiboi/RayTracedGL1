@@ -353,6 +353,11 @@ void main()
                 }
             }
         }
+        if( waterDensity < 0.0 )
+        {
+            waterDensity = ( globalUniform.waterColorAndDensity.a > 0.0001 ) ? globalUniform.waterColorAndDensity.a : 0.1;
+            waterColor = ( globalUniform.waterColorAndDensity.r >= 0.0 ) ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 );
+        }
         vec3 trans = getMediaTransmittance( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity );
         throughput *= trans;
         primaryWaterFog = getWaterVolumetricFog( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity, trans );
@@ -463,8 +468,8 @@ void main()
 
 
 
-    vec3 currentWaterColor = h.waterColor;
-    float currentWaterDensity = h.waterDensity;
+    vec3 currentWaterColor = ( h.waterColor.r >= 0.0 ) ? h.waterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 ) );
+    float currentWaterDensity = ( h.waterDensity >= 0.0 ) ? h.waterDensity : ( globalUniform.waterColorAndDensity.a > 0.0001 ? globalUniform.waterColorAndDensity.a : 0.1 );
 
     for (int i = 0; i < globalUniform.reflectRefractMaxDepth; i++)
     {

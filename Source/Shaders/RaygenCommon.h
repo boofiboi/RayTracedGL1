@@ -737,10 +737,7 @@ vec3 processDirectIllumination( uint          seed,
     );
 
     #if SHIPPING_HACK
-    if( reservoir.selected != LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET )
-    {
-        out_diffuse = clamp( out_diffuse, vec3( 0 ), vec3( 20 ) );
-    }
+    out_diffuse = clamp( out_diffuse, vec3( 0 ), vec3( 20 ) );
     #endif
 
     return out_diffuse;

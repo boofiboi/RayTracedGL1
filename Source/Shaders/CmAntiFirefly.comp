@@ -129,6 +129,14 @@ void main()
     smax.specular = vec3( -MAXFLOAT );
     smax.indir    = vec3( -MAXFLOAT );
 
+    vec3 sumDiff   = vec3( 0.0 );
+    vec3 sumSpec   = vec3( 0.0 );
+    vec3 sumIndir  = vec3( 0.0 );
+    vec3 sumSqDiff  = vec3( 0.0 );
+    vec3 sumSqSpec  = vec3( 0.0 );
+    vec3 sumSqIndir = vec3( 0.0 );
+    float count = 0.0;
+
     for( int i = -FILTER_RADIUS; i <= FILTER_RADIUS; i++ )
     {
         for( int j = -FILTER_RADIUS; j <= FILTER_RADIUS; j++ )
@@ -147,13 +155,49 @@ void main()
             smax.diffuse  = max( smax.diffuse, other.diffuse );
             smax.specular = max( smax.specular, other.specular );
             smax.indir    = max( smax.indir, other.indir );
+
+            sumDiff   += other.diffuse;
+            sumSpec   += other.specular;
+            sumIndir  += other.indir;
+
+            sumSqDiff  += other.diffuse * other.diffuse;
+            sumSqSpec  += other.specular * other.specular;
+            sumSqIndir += other.indir * other.indir;
+
+            count += 1.0;
         }
     }
 
-    Data c     = GET_SDATA( 0, 0 );
-    c.diffuse  = clamp( c.diffuse, smin.diffuse, smax.diffuse );
-    c.specular = clamp( c.specular, smin.specular, smax.specular );
-    c.indir    = clamp( c.indir, smin.indir, smax.indir );
+    Data c = GET_SDATA( 0, 0 );
+
+    if( count > 0.0 )
+    {
+        const float invCount = 1.0 / count;
+
+        const vec3 muDiff = sumDiff * invCount;
+        const vec3 sigmaDiff = sqrt( max( vec3( 0.0 ), ( sumSqDiff * invCount ) - ( muDiff * muDiff ) ) );
+        const vec3 maxClampDiff = min( smax.diffuse, muDiff + 2.0 * sigmaDiff );
+        const vec3 minClampDiff = max( smin.diffuse, muDiff - 2.0 * sigmaDiff );
+        c.diffuse = clamp( c.diffuse, minClampDiff, maxClampDiff );
+
+        const vec3 muSpec = sumSpec * invCount;
+        const vec3 sigmaSpec = sqrt( max( vec3( 0.0 ), ( sumSqSpec * invCount ) - ( muSpec * muSpec ) ) );
+        const vec3 maxClampSpec = min( smax.specular, muSpec + 2.0 * sigmaSpec );
+        const vec3 minClampSpec = max( smin.specular, muSpec - 2.0 * sigmaSpec );
+        c.specular = clamp( c.specular, minClampSpec, maxClampSpec );
+
+        const vec3 muIndir = sumIndir * invCount;
+        const vec3 sigmaIndir = sqrt( max( vec3( 0.0 ), ( sumSqIndir * invCount ) - ( muIndir * muIndir ) ) );
+        const vec3 maxClampIndir = min( smax.indir, muIndir + 2.0 * sigmaIndir );
+        const vec3 minClampIndir = max( smin.indir, muIndir - 2.0 * sigmaIndir );
+        c.indir = clamp( c.indir, minClampIndir, maxClampIndir );
+    }
+    else
+    {
+        c.diffuse  = clamp( c.diffuse, smin.diffuse, smax.diffuse );
+        c.specular = clamp( c.specular, smin.specular, smax.specular );
+        c.indir    = clamp( c.indir, smin.indir, smax.indir );
+    }
 
     imageStoreDiffAccumColor( pix, c.diffuse );
     imageStoreSpecPingColor( pix, c.specular );
