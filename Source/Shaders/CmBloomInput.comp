@@ -28,40 +28,79 @@
 
 layout(local_size_x = COMPUTE_BLOOM_DOWNSAMPLE_GROUP_SIZE_X, local_size_y = COMPUTE_BLOOM_DOWNSAMPLE_GROUP_SIZE_Y, local_size_z = 1) in;
 
-vec3 getBloomInput( const vec3 hdr, const vec3 screenEmis )
+vec3 applyBloomThreshold( const vec3 color, const float threshold )
 {
-    float evBloom = getCurrentEV100() + globalUniform.bloomEmissionMultiplier;
-
-    vec3 bloom = ( hdr + screenEmis * ev100ToLuminance( evBloom ) ) *
-                 ev100ToLuminousExposure( getCurrentEV100() );
-
-    if( any( isnan( bloom ) ) || any( isinf( bloom ) ) )
+    float l = getLuminance( color );
+    if( l <= 0.0001 || threshold <= 0.0 )
     {
-        bloom = vec3( 0 );
+        return color;
     }
 
-    return bloom * smoothstep( 0,
-                               globalUniform.bloomThreshold,
-                               getLuminance( bloom ) );
+    // Soft-knee thresholding curve to avoid harsh cutoffs and flickering
+    float knee = threshold * 0.5;
+    float soft = l - threshold + knee;
+    soft = clamp( soft, 0.0, 2.0 * knee );
+    soft = ( soft * soft ) / ( 4.0 * knee + 0.00001 );
+
+    float factor = max( soft, l - threshold ) / l;
+    return color * factor;
 }
 
+vec3 sampleFullResLinearColor( const ivec2 pix, const float exposure, const float evBloomLuminance )
+{
+    vec3       hdr        = texelFetch( framebufFinal_Sampler, pix, 0 ).rgb;
+    const vec3 screenEmis = texelFetch( framebufScreenEmission_Sampler, pix, 0 ).rgb;
+
+    const vec4 volumetric = texelFetch( framebufScattering_Sampler, pix, 0 );
+    hdr                   = hdr * volumetric.a + volumetric.rgb;
+
+    vec3 color = ( hdr + screenEmis * evBloomLuminance ) * exposure;
+
+    if( any( isnan( color ) ) || any( isinf( color ) ) )
+    {
+        color = vec3( 0.0 );
+    }
+
+    return max( color, vec3( 0.0 ) );
+}
 
 void main()
 {
-    const ivec2 fullResPix = ivec2( gl_GlobalInvocationID ) * 2 + 1;
-    if( fullResPix.x >= int( globalUniform.renderWidth ) ||
-        fullResPix.y >= int( globalUniform.renderHeight ) )
+    const ivec2 dstPix = ivec2( gl_GlobalInvocationID.xy );
+    const ivec2 fullResBase = dstPix * 2;
+
+    if( fullResBase.x >= int( globalUniform.renderWidth ) ||
+        fullResBase.y >= int( globalUniform.renderHeight ) )
     {
         return;
     }
 
-    vec3       hdr        = texelFetch( framebufFinal_Sampler, fullResPix, 0 ).rgb;
-    const vec3 screenEmis = texelFetch( framebufScreenEmission_Sampler, fullResPix, 0 ).rgb;
+    const float exposure = ev100ToLuminousExposure( getCurrentEV100() );
+    const float evBloom  = getCurrentEV100() + globalUniform.bloomEmissionMultiplier;
+    const float evBloomLuminance = ev100ToLuminance( evBloom );
 
-    {
-        vec4 volumetric = texelFetch( framebufScattering_Sampler, fullResPix, 0 );
-        hdr             = hdr * volumetric.a + volumetric.rgb;
-    }
+    const ivec2 maxCoord = ivec2( int( globalUniform.renderWidth ) - 1, int( globalUniform.renderHeight ) - 1 );
 
-    imageStore( framebufBloomInput, ivec2( gl_GlobalInvocationID ), vec4( getBloomInput( hdr, screenEmis ), 0.0 ) );
+    // 2x2 box filtering over the 4 full-res pixels to prevent subpixel highlight flickering
+    const ivec2 p00 = min( fullResBase + ivec2( 0, 0 ), maxCoord );
+    const ivec2 p10 = min( fullResBase + ivec2( 1, 0 ), maxCoord );
+    const ivec2 p01 = min( fullResBase + ivec2( 0, 1 ), maxCoord );
+    const ivec2 p11 = min( fullResBase + ivec2( 1, 1 ), maxCoord );
+
+    const vec3 c00 = sampleFullResLinearColor( p00, exposure, evBloomLuminance );
+    const vec3 c10 = sampleFullResLinearColor( p10, exposure, evBloomLuminance );
+    const vec3 c01 = sampleFullResLinearColor( p01, exposure, evBloomLuminance );
+    const vec3 c11 = sampleFullResLinearColor( p11, exposure, evBloomLuminance );
+
+    // Karis weighting on the 2x2 box to suppress fireflies
+    const float w00 = 1.0 / ( 1.0 + getLuminance( c00 ) );
+    const float w10 = 1.0 / ( 1.0 + getLuminance( c10 ) );
+    const float w01 = 1.0 / ( 1.0 + getLuminance( c01 ) );
+    const float w11 = 1.0 / ( 1.0 + getLuminance( c11 ) );
+
+    const vec3 avgColor = ( c00 * w00 + c10 * w10 + c01 * w01 + c11 * w11 ) / ( w00 + w10 + w01 + w11 );
+
+    const vec3 bloom = applyBloomThreshold( avgColor, globalUniform.bloomThreshold );
+
+    imageStore( framebufBloomInput, dstPix, vec4( bloom, 0.0 ) );
 }

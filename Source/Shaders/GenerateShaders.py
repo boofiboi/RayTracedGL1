@@ -270,6 +270,17 @@ def main():
                     del cache[filename]
             else:
                 cache[filename] = lastModifTime
+                extraDirs = [
+                    "../../Build/x64-Release/shaders/",
+                    "../../Build/x64-Release-NonAVX/shaders/",
+                    "../../Build/Release/shaders/",
+                    "../../Build/x64-Debug/shaders/",
+                    "../../Build/Debug/shaders/",
+                ]
+                import shutil
+                for extra in extraDirs:
+                    if os.path.isdir(extra):
+                        shutil.copy2(targetSpvFile, os.path.join(extra, os.path.basename(targetSpvFile)))
 
             msgWasAnyShaderRebuilt = True
 

@@ -231,8 +231,20 @@ else()
 	project (FidelityFX-SDK)
 endif()
 
-# Components (only FSR3 Upscaler is used)
+# Components
 add_subdirectory(${FFX_COMPONENTS_PATH}/fsr3upscaler)
+
+if (FFX_FSR3)
+	add_subdirectory(${FFX_COMPONENTS_PATH}/fsr3)
+endif()
+
+if (FFX_FI)
+	add_subdirectory(${FFX_COMPONENTS_PATH}/frameinterpolation)
+endif()
+
+if (FFX_OF)
+	add_subdirectory(${FFX_COMPONENTS_PATH}/opticalflow)
+endif()
 
 # Vulkan backend only
 if (FFX_API_BACKEND STREQUAL VK_X64)

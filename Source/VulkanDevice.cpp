@@ -607,18 +607,17 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                       renderResolution );
     }
 
-    imageComposition->Finalize( cmd,
-                                frameIndex,
-                                *uniform,
-                                *tonemapping,
-                                AccessParams< RgDrawFrameTonemappingParams >( drawInfo ) );
-
-
     bool enableBloom = AccessParams< RgDrawFrameBloomParams >( drawInfo ).bloomIntensity > 0.0f;
     if( enableBloom )
     {
         bloom->Prepare( cmd, frameIndex, *uniform, *tonemapping );
     }
+
+    imageComposition->Finalize( cmd,
+                                frameIndex,
+                                *uniform,
+                                *tonemapping,
+                                AccessParams< RgDrawFrameTonemappingParams >( drawInfo ) );
 
 
     FramebufferImageIndex accum = FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;

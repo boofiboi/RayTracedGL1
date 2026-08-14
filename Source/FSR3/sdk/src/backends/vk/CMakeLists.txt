@@ -111,9 +111,11 @@ if (FFX_FSR3UPSCALER OR FFX_ALL)
 endif()
 
 if (FFX_FI OR FFX_ALL)
-	set(FFX_FI_PRIVATE_SOURCE
+	file(GLOB FFX_FI_SWAPCHAIN_SOURCE
 		"${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.h"
-		"${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/FrameInterpolationSwapchain/*.cpp")
+	set(FFX_FI_PRIVATE_SOURCE
+		${FFX_FI_SWAPCHAIN_SOURCE}
 		"${FFX_SRC_BACKENDS_PATH}/shared/blob_accessors/ffx_frameinterpolation_shaderblobs.h"
 		"${FFX_SRC_BACKENDS_PATH}/shared/blob_accessors/ffx_frameinterpolation_shaderblobs.cpp")
 	list(APPEND PRIVATE_SOURCE ${FFX_FI_PRIVATE_SOURCE})
