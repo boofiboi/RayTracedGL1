@@ -52,6 +52,11 @@ float phaseFunction_Schlick( const vec3 tolight, const vec3 toviewer, float assy
 
 vec3 traceDirectIllumination_SpecificLight( const vec3 from, inout vec3 out_lightdirection )
 {
+    // WALL_BIAS: nudge the volumetric shadow ray origin toward the light so that voxel
+    // centers embedded in thin BSP walls start the ray on the unobstructed side.
+    // 1.0 matches the minimum GoldSrc wall thickness in world units.
+    const float WALL_BIAS = 1.0;
+
     if( globalUniform.volumeLightSourceIndex != LIGHT_INDEX_NONE )
     {
         LightSample light =
@@ -61,16 +66,22 @@ vec3 traceDirectIllumination_SpecificLight( const vec3 from, inout vec3 out_ligh
 
         if( getLuminance( radiance ) > 0.0 )
         {
-            bool isShadowed = traceShadowRay( 0, from, light.position, true );
+            // Bias the origin toward the light so wall-embedded voxels are treated as shadowed
+            vec3 toLight = safeNormalize( light.position - from );
+            bool isShadowed = traceShadowRay( 0, from + toLight * WALL_BIAS, light.position, true );
 
-            out_lightdirection = safeNormalize( from - light.position );
+            out_lightdirection = -toLight;
             return radiance * float( !isShadowed );
         }
     }
     else if( globalUniform.volumeFallbackSrcExists != 0 )
     {
+        // volumeFallbackSrcDirection points FROM the sun TOWARD the scene (i.e. the light direction).
+        // Negate it to get the direction toward the sun, then bias the origin that way.
+        vec3 towardSun = -globalUniform.volumeFallbackSrcDirection.xyz;
         bool isShadowed = traceShadowRay(
-            0, from, from - MAX_RAY_LENGTH * globalUniform.volumeFallbackSrcDirection.xyz, true );
+            0, from + towardSun * WALL_BIAS,
+            from + towardSun * WALL_BIAS - MAX_RAY_LENGTH * globalUniform.volumeFallbackSrcDirection.xyz, true );
 
         out_lightdirection = globalUniform.volumeFallbackSrcDirection.xyz;
         return globalUniform.volumeFallbackSrcColor.rgb * float( !isShadowed );
