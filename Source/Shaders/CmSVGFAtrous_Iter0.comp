@@ -222,10 +222,11 @@ void atrous0(
     outIndir    = decodeE5B9G9R9(center.encIndirColor);
 
     const float l = getLuminance(outDiff);
+    const float l_s = getLuminance(outSpec);
     const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * prefilterLuminanceVariance() + 0.00001);
    
     // the rougher the surface, the more blur to apply
-    const float wRoughMultiplier = clamp(center.roughness * 30, 0, 1);
+    const float wRoughMultiplier = clamp(center.roughness * center.roughness * 10.0, 0.0, 1.0);
 
     float historyLengthSpec = texelFetch(framebufAccumHistoryLength_Sampler, pix, 0).b;
     float normalWeightScale = clamp(historyLengthSpec / 8, 0, 1);
@@ -257,11 +258,13 @@ void atrous0(
 
 
             const float l_q = getLuminance(other.directDiffuseColor);
+            const float l_s_q = getLuminance(decodeE5B9G9R9(other.encSpecularColor));
             const float n_n = max(0.0, dotEnc(center.encNormal, other.encNormal));
 
             const float w_z = abs(center.depth - other.depth) / max(gradDepth * (abs(xx) + abs(yy)), 0.01);
             const float w_n = pow(n_n, 128.0);
             const float w_l = abs(l - l_q) * wLumMultiplier;
+            const float w_l_s = abs(l_s - l_s_q) * wLumMultiplier;
 
             // larger weight if roughness difference is small
             float w_r = max(0.0, 1.0 - 10.0 * abs(center.roughness - other.roughness)) * wRoughMultiplier;
@@ -277,7 +280,7 @@ void atrous0(
             const float wBase = exp(-w_z * w_z) * w_n * waveletW * isInside;
 
             const float wDiff      = wBase * exp(-w_l);
-            const float wSpec      = wBase * w_r;
+            const float wSpec      = wBase * w_r * exp(-w_l_s);
             const float wDiffIndir = wBase;
 
 

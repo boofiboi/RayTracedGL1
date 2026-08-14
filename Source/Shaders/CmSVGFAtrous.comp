@@ -101,11 +101,12 @@ void atrous(sampler2D samplerDiff,
     const vec3 normal = texelFetchNormal(pix);
 
     const float l = getLuminance(outDiff);
+    const float l_s = getLuminance(outSpec);
     const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * getPrefilteredLuminanceVariance(pix) + 0.00001);
    
     // the rougher the surface, the more blur to apply
     const float roughness = texelFetch(framebufMetallicRoughness_Sampler, pix, 0).g;
-    const float wRoughMultiplier = clamp(roughness * 30 - atrousIteration, 0, 1);
+    const float wRoughMultiplier = clamp(roughness * roughness * 10.0 - atrousIteration * 0.2, 0.0, 1.0);
 
     float historyLengthSpec = texelFetch(framebufAccumHistoryLength_Sampler, pix, 0).b;
     float normalWeightScale = clamp(historyLengthSpec / 8, 0, 1);
@@ -170,6 +171,7 @@ void atrous(sampler2D samplerDiff,
             const vec3  diffColor_q = cv_q.rgb;
             const float variance_q  = cv_q.a;
             const float l_q         = getLuminance(diffColor_q);
+            const float l_s_q       = getLuminance(specColor_q);
             const float n_n         = max(0.0, dot(normal, normal_q));
 
             const vec3 indir_q      = decodeE5B9G9R9(texelFetch(samplerIndir,       pix_q, 0).r);
@@ -178,6 +180,7 @@ void atrous(sampler2D samplerDiff,
             const float w_z = abs(depth - depth_q) / max(gradDepth * (abs(xx) + abs(yy)), 0.01);
             const float w_n = pow(n_n, 128.0);
             const float w_l = abs(l - l_q) * wLumMultiplier;
+            const float w_l_s = abs(l_s - l_s_q) * wLumMultiplier;
 
             // larger weight if roughness difference is small
             float w_r =  max(0, 1 - 10 * abs(roughness - roughness_q)) * wRoughMultiplier;
@@ -193,7 +196,7 @@ void atrous(sampler2D samplerDiff,
             const float wBase = exp(-w_z * w_z) * w_n * waveletW * isInside;
 
             const float wDiff      = wBase * exp(-w_l);
-            const float wSpec      = wBase * w_r;
+            const float wSpec      = wBase * w_r * exp(-w_l_s);
             const float wDiffIndir = wBase;
 
 
