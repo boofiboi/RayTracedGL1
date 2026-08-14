@@ -140,8 +140,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
     // calculate direct diffuse illumination in a hit position
     vec3 diffuse = processDirectIllumination(seed, hitSurf, 1);
 
-    // TODO: investigate why uncommenting this makes diffuse very red
-    // if( globalUniform.indirSecondBounce != 0 )
+    if( globalUniform.indirSecondBounce != 0 )
     {
         float oneOverPdf_Second;
         const vec3 bounceDir_Second = getDiffuseBounce(seed, 2, hitSurf.normal, oneOverPdf_Second);
