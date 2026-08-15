@@ -285,7 +285,7 @@ if (RG_WITH_NVIDIA_NRD)
 
     add_custom_command(TARGET RayTracedGL1 POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/NRD/_Bin/$<CONFIG>/NRI.dll"
+            "$<TARGET_FILE:NRI>"
             "$<TARGET_FILE_DIR:RayTracedGL1>")
 endif()
 
