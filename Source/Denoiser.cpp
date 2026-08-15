@@ -128,6 +128,7 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
         VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
+        VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
     };
 
     nri::DeviceCreationVKDesc devDesc = {
