@@ -340,7 +340,7 @@ bool traceShadowRay(uint surfInstCustomIndex, vec3 start, vec3 end, bool ignoreF
 
     traceRayEXT(
         topLevelAS, 
-        gl_RayFlagsSkipClosestHitShaderEXT, 
+        gl_RayFlagsSkipClosestHitShaderEXT | gl_RayFlagsTerminateOnFirstHitEXT, 
         cullMask, 
         0, 0, 	// sbtRecordOffset, sbtRecordStride
         SBT_INDEX_MISS_SHADOW, 		// shadow missIndex
