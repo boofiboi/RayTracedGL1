@@ -668,6 +668,7 @@ void main()
     imageStore(framebufVisibilityBuffer,    pix, packVisibilityBuffer(currentPayload));
     imageStore(framebufViewDirection,       pix, vec4(rayDir, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, wasSplit ? 1.0 : -1.0));
+    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), 0.0, 0.0));
     imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(UPSCALER_REACTIVITY_REFLREFR));
 }
 #endif

@@ -38,15 +38,18 @@ void main()
     const ivec2 cbp = getCheckerboardPix(pix);
 
     bool isSky = isSkyPix(cbp);
-    vec3 surfPos = texelFetch(framebufSurfacePosition_Sampler, cbp, 0).xyz;
     vec3 normal = texelFetchNormal(cbp);
     float roughness = texelFetch(framebufMetallicRoughness_Sampler, cbp, 0).g;
 
-    vec3 viewPos = (globalUniform.view * vec4(surfPos, 1.0)).xyz;
-    float viewZ = isSky ? 100000.0 : abs(viewPos.z);
+    float depth = texelFetch(framebufDepthWorld_Sampler, cbp, 0).r;
+    float viewZ = isSky ? 100000.0 : max(depth, 0.01);
 
     vec4 viewDirRay = texelFetch(framebufViewDirection_Sampler, cbp, 0);
     float hitDist = max(viewDirRay.w, 0.0);
+    if(hitDist <= 0.0)
+    {
+        hitDist = depth;
+    }
 
     vec3 directDiff = texelFetchUnfilteredDirect(cbp);
     vec3 indirDiff = texelFetchUnfilteredIndir(cbp);
