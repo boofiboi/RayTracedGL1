@@ -112,6 +112,14 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
         .familyIndex = queueFamilyIndex,
     };
 
+    const char* instExtensions[] = {
+        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+        VK_KHR_SURFACE_EXTENSION_NAME,
+#ifdef RG_USE_SURFACE_WIN32
+        VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#endif
+    };
+
     const char* devExtensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
@@ -130,6 +138,8 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
         .queueFamilyNum = 1,
         .minorVersion = 2,
     };
+    devDesc.vkExtensions.instanceExtensions = instExtensions;
+    devDesc.vkExtensions.instanceExtensionNum = static_cast< uint32_t >( std::size( instExtensions ) );
     devDesc.vkExtensions.deviceExtensions = devExtensions;
     devDesc.vkExtensions.deviceExtensionNum = static_cast< uint32_t >( std::size( devExtensions ) );
 
