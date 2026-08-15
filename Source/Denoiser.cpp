@@ -192,6 +192,10 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
             FI::FB_IMAGE_INDEX_UNFILTERED_DIRECT,
             FI::FB_IMAGE_INDEX_UNFILTERED_INDIR,
             FI::FB_IMAGE_INDEX_UNFILTERED_SPECULAR,
+            FI::FB_IMAGE_INDEX_NRD_DIFFUSE_HIT_DIST,
+            FI::FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST,
+            FI::FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS,
+            FI::FB_IMAGE_INDEX_NRD_VIEW_Z,
         };
         framebuffers->BarrierMultiple( cmd, frameIndex, inBarriers );
 
@@ -231,7 +235,9 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
             FI::FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST,
             FI::FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS,
             FI::FB_IMAGE_INDEX_NRD_VIEW_Z,
-            FI::FB_IMAGE_INDEX_MOTION,
+            FI::FB_IMAGE_INDEX_MOTION_DLSS,
+            FI::FB_IMAGE_INDEX_NRD_OUT_DIFFUSE,
+            FI::FB_IMAGE_INDEX_NRD_OUT_SPECULAR,
         };
         framebuffers->BarrierMultiple( cmd, frameIndex, nrdInBarriers );
 
@@ -247,6 +253,15 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
         commonSettings.cameraJitter[ 1 ] = jitter.data[ 1 ];
         commonSettings.cameraJitterPrev[ 0 ] = prevJitter.data[ 0 ];
         commonSettings.cameraJitterPrev[ 1 ] = prevJitter.data[ 1 ];
+
+        commonSettings.resourceSize[ 0 ] = static_cast< uint16_t >( currentWidth );
+        commonSettings.resourceSize[ 1 ] = static_cast< uint16_t >( currentHeight );
+        commonSettings.resourceSizePrev[ 0 ] = static_cast< uint16_t >( currentWidth );
+        commonSettings.resourceSizePrev[ 1 ] = static_cast< uint16_t >( currentHeight );
+        commonSettings.rectSize[ 0 ] = static_cast< uint16_t >( currentWidth );
+        commonSettings.rectSize[ 1 ] = static_cast< uint16_t >( currentHeight );
+        commonSettings.rectSizePrev[ 0 ] = static_cast< uint16_t >( currentWidth );
+        commonSettings.rectSizePrev[ 1 ] = static_cast< uint16_t >( currentHeight );
 
         commonSettings.motionVectorScale[ 0 ] = 1.0f;
         commonSettings.motionVectorScale[ 1 ] = 1.0f;
@@ -285,7 +300,7 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
         setupResource( nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST );
         setupResource( nrd::ResourceType::IN_NORMAL_ROUGHNESS, FI::FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS );
         setupResource( nrd::ResourceType::IN_VIEWZ, FI::FB_IMAGE_INDEX_NRD_VIEW_Z );
-        setupResource( nrd::ResourceType::IN_MV, FI::FB_IMAGE_INDEX_MOTION );
+        setupResource( nrd::ResourceType::IN_MV, FI::FB_IMAGE_INDEX_MOTION_DLSS );
         setupResource( nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_OUT_DIFFUSE );
         setupResource( nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_OUT_SPECULAR );
 
@@ -311,6 +326,8 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
             FI::FB_IMAGE_INDEX_THROUGHPUT,
             FI::FB_IMAGE_INDEX_IS_SKY,
             FI::FB_IMAGE_INDEX_ACID_FOG_R_T,
+            FI::FB_IMAGE_INDEX_PRE_FINAL,
+            FI::FB_IMAGE_INDEX_HISTOGRAM_INPUT,
         };
         framebuffers->BarrierMultiple( cmd, frameIndex, outBarriers );
 

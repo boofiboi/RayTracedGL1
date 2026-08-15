@@ -30,9 +30,11 @@ void main()
         return;
     }
 
-    bool isSky = texelFetch(framebufIsSky_Sampler, pix, 0).r != 0;
+    const ivec2 cbp = getCheckerboardPix(pix);
+
+    bool isSky = isSkyPix(cbp);
     vec3 albedo = texelFetch(framebufAlbedo_Sampler, pix, 0).rgb;
-    vec3 throughput = texelFetch(framebufThroughput_Sampler, pix, 0).rgb;
+    vec3 throughput = texelFetch(framebufThroughput_Sampler, cbp, 0).rgb;
 
     vec3 diffuse;
     vec3 spec;
@@ -52,7 +54,7 @@ void main()
 
     if(!isSky)
     {
-        float metallic = texelFetch(framebufMetallicRoughness_Sampler, pix, 0).r;
+        float metallic = texelFetch(framebufMetallicRoughness_Sampler, cbp, 0).r;
         vec3 ro_s = getSpecularColor(albedo, metallic);
         vec3 ro_d = albedo * (1.0 - metallic);
 
