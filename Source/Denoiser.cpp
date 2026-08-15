@@ -112,6 +112,16 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
         .familyIndex = queueFamilyIndex,
     };
 
+    const char* devExtensions[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
+    };
+
     nri::DeviceCreationVKDesc devDesc = {
         .vkInstance = ( void* )instance,
         .vkDevice = ( void* )device,
@@ -120,6 +130,8 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
         .queueFamilyNum = 1,
         .minorVersion = 2,
     };
+    devDesc.vkExtensions.deviceExtensions = devExtensions;
+    devDesc.vkExtensions.deviceExtensionNum = static_cast< uint32_t >( std::size( devExtensions ) );
 
     nrd::Result res = nrdIntegration.RecreateVK( integrationDesc, instanceDesc, devDesc );
     if( res == nrd::Result::SUCCESS )
