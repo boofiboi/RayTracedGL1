@@ -1,0 +1,93 @@
+#version 460
+
+#define DESC_SET_FRAMEBUFFERS 0
+#define DESC_SET_GLOBAL_UNIFORM 1
+#include "ShaderCommonGLSLFunc.h"
+#include "BRDF.h"
+
+layout(local_size_x = COMPUTE_COMPOSE_GROUP_SIZE_X, local_size_y = COMPUTE_COMPOSE_GROUP_SIZE_Y, local_size_z = 1) in;
+
+layout(push_constant) uniform NrdPostprocessPush_BT
+{
+    uint denoiserType;
+} push;
+
+vec3 yCoCgToLinear(vec3 c)
+{
+    float t = c.x - c.z;
+    float r = t + c.y;
+    float g = c.x + c.z;
+    float b = t - c.y;
+    return max(vec3(r, g, b), vec3(0.0));
+}
+
+void main()
+{
+    const ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
+
+    if(pix.x >= uint(globalUniform.renderWidth) || pix.y >= uint(globalUniform.renderHeight))
+    {
+        return;
+    }
+
+    bool isSky = texelFetch(framebufIsSky_Sampler, pix, 0).r != 0;
+    vec3 albedo = texelFetch(framebufAlbedo_Sampler, pix, 0).rgb;
+    vec3 throughput = texelFetch(framebufThroughput_Sampler, pix, 0).rgb;
+
+    vec3 diffuse;
+    vec3 spec;
+
+    if(push.denoiserType == 0)
+    {
+        diffuse = yCoCgToLinear(texelFetch(framebufNrdOutDiffuse_Sampler, pix, 0).rgb);
+        spec = yCoCgToLinear(texelFetch(framebufNrdOutSpecular_Sampler, pix, 0).rgb);
+    }
+    else
+    {
+        diffuse = texelFetch(framebufNrdOutDiffuse_Sampler, pix, 0).rgb;
+        spec = texelFetch(framebufNrdOutSpecular_Sampler, pix, 0).rgb;
+    }
+
+    vec3 illuminated;
+
+    if(!isSky)
+    {
+        float metallic = texelFetch(framebufMetallicRoughness_Sampler, pix, 0).r;
+        vec3 ro_s = getSpecularColor(albedo, metallic);
+        vec3 ro_d = albedo * (1.0 - metallic);
+
+        illuminated = diffuse * ro_d + spec * ro_s;
+
+        if((globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_ONLY_DIRECT_DIFFUSE) != 0)
+        {
+            illuminated = diffuse * albedo;
+        }
+        else if((globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_ONLY_SPECULAR) != 0)
+        {
+            illuminated = spec * ro_s;
+        }
+        else if((globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_ONLY_INDIRECT_DIFFUSE) != 0)
+        {
+            illuminated = diffuse;
+        }
+
+        illuminated *= throughput;
+        illuminated *= getMaterialAmbient(albedo);
+
+        vec3 waterFog = texelFetch(framebufAcidFogRT_Sampler, pix, 0).rgb;
+        illuminated += waterFog * getMaterialAmbient(albedo);
+    }
+    else
+    {
+        illuminated = albedo * throughput;
+    }
+
+    imageStore(framebufHistogramInput, pix, vec4(max(0.0, getLuminance(illuminated))));
+
+    if(classicShading(pix))
+    {
+        illuminated = albedo * throughput;
+    }
+
+    imageStore(framebufPreFinal, pix, vec4(max(vec3(0.0), illuminated), 0.0));
+}

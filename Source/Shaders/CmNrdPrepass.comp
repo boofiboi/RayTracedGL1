@@ -1,0 +1,75 @@
+#version 460
+
+#define DESC_SET_FRAMEBUFFERS 0
+#define DESC_SET_GLOBAL_UNIFORM 1
+#include "ShaderCommonGLSLFunc.h"
+
+layout(local_size_x = COMPUTE_COMPOSE_GROUP_SIZE_X, local_size_y = COMPUTE_COMPOSE_GROUP_SIZE_Y, local_size_z = 1) in;
+
+layout(push_constant) uniform NrdPrepassPush_BT
+{
+    uint denoiserType;
+} push;
+
+vec3 linearToYCoCg(vec3 c)
+{
+    float Y = dot(c, vec3(0.25, 0.5, 0.25));
+    float Co = dot(c, vec3(0.5, 0.0, -0.5));
+    float Cg = dot(c, vec3(-0.25, 0.5, -0.25));
+    return vec3(Y, Co, Cg);
+}
+
+float getReblurNormHitDist(float hitDist, float viewZ, float roughness)
+{
+    float smc = (1.0 - exp2(-200.0 * roughness * roughness)) * sqrt(clamp(roughness, 0.0, 1.0));
+    float f = (3.0 + viewZ * 0.1) * mix(20.0, 1.0, smc);
+    return clamp(hitDist / max(f, 1e-4), 0.0, 1.0);
+}
+
+void main()
+{
+    const ivec2 pix = ivec2(gl_GlobalInvocationID.xy);
+
+    if(pix.x >= uint(globalUniform.renderWidth) || pix.y >= uint(globalUniform.renderHeight))
+    {
+        return;
+    }
+
+    bool isSky = texelFetch(framebufIsSky_Sampler, pix, 0).r != 0;
+    vec3 surfPos = texelFetch(framebufSurfacePosition_Sampler, pix, 0).xyz;
+    vec3 normal = texelFetchNormal(pix);
+    float roughness = texelFetch(framebufMetallicRoughness_Sampler, pix, 0).g;
+
+    vec3 viewPos = (globalUniform.view * vec4(surfPos, 1.0)).xyz;
+    float viewZ = isSky ? 100000.0 : abs(viewPos.z);
+
+    vec4 viewDirRay = texelFetch(framebufViewDirection_Sampler, pix, 0);
+    float hitDist = max(viewDirRay.w, 0.0);
+
+    vec3 directDiff = texelFetchUnfilteredDirect(pix);
+    vec3 indirDiff = texelFetchUnfilteredIndir(pix);
+    vec3 diffRadiance = directDiff + indirDiff;
+    vec3 specRadiance = texelFetchUnfilteredSpecular(pix);
+
+    vec4 outDiffHitDist;
+    vec4 outSpecHitDist;
+
+    if(push.denoiserType == 0)
+    {
+        float normDiffHitDist = getReblurNormHitDist(hitDist, viewZ, 1.0);
+        float normSpecHitDist = getReblurNormHitDist(hitDist, viewZ, roughness);
+
+        outDiffHitDist = vec4(linearToYCoCg(diffRadiance), normDiffHitDist);
+        outSpecHitDist = vec4(linearToYCoCg(specRadiance), normSpecHitDist);
+    }
+    else
+    {
+        outDiffHitDist = vec4(diffRadiance, hitDist);
+        outSpecHitDist = vec4(specRadiance, hitDist);
+    }
+
+    imageStore(framebufNrdDiffuseHitDist, pix, outDiffHitDist);
+    imageStore(framebufNrdSpecularHitDist, pix, outSpecHitDist);
+    imageStore(framebufNrdNormalRoughness, pix, vec4(normal, roughness));
+    imageStore(framebufNrdViewZ, pix, vec4(viewZ, 0.0, 0.0, 0.0));
+}

@@ -583,7 +583,9 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         pathTracer->TraceVolumetric( params );
 
         pathTracer->CalculateGradientsSamples( params );
-        denoiser->Denoise( cmd, frameIndex, uniform );
+        bool resetHistory =
+            AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo ).resetUpscalerHistory;
+        denoiser->Denoise( cmd, frameIndex, uniform, jitter, resetHistory );
         volumetric->ProcessScattering(
             cmd, frameIndex, *uniform, *blueNoise, *framebuffers, volumetricMaxHistoryLen );
         tonemapping->CalculateExposure( cmd, frameIndex, uniform );

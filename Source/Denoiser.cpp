@@ -1,258 +1,332 @@
-// Copyright (c) 2021 Sultim Tsyrendashiev
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #include "Denoiser.h"
 
 #include <cmath>
+#include <cstring>
 #include "Generated/ShaderCommonC.h"
 #include "CmdLabel.h"
 #include "Utils.h"
 
-RTGL1::Denoiser::Denoiser( VkDevice                        _device,
+#ifdef RG_USE_NVIDIA_NRD
+#include <NRDIntegration.hpp>
+#endif
+
+RTGL1::Denoiser::Denoiser( VkInstance _instance,
+                           VkDevice _device,
+                           VkPhysicalDevice _physDevice,
+                           uint32_t _graphicsQueueFamilyIndex,
                            std::shared_ptr< Framebuffers > _framebuffers,
-                           const ShaderManager&            _shaderManager,
-                           const GlobalUniform&            _uniform )
-    : device( _device )
+                           const ShaderManager& _shaderManager,
+                           const GlobalUniform& _uniform )
+    : instance( _instance )
+    , device( _device )
+    , physDevice( _physDevice )
+    , queueFamilyIndex( _graphicsQueueFamilyIndex )
     , framebuffers( std::move( _framebuffers ) )
     , pipelineLayout( VK_NULL_HANDLE )
-    , gradientAtrous{}
-    , antifirefly( VK_NULL_HANDLE )
-    , temporalAccumulation( VK_NULL_HANDLE )
-    , varianceEstimation( VK_NULL_HANDLE )
-    , atrous{}
+    , prepassPipeline( VK_NULL_HANDLE )
+    , postprocessPipeline( VK_NULL_HANDLE )
+    , renderWidth( 0 )
+    , renderHeight( 0 )
+    , prevJitter{}
+    , currentMethod( NrdDenoiserMethod::Reblur )
+#ifdef RG_USE_NVIDIA_NRD
+    , reblurSettings{}
+    , relaxSettings{}
+    , nrdInitialized( false )
+#endif
 {
-    static_assert( sizeof( atrous ) / sizeof( VkPipeline ) == COMPUTE_SVGF_ATROUS_ITERATION_COUNT,
-                   "Wrong atrous pipeline count" );
-    static_assert( sizeof( gradientAtrous ) / sizeof( VkPipeline ) ==
-                       COMPUTE_ASVGF_GRADIENT_ATROUS_ITERATION_COUNT,
-                   "Wrong gradient atrous pipeline count" );
-
-
     VkDescriptorSetLayout setLayouts[] = {
         framebuffers->GetDescSetLayout(),
         _uniform.GetDescSetLayout(),
     };
 
-    CreatePipelineLayout( setLayouts, std::size( setLayouts ) );
+    CreatePipelineLayout( setLayouts, static_cast< uint32_t >( std::size( setLayouts ) ) );
     CreatePipelines( &_shaderManager );
 }
 
 RTGL1::Denoiser::~Denoiser()
 {
-    vkDestroyPipelineLayout( device, pipelineLayout, nullptr );
+#ifdef RG_USE_NVIDIA_NRD
+    if( nrdInitialized )
+    {
+        nrdIntegration.Destroy();
+        nrdInitialized = false;
+    }
+#endif
 
+    vkDestroyPipelineLayout( device, pipelineLayout, nullptr );
     DestroyPipelines();
 }
 
-void RTGL1::Denoiser::Denoise( VkCommandBuffer                               cmd,
-                               uint32_t                                      frameIndex,
-                               const std::shared_ptr< const GlobalUniform >& uniform )
+void RTGL1::Denoiser::SetMethod( NrdDenoiserMethod method )
+{
+    currentMethod = method;
+}
+
+RTGL1::NrdDenoiserMethod RTGL1::Denoiser::GetMethod() const
+{
+    return currentMethod;
+}
+
+#ifdef RG_USE_NVIDIA_NRD
+nrd::ReblurSettings& RTGL1::Denoiser::GetReblurSettings()
+{
+    return reblurSettings;
+}
+
+nrd::RelaxSettings& RTGL1::Denoiser::GetRelaxSettings()
+{
+    return relaxSettings;
+}
+#endif
+
+void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
+{
+#ifdef RG_USE_NVIDIA_NRD
+    if( width == 0 || height == 0 )
+    {
+        return;
+    }
+
+    renderWidth = width;
+    renderHeight = height;
+
+    nrd::IntegrationCreationDesc integrationDesc = {};
+    strcpy_s( integrationDesc.name, "RayTracedGL1_NRD" );
+    integrationDesc.resourceWidth = static_cast< uint16_t >( width );
+    integrationDesc.resourceHeight = static_cast< uint16_t >( height );
+    integrationDesc.queuedFrameNum = FRAMEBUFFERS_HISTORY_LENGTH;
+
+    const nrd::DenoiserDesc denoiserDescs[] = {
+        { 0, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR },
+        { 1, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR },
+    };
+
+    nrd::InstanceCreationDesc instanceDesc = {};
+    instanceDesc.denoisers = denoiserDescs;
+    instanceDesc.denoisersNum = static_cast< uint32_t >( std::size( denoiserDescs ) );
+
+    nri::QueueFamilyVKDesc queueFamily = {
+        .queueNum = 1,
+        .queueType = nri::QueueType::GRAPHICS,
+        .familyIndex = queueFamilyIndex,
+    };
+
+    nri::DeviceCreationVKDesc devDesc = {
+        .vkInstance = ( void* )instance,
+        .vkDevice = ( void* )device,
+        .vkPhysicalDevice = ( void* )physDevice,
+        .queueFamilies = &queueFamily,
+        .queueFamilyNum = 1,
+        .minorVersion = 2,
+    };
+
+    nrd::Result res = nrdIntegration.RecreateVK( integrationDesc, instanceDesc, devDesc );
+    if( res == nrd::Result::SUCCESS )
+    {
+        nrdInitialized = true;
+    }
+    else
+    {
+        nrdInitialized = false;
+    }
+#endif
+}
+
+void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
+                               uint32_t frameIndex,
+                               const std::shared_ptr< const GlobalUniform >& uniform,
+                               RgFloat2D jitter,
+                               bool resetAccumulation )
 {
     typedef FramebufferImageIndex FI;
 
+    uint32_t currentWidth = static_cast< uint32_t >( uniform->GetData()->renderWidth );
+    uint32_t currentHeight = static_cast< uint32_t >( uniform->GetData()->renderHeight );
 
-    // bind desc sets
-    VkDescriptorSet sets[] = {
-        framebuffers->GetDescSet( frameIndex ),
-        uniform->GetDescSet( frameIndex ),
-    };
-
-    vkCmdBindDescriptorSets( cmd,
-                             VK_PIPELINE_BIND_POINT_COMPUTE,
-                             pipelineLayout,
-                             0,
-                             std::size( sets ),
-                             sets,
-                             0,
-                             nullptr );
-
-
-#if GRADIENT_ESTIMATION_ENABLED
-    // gradient atrous
+#ifdef RG_USE_NVIDIA_NRD
+    if( currentWidth != renderWidth || currentHeight != renderHeight || !nrdInitialized )
     {
-        CmdLabel label( cmd, "Gradient Atrous" );
-
-        for( uint32_t i = 0; i < COMPUTE_ASVGF_GRADIENT_ATROUS_ITERATION_COUNT; i++ )
-        {
-            uint32_t wgGradCountX = Utils::GetWorkGroupCount(
-                uniform->GetData()->renderWidth / COMPUTE_ASVGF_STRATA_SIZE,
-                COMPUTE_GRADIENT_ATROUS_GROUP_SIZE_X );
-            uint32_t wgGradCountY = Utils::GetWorkGroupCount(
-                uniform->GetData()->renderHeight / COMPUTE_ASVGF_STRATA_SIZE,
-                COMPUTE_GRADIENT_ATROUS_GROUP_SIZE_X );
-
-            if( i % 2 == 0 )
-            {
-                FI fs[] = {
-                    FI::FB_IMAGE_INDEX_D_I_S_PING_GRADIENT,
-                };
-                framebuffers->BarrierMultiple( cmd, frameIndex, fs );
-            }
-            else
-            {
-                FI fs[] = {
-                    FI::FB_IMAGE_INDEX_D_I_S_PONG_GRADIENT,
-                };
-                framebuffers->BarrierMultiple( cmd, frameIndex, fs );
-            }
-
-            vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradientAtrous[ i ] );
-            vkCmdDispatch( cmd, wgGradCountX, wgGradCountY, 1 );
-        }
+        RecreateNrd( currentWidth, currentHeight );
     }
-#endif // GRADIENT_ESTIMATION_ENABLED
 
-
-    // temporal accumulation
+    if( !nrdInitialized )
     {
-        uint32_t wgCountX = Utils::GetWorkGroupCount( uniform->GetData()->renderWidth,
-                                                      COMPUTE_SVGF_TEMPORAL_GROUP_SIZE_X );
-        uint32_t wgCountY = Utils::GetWorkGroupCount( uniform->GetData()->renderHeight,
-                                                      COMPUTE_SVGF_TEMPORAL_GROUP_SIZE_X );
+        return;
+    }
 
-        CmdLabel label( cmd, "Temporal accumulation" );
+    uint32_t denoiserType = ( currentMethod == NrdDenoiserMethod::Reblur ) ? 0 : 1;
 
-        FI fs[] = {
-            FI::FB_IMAGE_INDEX_MOTION,
-            FI::FB_IMAGE_INDEX_DEPTH_WORLD,
-            FI::FB_IMAGE_INDEX_DEPTH_GRAD,
+    {
+        CmdLabel label( cmd, "NRD Prepass" );
+
+        FI inBarriers[] = {
+            FI::FB_IMAGE_INDEX_IS_SKY,
+            FI::FB_IMAGE_INDEX_SURFACE_POSITION,
             FI::FB_IMAGE_INDEX_NORMAL,
             FI::FB_IMAGE_INDEX_METALLIC_ROUGHNESS,
-            FI::FB_IMAGE_INDEX_SURFACE_POSITION,
             FI::FB_IMAGE_INDEX_VIEW_DIRECTION,
             FI::FB_IMAGE_INDEX_UNFILTERED_DIRECT,
-            FI::FB_IMAGE_INDEX_UNFILTERED_SPECULAR,
             FI::FB_IMAGE_INDEX_UNFILTERED_INDIR,
-            FI::FB_IMAGE_INDEX_DIFF_COLOR_HISTORY,
-#if GRADIENT_ESTIMATION_ENABLED
-            FI::FB_IMAGE_INDEX_D_I_S_PING_GRADIENT,
-#endif
+            FI::FB_IMAGE_INDEX_UNFILTERED_SPECULAR,
         };
-        framebuffers->BarrierMultiple( cmd, frameIndex, fs );
+        framebuffers->BarrierMultiple( cmd, frameIndex, inBarriers );
 
-        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, temporalAccumulation );
+        VkDescriptorSet sets[] = {
+            framebuffers->GetDescSet( frameIndex ),
+            uniform->GetDescSet( frameIndex ),
+        };
+
+        vkCmdBindDescriptorSets( cmd,
+                                 VK_PIPELINE_BIND_POINT_COMPUTE,
+                                 pipelineLayout,
+                                 0,
+                                 static_cast< uint32_t >( std::size( sets ) ),
+                                 sets,
+                                 0,
+                                 nullptr );
+
+        vkCmdPushConstants( cmd,
+                            pipelineLayout,
+                            VK_SHADER_STAGE_COMPUTE_BIT,
+                            0,
+                            sizeof( uint32_t ),
+                            &denoiserType );
+
+        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, prepassPipeline );
+
+        uint32_t wgCountX = Utils::GetWorkGroupCount( currentWidth, COMPUTE_COMPOSE_GROUP_SIZE_X );
+        uint32_t wgCountY = Utils::GetWorkGroupCount( currentHeight, COMPUTE_COMPOSE_GROUP_SIZE_Y );
         vkCmdDispatch( cmd, wgCountX, wgCountY, 1 );
     }
 
-
-    // antifirefly
-    if( uniform->GetData()->antiFireflyEnabled != 0 )
     {
-        uint32_t x = Utils::GetWorkGroupCount( uniform->GetData()->renderWidth,
-                                               COMPUTE_ANTIFIREFLY_GROUP_SIZE_X );
-        uint32_t y = Utils::GetWorkGroupCount( uniform->GetData()->renderHeight,
-                                               COMPUTE_ANTIFIREFLY_GROUP_SIZE_X );
+        CmdLabel label( cmd, "NRD Denoiser" );
 
-        CmdLabel label( cmd, "Antifirefly" );
-
-        FI fs[] = {
-            FI::FB_IMAGE_INDEX_DIFF_ACCUM_COLOR,
-            FI::FB_IMAGE_INDEX_SPEC_ACCUM_COLOR,
-            FI::FB_IMAGE_INDEX_INDIR_ACCUM,
+        FI nrdInBarriers[] = {
+            FI::FB_IMAGE_INDEX_NRD_DIFFUSE_HIT_DIST,
+            FI::FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST,
+            FI::FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS,
+            FI::FB_IMAGE_INDEX_NRD_VIEW_Z,
+            FI::FB_IMAGE_INDEX_MOTION,
         };
-        framebuffers->BarrierMultiple( cmd, frameIndex, fs );
+        framebuffers->BarrierMultiple( cmd, frameIndex, nrdInBarriers );
 
+        nrdIntegration.NewFrame();
 
-        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, antifirefly );
-        vkCmdDispatch( cmd, x, y, 1 );
-    }
+        nrd::CommonSettings commonSettings = {};
+        memcpy( commonSettings.viewToClipMatrix, uniform->GetData()->projection, sizeof( float ) * 16 );
+        memcpy( commonSettings.viewToClipMatrixPrev, uniform->GetData()->projectionPrev, sizeof( float ) * 16 );
+        memcpy( commonSettings.worldToViewMatrix, uniform->GetData()->view, sizeof( float ) * 16 );
+        memcpy( commonSettings.worldToViewMatrixPrev, uniform->GetData()->viewPrev, sizeof( float ) * 16 );
 
+        commonSettings.cameraJitter[ 0 ] = jitter.data[ 0 ];
+        commonSettings.cameraJitter[ 1 ] = jitter.data[ 1 ];
+        commonSettings.cameraJitterPrev[ 0 ] = prevJitter.data[ 0 ];
+        commonSettings.cameraJitterPrev[ 1 ] = prevJitter.data[ 1 ];
 
-    // variance estimation
-    {
-        uint32_t wgCountX = Utils::GetWorkGroupCount( uniform->GetData()->renderWidth,
-                                                      COMPUTE_SVGF_VARIANCE_GROUP_SIZE_X );
-        uint32_t wgCountY = Utils::GetWorkGroupCount( uniform->GetData()->renderHeight,
-                                                      COMPUTE_SVGF_VARIANCE_GROUP_SIZE_X );
+        commonSettings.motionVectorScale[ 0 ] = 1.0f;
+        commonSettings.motionVectorScale[ 1 ] = 1.0f;
+        commonSettings.motionVectorScale[ 2 ] = 0.0f;
+        commonSettings.isMotionVectorInWorldSpace = false;
 
-        CmdLabel label( cmd, "SVGF Variance estimation" );
+        commonSettings.frameIndex = uniform->GetData()->frameId;
+        commonSettings.accumulationMode =
+            resetAccumulation ? nrd::AccumulationMode::RESTART : nrd::AccumulationMode::CONTINUE;
 
-        FI fs[] = { FI::FB_IMAGE_INDEX_DIFF_ACCUM_COLOR,
-                    FI::FB_IMAGE_INDEX_DIFF_ACCUM_MOMENTS,
-                    FI::FB_IMAGE_INDEX_ACCUM_HISTORY_LENGTH };
-        framebuffers->BarrierMultiple( cmd, frameIndex, fs );
+        nrdIntegration.SetCommonSettings( commonSettings );
 
-        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, varianceEstimation );
-        vkCmdDispatch( cmd, wgCountX, wgCountY, 1 );
-    }
-
-
-    // atrous
-
-    for( uint32_t i = 0; i < COMPUTE_SVGF_ATROUS_ITERATION_COUNT; i++ )
-    {
-        uint32_t wgCountX = Utils::GetWorkGroupCount( uniform->GetData()->renderWidth,
-                                                      COMPUTE_SVGF_ATROUS_GROUP_SIZE_X );
-        uint32_t wgCountY = Utils::GetWorkGroupCount( uniform->GetData()->renderHeight,
-                                                      COMPUTE_SVGF_ATROUS_GROUP_SIZE_X );
-
-        CmdLabel label( cmd, "SVGF Atrous" );
-
-        switch( i )
+        if( currentMethod == NrdDenoiserMethod::Reblur )
         {
-            case 0: {
-                FI fs[] = { FI::FB_IMAGE_INDEX_DIFF_PING_COLOR_AND_VARIANCE,
-                            FI::FB_IMAGE_INDEX_SPEC_PING_COLOR,
-                            FI::FB_IMAGE_INDEX_INDIR_PING,
-
-                            FI::FB_IMAGE_INDEX_METALLIC_ROUGHNESS };
-
-                framebuffers->BarrierMultiple( cmd, frameIndex, fs );
-                break;
-            }
-            case 1: {
-                FI fs[] = { FI::FB_IMAGE_INDEX_DIFF_COLOR_HISTORY,
-                            FI::FB_IMAGE_INDEX_SPEC_PONG_COLOR,
-                            FI::FB_IMAGE_INDEX_INDIR_PONG,
-                            // on iteration 0 prefiltered variance was calculated
-                            FI::FB_IMAGE_INDEX_ATROUS_FILTERED_VARIANCE };
-
-                framebuffers->BarrierMultiple( cmd, frameIndex, fs );
-                break;
-            }
-            case 2: {
-                FI fs[] = { FI::FB_IMAGE_INDEX_DIFF_PING_COLOR_AND_VARIANCE,
-                            FI::FB_IMAGE_INDEX_SPEC_PING_COLOR,
-                            FI::FB_IMAGE_INDEX_INDIR_PING };
-
-                framebuffers->BarrierMultiple( cmd, frameIndex, fs );
-                break;
-            }
-            case 3: {
-                FI fs[] = { FI::FB_IMAGE_INDEX_DIFF_PONG_COLOR_AND_VARIANCE,
-                            FI::FB_IMAGE_INDEX_SPEC_PONG_COLOR,
-                            FI::FB_IMAGE_INDEX_INDIR_PONG,
-                            FI::FB_IMAGE_INDEX_THROUGHPUT };
-
-                framebuffers->BarrierMultiple( cmd, frameIndex, fs );
-                break;
-            }
-            default: {
-                assert( 0 );
-                return;
-            }
+            nrdIntegration.SetDenoiserSettings( 0, &reblurSettings );
+        }
+        else
+        {
+            nrdIntegration.SetDenoiserSettings( 1, &relaxSettings );
         }
 
-        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, atrous[ i ] );
-        vkCmdDispatch( cmd, wgCountX, wgCountY, 1 );
+        nrd::ResourceSnapshot snapshot = {};
+
+        auto setupResource = [ & ]( nrd::ResourceType type, FramebufferImageIndex fbIndex ) {
+            auto [ img, view, fmt ] = framebuffers->GetImageHandles( fbIndex, frameIndex );
+            nrd::Resource r = {};
+            r.vk.image = ( uint64_t )img;
+            r.vk.format = ( int32_t )fmt;
+            r.state.layout = nri::Layout::GENERAL;
+            r.state.stages = nri::StageBits::COMPUTE_SHADER;
+            r.state.access = nri::AccessBits::SHADER_RESOURCE_STORAGE;
+            snapshot.SetResource( type, r );
+        };
+
+        setupResource( nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_DIFFUSE_HIT_DIST );
+        setupResource( nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST );
+        setupResource( nrd::ResourceType::IN_NORMAL_ROUGHNESS, FI::FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS );
+        setupResource( nrd::ResourceType::IN_VIEWZ, FI::FB_IMAGE_INDEX_NRD_VIEW_Z );
+        setupResource( nrd::ResourceType::IN_MV, FI::FB_IMAGE_INDEX_MOTION );
+        setupResource( nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_OUT_DIFFUSE );
+        setupResource( nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST, FI::FB_IMAGE_INDEX_NRD_OUT_SPECULAR );
+
+        snapshot.restoreInitialState = true;
+
+        nri::CommandBufferVKDesc cbDesc = {
+            .vkCommandBuffer = ( void* )cmd,
+            .queueType = nri::QueueType::GRAPHICS,
+        };
+
+        nrd::Identifier denoiserId = ( currentMethod == NrdDenoiserMethod::Reblur ) ? 0 : 1;
+        nrdIntegration.DenoiseVK( &denoiserId, 1, cbDesc, snapshot );
     }
+
+    {
+        CmdLabel label( cmd, "NRD Postprocess" );
+
+        FI outBarriers[] = {
+            FI::FB_IMAGE_INDEX_NRD_OUT_DIFFUSE,
+            FI::FB_IMAGE_INDEX_NRD_OUT_SPECULAR,
+            FI::FB_IMAGE_INDEX_ALBEDO,
+            FI::FB_IMAGE_INDEX_METALLIC_ROUGHNESS,
+            FI::FB_IMAGE_INDEX_THROUGHPUT,
+            FI::FB_IMAGE_INDEX_IS_SKY,
+            FI::FB_IMAGE_INDEX_ACID_FOG_R_T,
+        };
+        framebuffers->BarrierMultiple( cmd, frameIndex, outBarriers );
+
+        VkDescriptorSet sets[] = {
+            framebuffers->GetDescSet( frameIndex ),
+            uniform->GetDescSet( frameIndex ),
+        };
+
+        vkCmdBindDescriptorSets( cmd,
+                                 VK_PIPELINE_BIND_POINT_COMPUTE,
+                                 pipelineLayout,
+                                 0,
+                                 static_cast< uint32_t >( std::size( sets ) ),
+                                 sets,
+                                 0,
+                                 nullptr );
+
+        vkCmdPushConstants( cmd,
+                            pipelineLayout,
+                            VK_SHADER_STAGE_COMPUTE_BIT,
+                            0,
+                            sizeof( uint32_t ),
+                            &denoiserType );
+
+        vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, postprocessPipeline );
+
+        uint32_t wgCountX = Utils::GetWorkGroupCount( currentWidth, COMPUTE_COMPOSE_GROUP_SIZE_X );
+        uint32_t wgCountY = Utils::GetWorkGroupCount( currentHeight, COMPUTE_COMPOSE_GROUP_SIZE_Y );
+        vkCmdDispatch( cmd, wgCountX, wgCountY, 1 );
+
+        FI postBarriers[] = {
+            FI::FB_IMAGE_INDEX_PRE_FINAL,
+            FI::FB_IMAGE_INDEX_HISTOGRAM_INPUT,
+        };
+        framebuffers->BarrierMultiple( cmd, frameIndex, postBarriers );
+    }
+
+    prevJitter = jitter;
+#endif
 }
 
 void RTGL1::Denoiser::OnShaderReload( const ShaderManager* shaderManager )
@@ -261,178 +335,69 @@ void RTGL1::Denoiser::OnShaderReload( const ShaderManager* shaderManager )
     CreatePipelines( shaderManager );
 }
 
-void RTGL1::Denoiser::CreatePipelineLayout( VkDescriptorSetLayout* pSetLayouts,
-                                            uint32_t               setLayoutCount )
+void RTGL1::Denoiser::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
 {
+    RecreateNrd( resolutionState.renderWidth, resolutionState.renderHeight );
+}
+
+void RTGL1::Denoiser::CreatePipelineLayout( VkDescriptorSetLayout* pSetLayouts, uint32_t setLayoutCount )
+{
+    VkPushConstantRange pushConst = {
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof( uint32_t ),
+    };
+
     VkPipelineLayoutCreateInfo plLayoutInfo = {
-        .sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = setLayoutCount,
-        .pSetLayouts    = pSetLayouts,
+        .pSetLayouts = pSetLayouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConst,
     };
 
     VkResult r = vkCreatePipelineLayout( device, &plLayoutInfo, nullptr, &pipelineLayout );
-
     VK_CHECKERROR( r );
-    SET_DEBUG_NAME(
-        device, pipelineLayout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Denoiser pipeline layout" );
+    SET_DEBUG_NAME( device, pipelineLayout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, "NRD Denoiser pipeline layout" );
 }
 
 void RTGL1::Denoiser::DestroyPipelines()
 {
-    vkDestroyPipeline( device, antifirefly, nullptr );
-    vkDestroyPipeline( device, temporalAccumulation, nullptr );
-    vkDestroyPipeline( device, varianceEstimation, nullptr );
-
-    for( VkPipeline& p : gradientAtrous )
+    if( prepassPipeline != VK_NULL_HANDLE )
     {
-        vkDestroyPipeline( device, p, nullptr );
-        p = VK_NULL_HANDLE;
+        vkDestroyPipeline( device, prepassPipeline, nullptr );
+        prepassPipeline = VK_NULL_HANDLE;
     }
-
-    for( VkPipeline& p : atrous )
+    if( postprocessPipeline != VK_NULL_HANDLE )
     {
-        vkDestroyPipeline( device, p, nullptr );
-        p = VK_NULL_HANDLE;
+        vkDestroyPipeline( device, postprocessPipeline, nullptr );
+        postprocessPipeline = VK_NULL_HANDLE;
     }
-
-    antifirefly          = VK_NULL_HANDLE;
-    temporalAccumulation = VK_NULL_HANDLE;
-    varianceEstimation   = VK_NULL_HANDLE;
 }
 
 void RTGL1::Denoiser::CreatePipelines( const ShaderManager* shaderManager )
 {
-    uint32_t gAtrousIteration = 0;
-
-    VkSpecializationMapEntry specEntry = {
-        .constantID = 0,
-        .offset     = 0,
-        .size       = sizeof( uint32_t ),
-    };
-
-    VkSpecializationInfo specInfo = {
-        .mapEntryCount = 1,
-        .pMapEntries   = &specEntry,
-        .dataSize      = sizeof( uint32_t ),
-        .pData         = &gAtrousIteration,
-    };
-
-    {
-        const char* debugNames[ COMPUTE_ASVGF_GRADIENT_ATROUS_ITERATION_COUNT ] = {
-            "ASVGF Gradient atrous iteration #0 pipeline",
-            "ASVGF Gradient atrous iteration #1 pipeline",
-            "ASVGF Gradient atrous iteration #2 pipeline",
-            "ASVGF Gradient atrous iteration #3 pipeline",
-        };
-
-        VkComputePipelineCreateInfo plInfo = {
-            .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .stage  = shaderManager->GetStageInfo( "CASVGFGradientAtrous" ),
-            .layout = pipelineLayout,
-        };
-        plInfo.stage.pSpecializationInfo = &specInfo;
-
-        for( uint32_t i = 0; i < COMPUTE_ASVGF_GRADIENT_ATROUS_ITERATION_COUNT; i++ )
-        {
-            gAtrousIteration = i;
-
-            VkResult r = vkCreateComputePipelines(
-                device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &gradientAtrous[ i ] );
-
-            VK_CHECKERROR( r );
-            SET_DEBUG_NAME( device, gradientAtrous[ i ], VK_OBJECT_TYPE_PIPELINE, debugNames[ i ] );
-        }
-    }
-
     {
         VkComputePipelineCreateInfo plInfo = {
-            .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .stage  = shaderManager->GetStageInfo( "CSVGFTemporalAccum" ),
+            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage = shaderManager->GetStageInfo( "CNrdPrepass" ),
             .layout = pipelineLayout,
         };
 
-        VkResult r = vkCreateComputePipelines(
-            device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &temporalAccumulation );
-
+        VkResult r = vkCreateComputePipelines( device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &prepassPipeline );
         VK_CHECKERROR( r );
-        SET_DEBUG_NAME( device,
-                        temporalAccumulation,
-                        VK_OBJECT_TYPE_PIPELINE,
-                        "SVGF Temporal accumulation pipeline" );
+        SET_DEBUG_NAME( device, prepassPipeline, VK_OBJECT_TYPE_PIPELINE, "NRD Prepass pipeline" );
     }
 
     {
         VkComputePipelineCreateInfo plInfo = {
-            .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .stage  = shaderManager->GetStageInfo( "CAntiFirefly" ),
+            .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            .stage = shaderManager->GetStageInfo( "CNrdPostprocess" ),
             .layout = pipelineLayout,
         };
 
-        VkResult r =
-            vkCreateComputePipelines( device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &antifirefly );
+        VkResult r = vkCreateComputePipelines( device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &postprocessPipeline );
         VK_CHECKERROR( r );
-
-        SET_DEBUG_NAME( device, antifirefly, VK_OBJECT_TYPE_PIPELINE, "Antifirefly pipeline" );
-    }
-
-    {
-        VkComputePipelineCreateInfo plInfo = {
-            .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-            .stage  = shaderManager->GetStageInfo( "CSVGFVarianceEstim" ),
-            .layout = pipelineLayout,
-        };
-
-        VkResult r = vkCreateComputePipelines(
-            device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &varianceEstimation );
-
-        VK_CHECKERROR( r );
-        SET_DEBUG_NAME( device,
-                        varianceEstimation,
-                        VK_OBJECT_TYPE_PIPELINE,
-                        "SVGF Variance estimation pipeline" );
-    }
-
-    {
-        const char* debugNames[ COMPUTE_SVGF_ATROUS_ITERATION_COUNT ] = {
-            "SVGF Atrous iteration #0 pipeline",
-            "SVGF Atrous iteration #1 pipeline",
-            "SVGF Atrous iteration #2 pipeline",
-            "SVGF Atrous iteration #3 pipeline",
-        };
-
-        // special iteration 0
-        {
-            VkComputePipelineCreateInfo plInfo = {
-                .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-                .stage  = shaderManager->GetStageInfo( "CSVGFAtrous_Iter0" ),
-                .layout = pipelineLayout,
-            };
-
-            VkResult r = vkCreateComputePipelines(
-                device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &atrous[ 0 ] );
-
-            VK_CHECKERROR( r );
-            SET_DEBUG_NAME( device, atrous[ 0 ], VK_OBJECT_TYPE_PIPELINE, debugNames[ 0 ] );
-        }
-
-        {
-            VkComputePipelineCreateInfo plInfo = {
-                .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-                .stage  = shaderManager->GetStageInfo( "CSVGFAtrous" ),
-                .layout = pipelineLayout,
-            };
-            plInfo.stage.pSpecializationInfo = &specInfo;
-
-            for( uint32_t i = 1; i < COMPUTE_SVGF_ATROUS_ITERATION_COUNT; i++ )
-            {
-                gAtrousIteration = i;
-
-                VkResult r = vkCreateComputePipelines(
-                    device, VK_NULL_HANDLE, 1, &plInfo, nullptr, &atrous[ i ] );
-
-                VK_CHECKERROR( r );
-                SET_DEBUG_NAME( device, atrous[ i ], VK_OBJECT_TYPE_PIPELINE, debugNames[ i ] );
-            }
-        }
+        SET_DEBUG_NAME( device, postprocessPipeline, VK_OBJECT_TYPE_PIPELINE, "NRD Postprocess pipeline" );
     }
 }

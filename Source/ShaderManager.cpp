@@ -72,6 +72,8 @@ static ShaderModuleDefinition G_SHADERS[] =
     { "CSVGFAtrous",                "CmSVGFAtrous.comp.spv"                 },
     { "CSVGFAtrous_Iter0",          "CmSVGFAtrous_Iter0.comp.spv"           },
     { "CASVGFGradientAtrous",       "CmASVGFGradientAtrous.comp.spv"        },
+    { "CNrdPrepass",                "CmNrdPrepass.comp.spv"                 },
+    { "CNrdPostprocess",            "CmNrdPostprocess.comp.spv"             },
     { "CBloomInput",                "CmBloomInput.comp.spv"                 },
     { "CBloomDownsample",           "CmBloomDownsample.comp.spv"            },
     { "CBloomUpsample",             "CmBloomUpsample.comp.spv"              },

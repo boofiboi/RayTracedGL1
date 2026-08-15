@@ -11,3 +11,17 @@
 Build/
 Bin/
 Source/FSR3/
+Source/External/NRD/
+
+# slop
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.gemini/
+.cursor*
+.windsurf*
+.aider*
+.continue/
+.codeium/
+.github/copilot-instructions.md

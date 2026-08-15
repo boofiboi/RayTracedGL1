@@ -133,6 +133,7 @@ option(RG_WITH_SURFACE_XLIB     "Build with Xlib VkSurfaceKHR support"      OFF)
 option(RG_WITH_NVIDIA_DLSS      "Build RTGL1 with Nvidia DLSS"              OFF)
 option(RG_WITH_IMGUI            "Build RTGL1 with ImGui debug windows"      ON)
 option(RG_WITH_AMD_FSR3 "Build RTGL1 with AMD FSR3 Upscaling" ON)
+option(RG_WITH_NVIDIA_NRD       "Build RTGL1 with NVIDIA Real-Time Denoisers (NRD)" ON)
 
 option(RG_WITH_EXAMPLES         "Build with examples executable"            ON)
 option(RG_WITH_SHADERS          "Compile shaders during build"              ON)
@@ -258,10 +259,33 @@ if (RG_WITH_AMD_FSR3)
     target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include")
     target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_backend_vk_x64)
 
-    # Copy FSR3 Vulkan DLL to output directory
     add_custom_command(TARGET RayTracedGL1 POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_SOURCE_DIR}/Source/FSR3/PrebuiltSignedDLL/amd_fidelityfx_vk.dll"
+            "$<TARGET_FILE_DIR:RayTracedGL1>")
+endif()
+
+if (RG_WITH_NVIDIA_NRD)
+    message(STATUS "RG_WITH_NVIDIA_NRD enabled")
+    add_definitions(-DRG_USE_NVIDIA_NRD)
+    set(NRD_STATIC_LIBRARY ON CACHE BOOL "" FORCE)
+    set(NRD_NRI ON CACHE BOOL "" FORCE)
+    set(NRD_NORMAL_ENCODING "4" CACHE STRING "" FORCE)
+    set(NRD_ROUGHNESS_ENCODING "1" CACHE STRING "" FORCE)
+    set(NRD_EMBEDS_SPIRV_SHADERS ON CACHE BOOL "" FORCE)
+    set(NRD_EMBEDS_DXIL_SHADERS OFF CACHE BOOL "" FORCE)
+    set(NRD_EMBEDS_DXBC_SHADERS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(Source/External/NRD)
+    target_include_directories(RayTracedGL1 PRIVATE 
+        "Source/External/NRD/Include" 
+        "Source/External/NRD/Integration"
+        "${nri_SOURCE_DIR}/Include"
+    )
+    target_link_libraries(RayTracedGL1 PRIVATE NRD NRDIntegration NRI)
+
+    add_custom_command(TARGET RayTracedGL1 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/NRD/_Bin/$<CONFIG>/NRI.dll"
             "$<TARGET_FILE_DIR:RayTracedGL1>")
 endif()
 

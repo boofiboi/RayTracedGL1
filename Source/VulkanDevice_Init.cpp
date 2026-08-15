@@ -430,10 +430,15 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         shaderManager );
 
     denoiser = std::make_shared< Denoiser >(
-        device, 
-        framebuffers, 
+        instance,
+        device,
+        physDevice->Get(),
+        queues->GetIndexGraphics(),
+        framebuffers,
         *shaderManager,
         *uniform );
+
+    framebuffers->Subscribe( denoiser );
 
     effectWipe = std::make_shared< EffectWipe >(
         device, 

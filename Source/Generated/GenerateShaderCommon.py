@@ -875,6 +875,13 @@ FRAMEBUFFERS = {
     
 "Reservoirs"                        : (TYPE_UINT32,     COMPONENT_RG,   FRAMEBUF_FLAGS_STORE_PREV),
 "ReservoirsInitial"                 : (TYPE_UINT32,     COMPONENT_RG,   0),
+
+    "NrdDiffuseHitDist"                 : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
+    "NrdSpecularHitDist"                : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
+    "NrdNormalRoughness"                : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
+    "NrdViewZ"                          : (TYPE_FLOAT32,    COMPONENT_R,    0),
+    "NrdOutDiffuse"                     : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
+    "NrdOutSpecular"                    : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
 }
 
 if GRADIENT_ESTIMATION_ENABLED:

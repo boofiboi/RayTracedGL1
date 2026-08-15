@@ -252,6 +252,40 @@ void RTGL1::VulkanDevice::Dev_Draw() const
                                 "%.2f" );
             ImGui::TreePop();
         }
+        if( ImGui::TreeNode( "NRD Denoiser" ) )
+        {
+            int currentMethod = static_cast< int >( denoiser->GetMethod() );
+            const char* methodNames[] = { "ReBLUR", "RELAX" };
+            if( ImGui::Combo( "Method", &currentMethod, methodNames, static_cast< int >( std::size( methodNames ) ) ) )
+            {
+                denoiser->SetMethod( static_cast< NrdDenoiserMethod >( currentMethod ) );
+            }
+
+            if( currentMethod == 0 )
+            {
+                auto& s = denoiser->GetReblurSettings();
+                ImGui::SliderFloat( "Max Blur Radius", &s.maxBlurRadius, 0.0f, 60.0f, "%.1f" );
+                ImGui::SliderFloat( "Min Blur Radius", &s.minBlurRadius, 0.0f, 10.0f, "%.1f" );
+                ImGui::SliderFloat( "Diffuse Prepass Blur Radius", &s.diffusePrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
+                ImGui::SliderFloat( "Specular Prepass Blur Radius", &s.specularPrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
+                ImGui::SliderInt( "Max History Frames", reinterpret_cast< int* >( &s.maxAccumulatedFrameNum ), 0, 63 );
+                ImGui::SliderInt( "Max Fast History Frames", reinterpret_cast< int* >( &s.maxFastAccumulatedFrameNum ), 0, 30 );
+                ImGui::SliderFloat( "Antilag Sensitivity", &s.antilagSettings.luminanceSensitivity, 0.1f, 10.0f, "%.2f" );
+                ImGui::SliderFloat( "Antilag Sigma Scale", &s.antilagSettings.luminanceSigmaScale, 0.1f, 10.0f, "%.2f" );
+            }
+            else
+            {
+                auto& s = denoiser->GetRelaxSettings();
+                ImGui::SliderInt( "Diffuse Max History Frames", reinterpret_cast< int* >( &s.diffuseMaxAccumulatedFrameNum ), 0, 63 );
+                ImGui::SliderInt( "Specular Max History Frames", reinterpret_cast< int* >( &s.specularMaxAccumulatedFrameNum ), 0, 63 );
+                ImGui::SliderInt( "Diffuse Max Fast History Frames", reinterpret_cast< int* >( &s.diffuseMaxFastAccumulatedFrameNum ), 0, 30 );
+                ImGui::SliderInt( "Specular Max Fast History Frames", reinterpret_cast< int* >( &s.specularMaxFastAccumulatedFrameNum ), 0, 30 );
+                ImGui::SliderInt( "Atrous Iteration Count", reinterpret_cast< int* >( &s.atrousIterationNum ), 1, 8 );
+                ImGui::SliderFloat( "Diffuse Prepass Blur Radius", &s.diffusePrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
+                ImGui::SliderFloat( "Specular Prepass Blur Radius", &s.specularPrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
+            }
+            ImGui::TreePop();
+        }
         if( ImGui::TreeNode( "Lightmap" ) )
         {
             ImGui::SliderFloat( "Screen coverage", &modifiers.lightmapScreenCoverage, 0.0f, 1.0f );

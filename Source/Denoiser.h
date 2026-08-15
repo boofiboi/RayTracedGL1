@@ -1,71 +1,93 @@
-// Copyright (c) 2021 Sultim Tsyrendashiev
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #pragma once
 
+#include <memory>
 #include "ShaderManager.h"
 #include "Framebuffers.h"
 #include "GlobalUniform.h"
-#include "ASManager.h"
+#include "IFramebuffersDependency.h"
+
+#ifdef RG_USE_NVIDIA_NRD
+#include <NRI.h>
+#include <Extensions/NRIRayTracing.h>
+#include <Extensions/NRIHelper.h>
+#include <Extensions/NRIWrapperVK.h>
+#include <NRD.h>
+#include <NRDIntegration.h>
+#endif
 
 namespace RTGL1
 {
 
-class Denoiser final : public IShaderDependency
+enum class NrdDenoiserMethod
+{
+    Reblur,
+    Relax
+};
+
+class Denoiser final : public IShaderDependency, public IFramebuffersDependency
 {
 public:
-    Denoiser( VkDevice                                      device,
-              std::shared_ptr< Framebuffers >               framebuffers,
+    Denoiser( VkInstance instance,
+              VkDevice device,
+              VkPhysicalDevice physDevice,
+              uint32_t graphicsQueueFamilyIndex,
+              std::shared_ptr< Framebuffers > framebuffers,
               const ShaderManager& shaderManager,
               const GlobalUniform& uniform );
     ~Denoiser() override;
 
-    Denoiser( const Denoiser& other )     = delete;
+    Denoiser( const Denoiser& other ) = delete;
     Denoiser( Denoiser&& other ) noexcept = delete;
     Denoiser& operator=( const Denoiser& other ) = delete;
     Denoiser& operator=( Denoiser&& other ) noexcept = delete;
 
-    void      Denoise( VkCommandBuffer                               cmd,
-                       uint32_t                                      frameIndex,
-                       const std::shared_ptr< const GlobalUniform >& uniform );
+    void Denoise( VkCommandBuffer cmd,
+                  uint32_t frameIndex,
+                  const std::shared_ptr< const GlobalUniform >& uniform,
+                  RgFloat2D jitter,
+                  bool resetAccumulation );
 
-    void      OnShaderReload( const ShaderManager* shaderManager ) override;
+    void OnShaderReload( const ShaderManager* shaderManager ) override;
+    void OnFramebuffersSizeChange( const ResolutionState& resolutionState ) override;
+
+    void SetMethod( NrdDenoiserMethod method );
+    NrdDenoiserMethod GetMethod() const;
+
+#ifdef RG_USE_NVIDIA_NRD
+    nrd::ReblurSettings& GetReblurSettings();
+    nrd::RelaxSettings& GetRelaxSettings();
+#endif
 
 private:
     void CreatePipelineLayout( VkDescriptorSetLayout* pSetLayouts, uint32_t setLayoutCount );
     void CreatePipelines( const ShaderManager* shaderManager );
     void DestroyPipelines();
+    void RecreateNrd( uint32_t width, uint32_t height );
 
 private:
-    VkDevice                        device;
+    VkInstance instance;
+    VkDevice device;
+    VkPhysicalDevice physDevice;
+    uint32_t queueFamilyIndex;
 
     std::shared_ptr< Framebuffers > framebuffers;
 
-    VkPipelineLayout                pipelineLayout;
+    VkPipelineLayout pipelineLayout;
+    VkPipeline prepassPipeline;
+    VkPipeline postprocessPipeline;
 
-    VkPipeline                      gradientAtrous[ 4 ];
+    uint32_t renderWidth;
+    uint32_t renderHeight;
+    RgFloat2D prevJitter;
 
-    VkPipeline                      antifirefly;
-    VkPipeline                      temporalAccumulation;
-    VkPipeline                      varianceEstimation;
-    VkPipeline                      atrous[ 4 ];
+    NrdDenoiserMethod currentMethod;
+
+#ifdef RG_USE_NVIDIA_NRD
+    nrd::Integration nrdIntegration;
+    nrd::ReblurSettings reblurSettings;
+    nrd::RelaxSettings relaxSettings;
+    bool nrdInitialized;
+#endif
 };
 
 }
