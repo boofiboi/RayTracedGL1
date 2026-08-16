@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2020-2021 Sultim Tsyrendashiev
+// Copyright (c) 2020-2021 Sultim Tsyrendashiev
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -241,13 +241,11 @@ typedef struct RgInstanceCreateInfo
 
     RgBool32                    effectWipeIsUsed;
 
-    // Used for exporting.
-    // Up is also used for additional water flow calculations.
     RgFloat3D                   worldUp;
     RgFloat3D                   worldForward;
-    // Used for exporting.
-    // 1 game unit should correspond to (worldScale) meters.
     float                       worldScale;
+
+    RgBool32                    enableFrameGeneration;
 
 } RgInstanceCreateInfo;
 
@@ -993,6 +991,7 @@ RGAPI void RGCONV               rgUtilImScratchEnd( RgInstance instance );
 RGAPI void RGCONV               rgUtilImScratchSetToPrimitive( RgInstance instance, RgMeshPrimitiveInfo* pTarget ); // Set accumulated vertices to pTarget
 
 RGAPI RgBool32 RGCONV           rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscaleTechnique technique );
+RGAPI RgBool32 RGCONV           rgUtilIsFrameGenerationAvailable( RgInstance instance );
 RGAPI const char* RGCONV        rgUtilGetResultDescription( RgResult result );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorByte4D( uint8_t r, uint8_t g, uint8_t b, uint8_t a );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorFloat4D( float r, float g, float b, float a );

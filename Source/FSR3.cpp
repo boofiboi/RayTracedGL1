@@ -24,6 +24,9 @@
 
 #include <FidelityFX/host/ffx_fsr3upscaler.h>
 #include <FidelityFX/host/backends/vk/ffx_vk.h>
+#include <ffx_api/ffx_api.h>
+#include <ffx_api/ffx_framegeneration.h>
+#include <ffx_api/vk/ffx_api_vk.h>
 
 #include "RenderResolutionHelper.h"
 #include "RgException.h"
@@ -40,9 +43,10 @@ void CheckError( FfxErrorCode r )
 }
 }
 
-RTGL1::FSR3::FSR3( VkDevice _device, VkPhysicalDevice _physDevice )
+RTGL1::FSR3::FSR3( VkDevice _device, VkPhysicalDevice _physDevice, bool _enableFrameGeneration )
     : device( _device )
     , physDevice( _physDevice )
+    , enableFrameGeneration( _enableFrameGeneration )
     , context( std::make_unique< FfxFsr3UpscalerContext >() )
 {
     memset( context.get(), 0, sizeof( FfxFsr3UpscalerContext ) );
@@ -55,6 +59,12 @@ RTGL1::FSR3::~FSR3()
     if( isContextCreated && context )
     {
         ffxFsr3UpscalerContextDestroy( context.get() );
+    }
+
+    if( fgContext )
+    {
+        ffxDestroyContext( (ffxContext*)&fgContext, nullptr );
+        fgContext = nullptr;
     }
 }
 
@@ -92,6 +102,12 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         ffxFsr3UpscalerContextDestroy( context.get() );
         memset( context.get(), 0, sizeof( FfxFsr3UpscalerContext ) );
         isContextCreated = false;
+    }
+
+    if( fgContext )
+    {
+        ffxDestroyContext( (ffxContext*)&fgContext, nullptr );
+        fgContext = nullptr;
     }
 
     FfxFsr3UpscalerContextDescription contextDesc = {
@@ -139,6 +155,34 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
     reconstructedPrevNearestDepthRes = backendInterface.fpGetResource( &backendInterface, reconstructedPrevNearestDepthInternal );
 
     isContextCreated = true;
+
+    if( enableFrameGeneration )
+    {
+        ffxCreateBackendVKDesc backendDesc = {};
+        backendDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_VK;
+        backendDesc.vkDevice = device;
+        backendDesc.vkPhysicalDevice = physDevice;
+        backendDesc.vkDeviceProcAddr = vkGetDeviceProcAddr;
+
+        ffxCreateContextDescFrameGeneration createFg = {};
+        createFg.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
+        createFg.header.pNext = &backendDesc.header;
+        createFg.displaySize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
+        createFg.maxRenderSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
+        createFg.flags = FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE;
+        createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_SRGB );
+
+        ffxCreateContextDescFrameGenerationHudless createFgHudless = {};
+        createFgHudless.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
+        createFgHudless.hudlessBackBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_SRGB );
+        backendDesc.header.pNext = &createFgHudless.header;
+
+        ffxReturnCode_t ret = ffxCreateContext( (ffxContext*)&fgContext, &createFg.header, nullptr );
+        if( ret != FFX_API_RETURN_OK )
+        {
+            fgContext = nullptr;
+        }
+    }
 }
 
 namespace
@@ -317,11 +361,151 @@ bool RTGL1::FSR3::IsFsr3Available() {
    return true;
 }
 
+void RTGL1::FSR3::PrepareFrameGeneration( VkCommandBuffer                        cmd,
+                                          uint32_t                               frameIndex,
+                                          const std::shared_ptr< Framebuffers >& framebuffers,
+                                          const RenderResolutionHelper&          renderResolution,
+                                          RgFloat2D                              jitterOffset,
+                                          double                                 timeDelta,
+                                          float                                  nearPlane,
+                                          float                                  farPlane,
+                                          float                                  fovVerticalRad,
+                                          bool                                   resetAccumulation,
+                                          const float*                           pView,
+                                          uint64_t                               frameId )
+{
+    if( !enableFrameGeneration || !fgContext )
+    {
+        return;
+    }
+
+    using FI = FramebufferImageIndex;
+    auto [ depthImage, depthView, depthFormat, depthSz ] =
+        framebuffers->GetImageHandles( FI::FB_IMAGE_INDEX_DEPTH_NDC, frameIndex, renderResolution.GetResolutionState() );
+    auto [ motionImage, motionView, motionFormat, motionSz ] =
+        framebuffers->GetImageHandles( FI::FB_IMAGE_INDEX_MOTION_DLSS, frameIndex, renderResolution.GetResolutionState() );
+
+    VkImageCreateInfo depthInfo = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = depthFormat,
+        .extent = { depthSz.width, depthSz.height, 1 },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+    };
+    VkImageCreateInfo motionInfo = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = motionFormat,
+        .extent = { motionSz.width, motionSz.height, 1 },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+    };
+
+    FfxApiResource depthRes = ffxApiGetResourceVK( (void*)depthImage, ffxApiGetImageResourceDescriptionVK( depthImage, depthInfo, 0 ), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ );
+    FfxApiResource motionRes = ffxApiGetResourceVK( (void*)motionImage, ffxApiGetImageResourceDescriptionVK( motionImage, motionInfo, 0 ), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ );
+
+    ffxDispatchDescFrameGenerationPrepare prepareDesc = {};
+    prepareDesc.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE;
+    prepareDesc.frameID = frameId;
+    prepareDesc.flags = 0;
+    prepareDesc.commandList = (void*)cmd;
+    prepareDesc.renderSize = { renderResolution.GetResolutionState().renderWidth, renderResolution.GetResolutionState().renderHeight };
+    prepareDesc.jitterOffset = { -jitterOffset.data[ 0 ], -jitterOffset.data[ 1 ] };
+    prepareDesc.motionVectorScale = { float( renderResolution.GetResolutionState().renderWidth ), float( renderResolution.GetResolutionState().renderHeight ) };
+    prepareDesc.frameTimeDelta = float( timeDelta * 1000.0 );
+    prepareDesc.cameraNear = nearPlane;
+    prepareDesc.cameraFar = farPlane;
+    prepareDesc.cameraFovAngleVertical = fovVerticalRad;
+    prepareDesc.viewSpaceToMetersFactor = 1.0f;
+    prepareDesc.depth = depthRes;
+    prepareDesc.motionVectors = motionRes;
+
+    ffxDispatchDescFrameGenerationPrepareCameraInfo cameraInfo = {};
+    if( pView != nullptr )
+    {
+        cameraInfo.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_CAMERAINFO;
+        cameraInfo.cameraRight[0] = pView[0];
+        cameraInfo.cameraRight[1] = pView[4];
+        cameraInfo.cameraRight[2] = pView[8];
+        cameraInfo.cameraUp[0] = pView[1];
+        cameraInfo.cameraUp[1] = pView[5];
+        cameraInfo.cameraUp[2] = pView[9];
+        cameraInfo.cameraForward[0] = -pView[2];
+        cameraInfo.cameraForward[1] = -pView[6];
+        cameraInfo.cameraForward[2] = -pView[10];
+        prepareDesc.header.pNext = &cameraInfo.header;
+    }
+
+    ffxDispatch( (ffxContext*)&fgContext, &prepareDesc.header );
+}
+
+void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
+                                            VkImage        hudlessImage,
+                                            VkFormat       hudlessFormat,
+                                            uint32_t       width,
+                                            uint32_t       height,
+                                            uint64_t       frameId )
+{
+    if( !enableFrameGeneration || !fgContext )
+    {
+        return;
+    }
+
+    FfxApiResource hudlessRes = {};
+    if( hudlessImage != VK_NULL_HANDLE )
+    {
+        VkImageCreateInfo imgInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = hudlessFormat,
+            .extent = { width, height, 1 },
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        };
+        hudlessRes = ffxApiGetResourceVK( (void*)hudlessImage, ffxApiGetImageResourceDescriptionVK( hudlessImage, imgInfo, 0 ), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ );
+    }
+
+    ffxConfigureDescFrameGeneration configDesc = {};
+    configDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+    configDesc.swapChain = (void*)swapchain;
+    configDesc.presentCallback = nullptr;
+    configDesc.presentCallbackUserContext = nullptr;
+    configDesc.frameGenerationCallback = []( ffxDispatchDescFrameGeneration* params, void* pUserCtx ) -> ffxReturnCode_t {
+        return ffxDispatch( (ffxContext*)pUserCtx, &params->header );
+    };
+    configDesc.frameGenerationCallbackUserContext = &fgContext;
+    configDesc.frameGenerationEnabled = true;
+    configDesc.allowAsyncWorkloads = true;
+    configDesc.HUDLessColor = hudlessRes;
+    configDesc.flags = 0;
+    configDesc.onlyPresentGenerated = false;
+    configDesc.generationRect = { 0, 0, (int32_t)width, (int32_t)height };
+    configDesc.frameID = frameId;
+
+    ffxConfigure( (ffxContext*)&fgContext, &configDesc.header );
+}
+
+bool RTGL1::FSR3::IsFrameGenerationAvailable() const
+{
+    return true;
+}
+
 #else
 
-RTGL1::FSR3::FSR3(VkDevice _device, VkPhysicalDevice _physDevice)
+RTGL1::FSR3::FSR3(VkDevice _device, VkPhysicalDevice _physDevice, bool _enableFrameGeneration)
         : device(_device)
-        , physDevice(_physDevice) {}
+        , physDevice(_physDevice)
+        , enableFrameGeneration(_enableFrameGeneration) {}
 
 RTGL1::FSR3::~FSR3() {}
 
@@ -342,12 +526,41 @@ RTGL1::FramebufferImageIndex RTGL1::FSR3::Apply(
    return FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;
 }
 
+void RTGL1::FSR3::PrepareFrameGeneration( VkCommandBuffer                        cmd,
+                                          uint32_t                               frameIndex,
+                                          const std::shared_ptr< Framebuffers >& framebuffers,
+                                          const RenderResolutionHelper&          renderResolution,
+                                          RgFloat2D                              jitterOffset,
+                                          double                                 timeDelta,
+                                          float                                  nearPlane,
+                                          float                                  farPlane,
+                                          float                                  fovVerticalRad,
+                                          bool                                   resetAccumulation,
+                                          const float*                           pView,
+                                          uint64_t                               frameId )
+{
+}
+
+void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
+                                            VkImage        hudlessImage,
+                                            VkFormat       hudlessFormat,
+                                            uint32_t       width,
+                                            uint32_t       height,
+                                            uint64_t       frameId )
+{
+}
+
 RgFloat2D RTGL1::FSR3::GetJitter(const RTGL1::ResolutionState &resolutionState, uint32_t frameId)
 {
    return RgFloat2D{0, 0};
 }
 
 bool RTGL1::FSR3::IsFsr3Available()
+{
+   return false;
+}
+
+bool RTGL1::FSR3::IsFrameGenerationAvailable() const
 {
    return false;
 }

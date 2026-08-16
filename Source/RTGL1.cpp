@@ -345,6 +345,11 @@ RgBool32 rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscale
     return Call( instance, &RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable, technique );
 }
 
+RgBool32 rgUtilIsFrameGenerationAvailable( RgInstance instance )
+{
+    return Call( instance, &RTGL1::VulkanDevice::IsFrameGenerationAvailable );
+}
+
 const char* rgUtilGetResultDescription( RgResult result )
 {
     return RTGL1::RgException::GetRgResultName( result );

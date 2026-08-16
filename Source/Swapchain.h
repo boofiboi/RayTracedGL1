@@ -30,13 +30,17 @@
 namespace RTGL1
 {
 
+class Queues;
+
 class Swapchain
 {
 public:
     Swapchain( VkDevice                                device,
                VkSurfaceKHR                            surface,
                VkPhysicalDevice                        physDevice,
-               std::shared_ptr< CommandBufferManager > cmdManager );
+               std::shared_ptr< CommandBufferManager > cmdManager,
+               std::shared_ptr< Queues >               queues                = nullptr,
+               bool                                    enableFrameGeneration = false );
     ~Swapchain();
 
     Swapchain( const Swapchain& other )     = delete;
@@ -47,6 +51,7 @@ public:
     bool       RequestVsync( bool enable );
 
     void       AcquireImage( VkSemaphore imageAvailableSemaphore );
+    VkResult   Present( VkQueue queue, const VkPresentInfoKHR* pPresentInfo );
     void       BlitForPresent( VkCommandBuffer cmd,
                                VkImage         srcImage,
                                uint32_t        srcImageWidth,
@@ -56,8 +61,6 @@ public:
     void       BlitPreviousForPresent( VkCommandBuffer cmd );
     void       OnQueuePresent( VkResult queuePresentResult );
 
-    // Subscribe to swapchain size chagne event.
-    // shared_ptr will be transformed to weak_ptr
     void Subscribe( std::shared_ptr< ISwapchainDependency > subscriber );
 
     VkFormat           GetSurfaceFormat() const;
@@ -71,11 +74,11 @@ public:
     VkSwapchainKHR     GetHandle() const;
 
     bool               IsExtentOptimal() const;
+    bool               IsFrameGenerationEnabled() const;
 
 private:
     VkExtent2D     GetOptimalExtent() const;
 
-    // Safe to call even if swapchain wasn't created
     bool           TryRecreate( const VkExtent2D& newExtent, bool vsync );
 
     void           Create( uint32_t       newWidth,
@@ -83,7 +86,6 @@ private:
                            bool           vsync,
                            VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE );
     void           Destroy();
-    // Destroy dresources but not the swapchain itself. Old swapchain is returned.
     VkSwapchainKHR DestroyWithoutSwapchain();
 
     void           CallCreateSubscribers();
@@ -94,13 +96,14 @@ private:
     VkSurfaceKHR                                       surface;
     VkPhysicalDevice                                   physDevice;
     std::shared_ptr< CommandBufferManager >            cmdManager;
+    std::shared_ptr< Queues >                          queues;
+    bool                                               enableFrameGeneration;
 
     VkSurfaceFormatKHR                                 surfaceFormat;
     VkPresentModeKHR                                   presentModeVsync;
     VkPresentModeKHR                                   presentModeImmediate;
 
     bool                                               requestedVsync;
-    // current surface's size
     VkExtent2D                                         surfaceExtent;
     bool                                               isVsync;
 
@@ -109,6 +112,13 @@ private:
     std::vector< VkImageView >                         swapchainViews;
 
     uint32_t                                           currentSwapchainIndex;
+
+    void*                                              fgSwapchainContext;
+    void*                                              pfnCreateSwapchainFFX;
+    void*                                              pfnDestroySwapchainFFX;
+    void*                                              pfnGetSwapchainImagesKHR;
+    void*                                              pfnAcquireNextImageKHR;
+    void*                                              pfnQueuePresentKHR;
 
     std::list< std::weak_ptr< ISwapchainDependency > > subscribers;
 };

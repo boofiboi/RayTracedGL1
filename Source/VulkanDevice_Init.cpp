@@ -236,11 +236,15 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         device, 
         memAllocator );
 
+    enableFrameGeneration = info->enableFrameGeneration;
+
     swapchain = std::make_shared< Swapchain >(
         device, 
         surface, 
         physDevice->Get(), 
-        cmdManager );
+        cmdManager,
+        queues,
+        enableFrameGeneration );
     
     if( libconfig.developerMode )
     {
@@ -415,7 +419,8 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
     amdFsr3 = std::make_shared< FSR3 >( 
         device, 
-        physDevice->Get() );
+        physDevice->Get(),
+        enableFrameGeneration );
 
     nvDlss = std::make_shared< DLSS >(
         instance, 

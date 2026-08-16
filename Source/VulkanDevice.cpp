@@ -723,6 +723,33 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         }
     }
 
+    if( enableFrameGeneration )
+    {
+        const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
+        amdFsr3->PrepareFrameGeneration( cmd,
+                                         frameIndex,
+                                         framebuffers,
+                                         renderResolution,
+                                         jitter,
+                                         currentFrameTime - previousFrameTime,
+                                         drawInfo.cameraNear,
+                                         drawInfo.cameraFar,
+                                         drawInfo.fovYRadians,
+                                         params.resetUpscalerHistory,
+                                         uniform->GetData()->view,
+                                         frameId );
+
+        auto [ hudlessImage, hudlessView, hudlessFormat, hudlessSz ] =
+            framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
+
+        amdFsr3->ConfigureFrameGeneration( swapchain->GetHandle(),
+                                           hudlessImage,
+                                           hudlessFormat,
+                                           renderResolution.UpscaledWidth(),
+                                           renderResolution.UpscaledHeight(),
+                                           frameId );
+    }
+
     // draw geometry such as HUD into an upscaled framebuf
     if( !drawInfo.disableRasterization )
     {
@@ -809,7 +836,7 @@ void RTGL1::VulkanDevice::EndFrame( VkCommandBuffer cmd )
         .pResults           = results,
     };
 
-    VkResult r = vkQueuePresentKHR( queues->GetGraphics(), &presentInfo );
+    VkResult r = swapchain->Present( queues->GetGraphics(), &presentInfo );
 
     swapchain->OnQueuePresent( results[ 0 ] );
     if( debugWindows )
@@ -1315,6 +1342,11 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
                 RG_RESULT_WRONG_FUNCTION_ARGUMENT,
                 "Incorrect technique was passed to rgIsRenderUpscaleTechniqueAvailable" );
     }
+}
+
+bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
+{
+    return amdFsr3->IsFrameGenerationAvailable();
 }
 
 RgPrimitiveVertex* RTGL1::VulkanDevice::ScratchAllocForVertices( uint32_t vertexCount )

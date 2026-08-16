@@ -23,8 +23,14 @@
 #include <algorithm>
 #include <utility>
 
+#include "Queues.h"
 #include "RgException.h"
 #include "Utils.h"
+
+#ifdef RG_USE_AMD_FSR3
+#include <ffx_api/ffx_api.h>
+#include <ffx_api/vk/ffx_api_vk.h>
+#endif
 
 namespace
 {
@@ -47,11 +53,15 @@ bool operator!=( const VkExtent2D& a, const VkExtent2D& b )
 RTGL1::Swapchain::Swapchain( VkDevice                                _device,
                              VkSurfaceKHR                            _surface,
                              VkPhysicalDevice                        _physDevice,
-                             std::shared_ptr< CommandBufferManager > _cmdManager )
+                             std::shared_ptr< CommandBufferManager > _cmdManager,
+                             std::shared_ptr< Queues >               _queues,
+                             bool                                    _enableFrameGeneration )
     : device( _device )
     , surface( _surface )
     , physDevice( _physDevice )
     , cmdManager( std::move( _cmdManager ) )
+    , queues( std::move( _queues ) )
+    , enableFrameGeneration( _enableFrameGeneration )
     , surfaceFormat{}
     , presentModeVsync( VK_PRESENT_MODE_FIFO_KHR )
     , presentModeImmediate( VK_PRESENT_MODE_FIFO_KHR )
@@ -60,6 +70,12 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
     , isVsync( true )
     , swapchain( VK_NULL_HANDLE )
     , currentSwapchainIndex( UINT32_MAX )
+    , fgSwapchainContext( nullptr )
+    , pfnCreateSwapchainFFX( nullptr )
+    , pfnDestroySwapchainFFX( nullptr )
+    , pfnGetSwapchainImagesKHR( nullptr )
+    , pfnAcquireNextImageKHR( nullptr )
+    , pfnQueuePresentKHR( nullptr )
 {
     VkResult r;
 
@@ -184,12 +200,26 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
 
     while( true )
     {
-        VkResult r = vkAcquireNextImageKHR( device,
-                                            swapchain,
-                                            UINT64_MAX,
-                                            imageAvailableSemaphore,
-                                            VK_NULL_HANDLE,
-                                            &currentSwapchainIndex );
+        VkResult r;
+        auto pfnAcquire = (PFN_vkAcquireNextImageKHR)pfnAcquireNextImageKHR;
+        if( pfnAcquire )
+        {
+            r = pfnAcquire( device,
+                            swapchain,
+                            UINT64_MAX,
+                            imageAvailableSemaphore,
+                            VK_NULL_HANDLE,
+                            &currentSwapchainIndex );
+        }
+        else
+        {
+            r = vkAcquireNextImageKHR( device,
+                                       swapchain,
+                                       UINT64_MAX,
+                                       imageAvailableSemaphore,
+                                       VK_NULL_HANDLE,
+                                       &currentSwapchainIndex );
+        }
 
         if( r == VK_SUCCESS )
         {
@@ -495,21 +525,83 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         .oldSwapchain     = oldSwapchain,
     };
 
-    r = vkCreateSwapchainKHR( device, &swapchainInfo, nullptr, &swapchain );
+    auto pfnCreate = (PFN_vkCreateSwapchainFFXAPI)pfnCreateSwapchainFFX;
+    if( pfnCreate )
+    {
+        r = pfnCreate( device, &swapchainInfo, nullptr, &swapchain, fgSwapchainContext );
+    }
+    else
+    {
+        r = vkCreateSwapchainKHR( device, &swapchainInfo, nullptr, &swapchain );
+    }
     VK_CHECKERROR( r );
 
     if( oldSwapchain != VK_NULL_HANDLE )
     {
-        vkDestroySwapchainKHR( device, oldSwapchain, nullptr );
+        auto pfnDestroy = (PFN_vkDestroySwapchainFFXAPI)pfnDestroySwapchainFFX;
+        if( pfnDestroy )
+        {
+            pfnDestroy( device, oldSwapchain, nullptr, fgSwapchainContext );
+        }
+        else
+        {
+            vkDestroySwapchainKHR( device, oldSwapchain, nullptr );
+        }
     }
 
-    r = vkGetSwapchainImagesKHR( device, swapchain, &imageCount, nullptr );
+#ifdef RG_USE_AMD_FSR3
+    if( enableFrameGeneration && fgSwapchainContext == nullptr && queues )
+    {
+        ffxCreateContextDescFrameGenerationSwapChainVK createSwapChainDesc = {};
+        createSwapChainDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
+        createSwapChainDesc.physicalDevice = physDevice;
+        createSwapChainDesc.device = device;
+        createSwapChainDesc.swapchain = &swapchain;
+        createSwapChainDesc.createInfo = swapchainInfo;
+        createSwapChainDesc.allocator = nullptr;
+        createSwapChainDesc.gameQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
+        createSwapChainDesc.asyncComputeQueue = { queues->GetCompute(), queues->GetIndexCompute(), nullptr };
+        createSwapChainDesc.presentQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
+        createSwapChainDesc.imageAcquireQueue = { queues->GetTransfer() ? queues->GetTransfer() : queues->GetGraphics(), queues->GetIndexTransfer(), nullptr };
+
+        ffxReturnCode_t retCode = ffxCreateContext( (ffxContext*)&fgSwapchainContext, &createSwapChainDesc.header, nullptr );
+        if( retCode == FFX_API_RETURN_OK )
+        {
+            ffxQueryDescSwapchainReplacementFunctionsVK replacementFunctions = {};
+            replacementFunctions.header.type = FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
+            ffxQuery( (ffxContext*)&fgSwapchainContext, &replacementFunctions.header );
+
+            pfnCreateSwapchainFFX = (void*)replacementFunctions.pOutCreateSwapchainFFXAPI;
+            pfnDestroySwapchainFFX = (void*)replacementFunctions.pOutDestroySwapchainFFXAPI;
+            pfnGetSwapchainImagesKHR = (void*)replacementFunctions.pOutGetSwapchainImagesKHR;
+            pfnAcquireNextImageKHR = (void*)replacementFunctions.pOutAcquireNextImageKHR;
+            pfnQueuePresentKHR = (void*)replacementFunctions.pOutQueuePresentKHR;
+        }
+    }
+#endif
+
+    auto pfnGetImages = (PFN_vkGetSwapchainImagesKHR)pfnGetSwapchainImagesKHR;
+    if( pfnGetImages )
+    {
+        r = pfnGetImages( device, swapchain, &imageCount, nullptr );
+    }
+    else
+    {
+        r = vkGetSwapchainImagesKHR( device, swapchain, &imageCount, nullptr );
+    }
     VK_CHECKERROR( r );
 
     swapchainImages.resize( imageCount );
     swapchainViews.resize( imageCount );
 
-    r = vkGetSwapchainImagesKHR( device, swapchain, &imageCount, swapchainImages.data() );
+    if( pfnGetImages )
+    {
+        r = pfnGetImages( device, swapchain, &imageCount, swapchainImages.data() );
+    }
+    else
+    {
+        r = vkGetSwapchainImagesKHR( device, swapchain, &imageCount, swapchainImages.data() );
+    }
     VK_CHECKERROR( r );
 
     for( uint32_t i = 0; i < imageCount; i++ )
@@ -556,7 +648,18 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
 void RTGL1::Swapchain::Destroy()
 {
     VkSwapchainKHR old = DestroyWithoutSwapchain();
-    vkDestroySwapchainKHR( device, old, nullptr );
+    if( old != VK_NULL_HANDLE )
+    {
+        auto pfnDestroy = (PFN_vkDestroySwapchainFFXAPI)pfnDestroySwapchainFFX;
+        if( pfnDestroy )
+        {
+            pfnDestroy( device, old, nullptr, fgSwapchainContext );
+        }
+        else
+        {
+            vkDestroySwapchainKHR( device, old, nullptr );
+        }
+    }
 }
 
 VkSwapchainKHR RTGL1::Swapchain::DestroyWithoutSwapchain()
@@ -607,6 +710,28 @@ void RTGL1::Swapchain::CallDestroySubscribers()
 RTGL1::Swapchain::~Swapchain()
 {
     Destroy();
+#ifdef RG_USE_AMD_FSR3
+    if( fgSwapchainContext != nullptr )
+    {
+        ffxDestroyContext( (ffxContext*)&fgSwapchainContext, nullptr );
+        fgSwapchainContext = nullptr;
+    }
+#endif
+}
+
+VkResult RTGL1::Swapchain::Present( VkQueue queue, const VkPresentInfoKHR* pPresentInfo )
+{
+    auto pfnPresent = (PFN_vkQueuePresentKHR)pfnQueuePresentKHR;
+    if( pfnPresent )
+    {
+        return pfnPresent( queue, pPresentInfo );
+    }
+    return vkQueuePresentKHR( queue, pPresentInfo );
+}
+
+bool RTGL1::Swapchain::IsFrameGenerationEnabled() const
+{
+    return enableFrameGeneration && fgSwapchainContext != nullptr;
 }
 
 void RTGL1::Swapchain::Subscribe( std::shared_ptr< ISwapchainDependency > subscriber )

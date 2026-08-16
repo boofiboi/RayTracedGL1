@@ -106,6 +106,7 @@ public:
 
     bool IsSuspended() const;
     bool IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique technique ) const;
+    bool IsFrameGenerationAvailable() const;
 
     RgPrimitiveVertex* ScratchAllocForVertices( uint32_t count );
     void               ScratchFree( const RgPrimitiveVertex* pPointer );
@@ -248,6 +249,7 @@ private:
     double postEffectTimeOffset;
 
     bool vsync;
+    bool enableFrameGeneration;
 };
 
 }
