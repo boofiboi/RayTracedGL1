@@ -537,7 +537,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
     };
 
 #ifdef RG_USE_AMD_FSR3
-    if( enableFrameGeneration && fgSwapchainContext == nullptr && queues )
+    if( enableFrameGeneration && queues )
     {
         swapchain = VK_NULL_HANDLE;
 
@@ -577,29 +577,13 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
     else
 #endif
     {
-        auto pfnCreate = (PFN_vkCreateSwapchainFFXAPI)pfnCreateSwapchainFFX;
-        if( pfnCreate )
-        {
-            r = pfnCreate( device, &swapchainInfo, nullptr, &swapchain, fgSwapchainContext );
-        }
-        else
-        {
-            r = vkCreateSwapchainKHR( device, &swapchainInfo, nullptr, &swapchain );
-        }
+        r = vkCreateSwapchainKHR( device, &swapchainInfo, nullptr, &swapchain );
         VK_CHECKERROR( r );
     }
 
     if( oldSwapchain != VK_NULL_HANDLE )
     {
-        auto pfnDestroy = (PFN_vkDestroySwapchainFFXAPI)pfnDestroySwapchainFFX;
-        if( pfnDestroy )
-        {
-            pfnDestroy( device, oldSwapchain, nullptr, fgSwapchainContext );
-        }
-        else
-        {
-            vkDestroySwapchainKHR( device, oldSwapchain, nullptr );
-        }
+        vkDestroySwapchainKHR( device, oldSwapchain, nullptr );
     }
 
     auto pfnGetImages = (PFN_vkGetSwapchainImagesKHR)pfnGetSwapchainImagesKHR;
@@ -672,15 +656,7 @@ void RTGL1::Swapchain::Destroy()
     VkSwapchainKHR old = DestroyWithoutSwapchain();
     if( old != VK_NULL_HANDLE )
     {
-        auto pfnDestroy = (PFN_vkDestroySwapchainFFXAPI)pfnDestroySwapchainFFX;
-        if( pfnDestroy )
-        {
-            pfnDestroy( device, old, nullptr, fgSwapchainContext );
-        }
-        else
-        {
-            vkDestroySwapchainKHR( device, old, nullptr );
-        }
+        vkDestroySwapchainKHR( device, old, nullptr );
     }
 }
 
@@ -703,6 +679,20 @@ VkSwapchainKHR RTGL1::Swapchain::DestroyWithoutSwapchain()
 
     VkSwapchainKHR old = swapchain;
     swapchain          = VK_NULL_HANDLE;
+
+#ifdef RG_USE_AMD_FSR3
+    if( fgSwapchainContext != nullptr )
+    {
+        ffxDestroyContext( (ffxContext*)&fgSwapchainContext, nullptr );
+        fgSwapchainContext = nullptr;
+        pfnCreateSwapchainFFX = nullptr;
+        pfnDestroySwapchainFFX = nullptr;
+        pfnGetSwapchainImagesKHR = nullptr;
+        pfnAcquireNextImageKHR = nullptr;
+        pfnQueuePresentKHR = nullptr;
+        old = VK_NULL_HANDLE;
+    }
+#endif
 
     return old;
 }
@@ -732,13 +722,6 @@ void RTGL1::Swapchain::CallDestroySubscribers()
 RTGL1::Swapchain::~Swapchain()
 {
     Destroy();
-#ifdef RG_USE_AMD_FSR3
-    if( fgSwapchainContext != nullptr )
-    {
-        ffxDestroyContext( (ffxContext*)&fgSwapchainContext, nullptr );
-        fgSwapchainContext = nullptr;
-    }
-#endif
 }
 
 VkResult RTGL1::Swapchain::Present( VkQueue queue, const VkPresentInfoKHR* pPresentInfo )
