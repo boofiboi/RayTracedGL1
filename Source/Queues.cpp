@@ -1,24 +1,5 @@
-// Copyright (c) 2020-2021 Sultim Tsyrendashiev
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #include "Queues.h"
+#include <algorithm>
 
 using namespace RTGL1;
 
@@ -37,6 +18,16 @@ uint32_t Queues::GetIndexTransfer() const
     return indexTransfer;
 }
 
+uint32_t Queues::GetIndexPresent() const
+{
+    return indexPresent;
+}
+
+uint32_t Queues::GetIndexImageAcquire() const
+{
+    return indexAcquire;
+}
+
 VkQueue Queues::GetGraphics() const
 {
     return graphics;
@@ -52,14 +43,33 @@ VkQueue Queues::GetTransfer() const
     return transfer;
 }
 
-Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface )
-    : defaultQueuePriority( 0 )
-    , indexGraphics( UINT32_MAX )
+VkQueue Queues::GetPresentQueue() const
+{
+    return present;
+}
+
+VkQueue Queues::GetImageAcquireQueue() const
+{
+    return acquire;
+}
+
+Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface, bool enableFrameGeneration )
+    : indexGraphics( UINT32_MAX )
     , indexCompute( UINT32_MAX )
     , indexTransfer( UINT32_MAX )
+    , indexPresent( UINT32_MAX )
+    , indexAcquire( UINT32_MAX )
+    , subIndexGraphics( 0 )
+    , subIndexCompute( 0 )
+    , subIndexTransfer( 0 )
+    , subIndexPresent( 0 )
+    , subIndexAcquire( 0 )
+    , requestedQueueCounts{}
     , graphics( VK_NULL_HANDLE )
     , compute( VK_NULL_HANDLE )
     , transfer( VK_NULL_HANDLE )
+    , present( VK_NULL_HANDLE )
+    , acquire( VK_NULL_HANDLE )
 {
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties( physDevice, &queueFamilyCount, nullptr );
@@ -69,11 +79,14 @@ Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface )
     vkGetPhysicalDeviceQueueFamilyProperties(
         physDevice, &queueFamilyCount, queueFamilyProperties.data() );
 
+    uint32_t dedicatedCompute = UINT32_MAX;
+    uint32_t dedicatedTransfer = UINT32_MAX;
+
     for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
     {
-        auto     flags = queueFamilyProperties[ i ].queueFlags;
+        auto flags = queueFamilyProperties[ i ].queueFlags;
 
-        VkBool32 presentSupported;
+        VkBool32 presentSupported = VK_FALSE;
         VkResult r =
             vkGetPhysicalDeviceSurfaceSupportKHR( physDevice, i, surface, &presentSupported );
         VK_CHECKERROR( r );
@@ -84,76 +97,153 @@ Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface )
             indexGraphics = i;
         }
 
-        if( ( flags & VK_QUEUE_GRAPHICS_BIT ) == 0 && ( flags & VK_QUEUE_COMPUTE_BIT ) != 0 &&
-            ( flags & VK_QUEUE_TRANSFER_BIT ) == 0 )
+        if( ( flags & VK_QUEUE_GRAPHICS_BIT ) == 0 && ( flags & VK_QUEUE_COMPUTE_BIT ) != 0 )
         {
-            indexCompute = i;
+            dedicatedCompute = i;
         }
 
         if( ( flags & VK_QUEUE_GRAPHICS_BIT ) == 0 && ( flags & VK_QUEUE_COMPUTE_BIT ) == 0 &&
             ( flags & VK_QUEUE_TRANSFER_BIT ) != 0 )
         {
-            indexTransfer = i;
+            dedicatedTransfer = i;
         }
     }
 
     assert( indexGraphics != UINT32_MAX );
 
-    if( indexCompute == UINT32_MAX )
+    if( !enableFrameGeneration )
     {
-        indexCompute = indexGraphics;
+        indexCompute = ( dedicatedCompute != UINT32_MAX ) ? dedicatedCompute : indexGraphics;
+        indexTransfer = ( dedicatedTransfer != UINT32_MAX ) ? dedicatedTransfer : indexGraphics;
+        indexPresent = indexGraphics;
+        indexAcquire = indexGraphics;
+
+        requestedQueueCounts[ indexGraphics ] = 1;
+        if( indexCompute != indexGraphics )
+        {
+            requestedQueueCounts[ indexCompute ] = 1;
+        }
+        if( indexTransfer != indexGraphics && indexTransfer != indexCompute )
+        {
+            requestedQueueCounts[ indexTransfer ] = 1;
+        }
+
+        subIndexGraphics = 0;
+        subIndexCompute = 0;
+        subIndexTransfer = 0;
+        subIndexPresent = 0;
+        subIndexAcquire = 0;
+    }
+    else
+    {
+        uint32_t allocated[ 16 ] = {};
+
+        indexGraphics = indexGraphics;
+        subIndexGraphics = allocated[ indexGraphics ]++;
+
+        if( dedicatedCompute != UINT32_MAX && allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
+        {
+            indexCompute = dedicatedCompute;
+        }
+        else if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
+        {
+            indexCompute = indexGraphics;
+        }
+        else
+        {
+            indexCompute = indexGraphics;
+        }
+        subIndexCompute = allocated[ indexCompute ]++;
+
+        if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
+        {
+            indexPresent = indexGraphics;
+        }
+        else
+        {
+            indexPresent = indexGraphics;
+            for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
+            {
+                VkBool32 ps = VK_FALSE;
+                vkGetPhysicalDeviceSurfaceSupportKHR( physDevice, i, surface, &ps );
+                if( ps && allocated[ i ] < queueFamilyProperties[ i ].queueCount )
+                {
+                    indexPresent = i;
+                    break;
+                }
+            }
+        }
+        subIndexPresent = allocated[ indexPresent ]++;
+
+        if( dedicatedTransfer != UINT32_MAX && allocated[ dedicatedTransfer ] < queueFamilyProperties[ dedicatedTransfer ].queueCount )
+        {
+            indexAcquire = dedicatedTransfer;
+        }
+        else if( dedicatedCompute != UINT32_MAX && allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
+        {
+            indexAcquire = dedicatedCompute;
+        }
+        else if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
+        {
+            indexAcquire = indexGraphics;
+        }
+        else
+        {
+            indexAcquire = indexGraphics;
+            for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
+            {
+                if( allocated[ i ] < queueFamilyProperties[ i ].queueCount )
+                {
+                    indexAcquire = i;
+                    break;
+                }
+            }
+        }
+        subIndexAcquire = allocated[ indexAcquire ]++;
+
+        indexTransfer = ( dedicatedTransfer != UINT32_MAX ) ? dedicatedTransfer : indexGraphics;
+        subIndexTransfer = ( indexTransfer == dedicatedTransfer ) ? 0 : subIndexGraphics;
+
+        for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
+        {
+            requestedQueueCounts[ i ] = std::min( allocated[ i ], queueFamilyProperties[ i ].queueCount );
+        }
     }
 
-    if( indexTransfer == UINT32_MAX )
+    for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
     {
-        indexTransfer = indexGraphics;
+        if( requestedQueueCounts[ i ] > 0 )
+        {
+            queuePriorities[ i ].assign( requestedQueueCounts[ i ], 1.0f );
+        }
     }
 }
 
 void Queues::SetDevice( VkDevice device )
 {
-    vkGetDeviceQueue( device, indexGraphics, 0, &graphics );
-    vkGetDeviceQueue( device, indexCompute, 0, &compute );
-    vkGetDeviceQueue( device, indexTransfer, 0, &transfer );
+    vkGetDeviceQueue( device, indexGraphics, subIndexGraphics, &graphics );
+    vkGetDeviceQueue( device, indexCompute, subIndexCompute, &compute );
+    vkGetDeviceQueue( device, indexTransfer, subIndexTransfer, &transfer );
+    vkGetDeviceQueue( device, indexPresent, subIndexPresent, &present );
+    vkGetDeviceQueue( device, indexAcquire, subIndexAcquire, &acquire );
 }
 
 std::vector< VkDeviceQueueCreateInfo > Queues::GetDeviceQueueCreateInfos() const
 {
     std::vector< VkDeviceQueueCreateInfo > infos;
 
+    for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
     {
-        VkDeviceQueueCreateInfo i = {
-            .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = indexGraphics,
-            .queueCount       = 1,
-            .pQueuePriorities = &defaultQueuePriority,
-        };
-
-        infos.push_back( i );
-    }
-
-    if( indexCompute != indexGraphics )
-    {
-        VkDeviceQueueCreateInfo i = {
-            .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = indexCompute,
-            .queueCount       = 1,
-            .pQueuePriorities = &defaultQueuePriority,
-        };
-
-        infos.push_back( i );
-    }
-
-    if( indexTransfer != indexGraphics && indexTransfer != indexCompute )
-    {
-        VkDeviceQueueCreateInfo i = {
-            .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = indexTransfer,
-            .queueCount       = 1,
-            .pQueuePriorities = &defaultQueuePriority,
-        };
-
-        infos.push_back( i );
+        if( requestedQueueCounts[ i ] > 0 )
+        {
+            VkDeviceQueueCreateInfo info = {
+                .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .queueFamilyIndex = i,
+                .queueCount       = requestedQueueCounts[ i ],
+                .pQueuePriorities = queuePriorities[ i ].data(),
+            };
+            infos.push_back( info );
+        }
     }
 
     return infos;

@@ -29,7 +29,7 @@ namespace RTGL1
 class Queues
 {
 public:
-    explicit Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface );
+    explicit Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface, bool enableFrameGeneration = false );
     ~Queues() = default;
 
     Queues( const Queues& other )                  = delete;
@@ -44,21 +44,38 @@ public:
     uint32_t                               GetIndexGraphics() const;
     uint32_t                               GetIndexCompute() const;
     uint32_t                               GetIndexTransfer() const;
+    uint32_t                               GetIndexPresent() const;
+    uint32_t                               GetIndexImageAcquire() const;
+
     VkQueue                                GetGraphics() const;
     VkQueue                                GetCompute() const;
     VkQueue                                GetTransfer() const;
+    VkQueue                                GetPresentQueue() const;
+    VkQueue                                GetImageAcquireQueue() const;
 
 private:
     std::vector< VkQueueFamilyProperties > queueFamilyProperties;
-    float                                  defaultQueuePriority;
+    std::vector< float >                   queuePriorities[ 16 ];
 
     uint32_t                               indexGraphics;
     uint32_t                               indexCompute;
     uint32_t                               indexTransfer;
+    uint32_t                               indexPresent;
+    uint32_t                               indexAcquire;
+
+    uint32_t                               subIndexGraphics;
+    uint32_t                               subIndexCompute;
+    uint32_t                               subIndexTransfer;
+    uint32_t                               subIndexPresent;
+    uint32_t                               subIndexAcquire;
+
+    uint32_t                               requestedQueueCounts[ 16 ];
 
     VkQueue                                graphics;
     VkQueue                                compute;
     VkQueue                                transfer;
+    VkQueue                                present;
+    VkQueue                                acquire;
 };
 
 }

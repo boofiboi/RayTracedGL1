@@ -564,8 +564,8 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
             createSwapChainDesc.allocator = nullptr;
             createSwapChainDesc.gameQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
             createSwapChainDesc.asyncComputeQueue = { queues->GetCompute(), queues->GetIndexCompute(), nullptr };
-            createSwapChainDesc.presentQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
-            createSwapChainDesc.imageAcquireQueue = { queues->GetTransfer() ? queues->GetTransfer() : queues->GetGraphics(), queues->GetIndexTransfer(), nullptr };
+            createSwapChainDesc.presentQueue = { queues->GetPresentQueue(), queues->GetIndexPresent(), nullptr };
+            createSwapChainDesc.imageAcquireQueue = { queues->GetImageAcquireQueue(), queues->GetIndexImageAcquire(), nullptr };
 
             ffxReturnCode_t retCode = ffxCreateContext( (ffxContext*)&fgSwapchainContext, &createSwapChainDesc.header, nullptr );
             if( retCode == FFX_API_RETURN_OK )

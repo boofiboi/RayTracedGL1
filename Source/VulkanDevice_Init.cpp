@@ -212,7 +212,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
     // create selected physical device
     physDevice = std::make_shared< PhysicalDevice >( instance );
-    queues     = std::make_shared< Queues >( physDevice->Get(), surface );
+    queues     = std::make_shared< Queues >( physDevice->Get(), surface, info->enableFrameGeneration );
 
     // create vulkan device and set extension function pointers
     CreateDevice();
