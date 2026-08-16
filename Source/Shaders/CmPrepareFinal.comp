@@ -152,7 +152,7 @@ void main()
     }
     else
     {
-        uint ditherSeed = getRandomSeed( pix, 0 );
+        uint ditherSeed = getRandomSeed( pix, globalUniform.frameId );
         vec4 rnd = rnd8_4( ditherSeed, 0 );
         float dither = ( rnd.x + rnd.y - 1.0 ) * ( 1.0 / 255.0 );
         color = clamp( color + vec3( dither ), vec3( 0.0 ), vec3( 1.0 ) );

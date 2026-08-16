@@ -40,11 +40,6 @@ push;
 
 vec4 fializeScattering( ivec2 regularPix )
 {
-    if( globalUniform.cameraMediaType == MEDIA_TYPE_WATER || globalUniform.cameraMediaType == MEDIA_TYPE_ACID )
-    {
-        return vec4( vec3( 0 ), 1.0 );
-    }
-
     if( globalUniform.volumeEnableType == VOLUME_ENABLE_VOLUMETRIC )
     {
         vec3 position;
