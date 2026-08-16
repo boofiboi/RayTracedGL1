@@ -169,13 +169,8 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         createFg.header.pNext = &backendDesc.header;
         createFg.displaySize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.maxRenderSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
-        createFg.flags = FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE;
-        createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_SRGB );
-
-        ffxCreateContextDescFrameGenerationHudless createFgHudless = {};
-        createFgHudless.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
-        createFgHudless.hudlessBackBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_SRGB );
-        backendDesc.header.pNext = &createFgHudless.header;
+        createFg.flags = 0;
+        createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_UNORM );
 
         ffxReturnCode_t ret = ffxCreateContext( (ffxContext*)&fgContext, &createFg.header, nullptr );
         if( ret != FFX_API_RETURN_OK )
@@ -380,6 +375,9 @@ void RTGL1::FSR3::PrepareFrameGeneration( VkCommandBuffer                       
     }
 
     using FI = FramebufferImageIndex;
+    FI rs[] = { FI::FB_IMAGE_INDEX_DEPTH_NDC, FI::FB_IMAGE_INDEX_MOTION_DLSS };
+    framebuffers->BarrierMultiple( cmd, frameIndex, rs, Framebuffers::BarrierType::Storage );
+
     auto [ depthImage, depthView, depthFormat, depthSz ] =
         framebuffers->GetImageHandles( FI::FB_IMAGE_INDEX_DEPTH_NDC, frameIndex, renderResolution.GetResolutionState() );
     auto [ motionImage, motionView, motionFormat, motionSz ] =
@@ -458,23 +456,6 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
         return;
     }
 
-    FfxApiResource hudlessRes = {};
-    if( hudlessImage != VK_NULL_HANDLE )
-    {
-        VkImageCreateInfo imgInfo = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = hudlessFormat,
-            .extent = { width, height, 1 },
-            .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        };
-        hudlessRes = ffxApiGetResourceVK( (void*)hudlessImage, ffxApiGetImageResourceDescriptionVK( hudlessImage, imgInfo, 0 ), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ );
-    }
-
     ffxConfigureDescFrameGeneration configDesc = {};
     configDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
     configDesc.swapChain = (void*)swapchain;
@@ -486,7 +467,7 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
     configDesc.frameGenerationCallbackUserContext = &fgContext;
     configDesc.frameGenerationEnabled = true;
     configDesc.allowAsyncWorkloads = true;
-    configDesc.HUDLessColor = hudlessRes;
+    configDesc.HUDLessColor = {};
     configDesc.flags = 0;
     configDesc.onlyPresentGenerated = false;
     configDesc.generationRect = { 0, 0, (int32_t)width, (int32_t)height };
