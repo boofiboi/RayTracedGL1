@@ -114,7 +114,7 @@ private:
     void UpdateBufferDescriptors( uint32_t frameIndex );
     void UpdateASDescriptors( uint32_t frameIndex );
 
-    bool SetupBLAS( BLASComponent& as, const VertexCollector& vertCollector );
+    bool SetupBLAS( BLASComponent& as, const VertexCollector& vertCollector, bool allowCompaction = false );
 
     static bool SetupTLASInstanceFromBLAS( const BLASComponent& as,
                                            uint32_t             rayCullMaskWorld,

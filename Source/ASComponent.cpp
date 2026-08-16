@@ -83,6 +83,20 @@ void RTGL1::ASComponent::RecreateIfNotValid(
     }
 }
 
+void RTGL1::ASComponent::CreateCompact( const std::shared_ptr< MemoryAllocator >& allocator,
+                                        VkDeviceSize                              compactSize )
+{
+    Destroy();
+    CreateBuffer( allocator, compactSize );
+    CreateAS( compactSize );
+}
+
+void RTGL1::ASComponent::SwapResources( ASComponent& other )
+{
+    buffer.Swap( other.buffer );
+    std::swap( as, other.as );
+}
+
 void RTGL1::BLASComponent::CreateAS( VkDeviceSize size )
 {
     assert( device != VK_NULL_HANDLE );

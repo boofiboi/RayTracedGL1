@@ -617,7 +617,7 @@ RTGL1::ASManager::~ASManager()
     vkDestroyFence( device, staticCopyFence, nullptr );
 }
 
-bool RTGL1::ASManager::SetupBLAS( BLASComponent& blas, const VertexCollector& vertCollector )
+bool RTGL1::ASManager::SetupBLAS( BLASComponent& blas, const VertexCollector& vertCollector, bool allowCompaction )
 {
     const auto  filter = blas.GetFilter();
     const auto& geoms  = vertCollector.GetASGeometries( filter );
@@ -633,31 +633,27 @@ bool RTGL1::ASManager::SetupBLAS( BLASComponent& blas, const VertexCollector& ve
     const auto& primCounts = vertCollector.GetPrimitiveCounts( filter );
 
     const bool fastTrace = !IsFastBuild( filter );
-    const bool update    = false;
 
-    // get AS size and create buffer for AS
     const auto buildSizes =
-        asBuilder->GetBottomBuildSizes( geoms.size(), geoms.data(), primCounts.data(), fastTrace );
+        asBuilder->GetBottomBuildSizes( geoms.size(), geoms.data(), primCounts.data(), fastTrace, allowCompaction );
 
-    // if no buffer, or it was created, but its size is too small for current AS
     blas.RecreateIfNotValid( buildSizes, allocator );
 
     assert( blas.GetAS() != VK_NULL_HANDLE );
 
-    // add BLAS, all passed arrays must be alive until BuildBottomLevel() call
     asBuilder->AddBLAS( blas.GetAS(),
                         geoms.size(),
                         geoms.data(),
                         ranges.data(),
                         buildSizes,
-                        fastTrace );
+                        fastTrace,
+                        allowCompaction );
 
     return true;
 }
 
 RTGL1::StaticGeometryToken RTGL1::ASManager::BeginStaticGeometry()
 {
-    // the whole static vertex data must be recreated, clear previous data
     collectorStatic->Reset();
     geomInfoMgr->ResetOnlyStatic();
 
@@ -669,19 +665,16 @@ void RTGL1::ASManager::SubmitStaticGeometry( StaticGeometryToken& token )
     assert( token );
     token = {};
 
-    // static geometry submission happens very infrequently, e.g. on level load
     vkDeviceWaitIdle( device );
 
     typedef VertexCollectorFilterTypeFlagBits FT;
 
     auto staticFlags = FT::CF_STATIC_NON_MOVABLE | FT::CF_STATIC_MOVABLE;
 
-    // destroy previous static
     for( auto& staticBlas : allStaticBlas )
     {
         assert( !( staticBlas->GetFilter() & FT::CF_DYNAMIC ) );
 
-        // if flags have any of static bits
         if( staticBlas->GetFilter() & staticFlags )
         {
             staticBlas->Destroy();
@@ -691,7 +684,6 @@ void RTGL1::ASManager::SubmitStaticGeometry( StaticGeometryToken& token )
 
     assert( asBuilder->IsEmpty() );
 
-    // skip if all static geometries are empty
     if( collectorStatic->AreGeometriesEmpty( staticFlags ) )
     {
         return;
@@ -699,30 +691,108 @@ void RTGL1::ASManager::SubmitStaticGeometry( StaticGeometryToken& token )
 
     VkCommandBuffer cmd = cmdManager->StartGraphicsCmd();
 
-    // copy from staging with barrier
     collectorStatic->CopyFromStaging( cmd );
 
-    // setup static blas
+    std::vector< BLASComponent* > staticBlasToBuild;
+
     for( auto& staticBlas : allStaticBlas )
     {
-        // if flags have any of static bits
         if( staticBlas->GetFilter() & staticFlags )
         {
-            SetupBLAS( *staticBlas, *collectorStatic );
+            if( SetupBLAS( *staticBlas, *collectorStatic, true ) )
+            {
+                staticBlasToBuild.push_back( staticBlas.get() );
+            }
         }
     }
 
-    // build AS
+    if( staticBlasToBuild.empty() )
+    {
+        cmdManager->Submit( cmd, staticCopyFence );
+        Utils::WaitAndResetFence( device, staticCopyFence );
+        return;
+    }
+
     asBuilder->BuildBottomLevel( cmd );
 
-    // submit geom info, in case if rgStartNewScene and rgSubmitStaticGeometries
-    // were out of rgStartFrame - rgDrawFrame, so static geominfo-s won't be
-    // erased on GeomInfoManager::PrepareForFrame
+    Utils::ASBuildMemoryBarrier( cmd );
+
+    VkQueryPool queryPool = VK_NULL_HANDLE;
+    VkQueryPoolCreateInfo queryPoolInfo = {
+        .sType      = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+        .queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+        .queryCount = static_cast< uint32_t >( staticBlasToBuild.size() ),
+    };
+    VkResult qr = vkCreateQueryPool( device, &queryPoolInfo, nullptr, &queryPool );
+    VK_CHECKERROR( qr );
+
+    vkCmdResetQueryPool( cmd, queryPool, 0, static_cast< uint32_t >( staticBlasToBuild.size() ) );
+
+    std::vector< VkAccelerationStructureKHR > buildASHandles;
+    buildASHandles.reserve( staticBlasToBuild.size() );
+    for( const auto* b : staticBlasToBuild )
+    {
+        buildASHandles.push_back( b->GetAS() );
+    }
+
+    svkCmdWriteAccelerationStructuresPropertiesKHR( cmd,
+                                                   static_cast< uint32_t >( buildASHandles.size() ),
+                                                   buildASHandles.data(),
+                                                   VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+                                                   queryPool,
+                                                   0 );
+
     geomInfoMgr->CopyFromStaging( cmd, 0, false );
 
-    // submit and wait
     cmdManager->Submit( cmd, staticCopyFence );
     Utils::WaitAndResetFence( device, staticCopyFence );
+
+    std::vector< VkDeviceSize > compactedSizes( staticBlasToBuild.size() );
+    qr = vkGetQueryPoolResults( device,
+                                queryPool,
+                                0,
+                                static_cast< uint32_t >( staticBlasToBuild.size() ),
+                                compactedSizes.size() * sizeof( VkDeviceSize ),
+                                compactedSizes.data(),
+                                sizeof( VkDeviceSize ),
+                                VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT );
+    VK_CHECKERROR( qr );
+
+    vkDestroyQueryPool( device, queryPool, nullptr );
+
+    std::vector< std::unique_ptr< BLASComponent > > compactedBlas;
+    compactedBlas.reserve( staticBlasToBuild.size() );
+
+    for( size_t i = 0; i < staticBlasToBuild.size(); i++ )
+    {
+        auto comp = std::make_unique< BLASComponent >( device, staticBlasToBuild[ i ]->GetFilter() );
+        comp->SetGeometryCount( staticBlasToBuild[ i ]->GetGeomCount() );
+        comp->CreateCompact( allocator, compactedSizes[ i ] );
+        compactedBlas.push_back( std::move( comp ) );
+    }
+
+    VkCommandBuffer compactCmd = cmdManager->StartGraphicsCmd();
+
+    for( size_t i = 0; i < staticBlasToBuild.size(); i++ )
+    {
+        VkCopyAccelerationStructureInfoKHR copyInfo = {
+            .sType = VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR,
+            .src   = staticBlasToBuild[ i ]->GetAS(),
+            .dst   = compactedBlas[ i ]->GetAS(),
+            .mode  = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR,
+        };
+        svkCmdCopyAccelerationStructureKHR( compactCmd, &copyInfo );
+    }
+
+    Utils::ASBuildMemoryBarrier( compactCmd );
+
+    cmdManager->Submit( compactCmd, staticCopyFence );
+    Utils::WaitAndResetFence( device, staticCopyFence );
+
+    for( size_t i = 0; i < staticBlasToBuild.size(); i++ )
+    {
+        staticBlasToBuild[ i ]->SwapResources( *compactedBlas[ i ] );
+    }
 }
 
 RTGL1::DynamicGeometryToken RTGL1::ASManager::BeginDynamicGeometry( VkCommandBuffer cmd,

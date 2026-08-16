@@ -46,6 +46,10 @@ public:
     void         RecreateIfNotValid( const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
                                      const std::shared_ptr< MemoryAllocator >&       allocator );
 
+    void         CreateCompact( const std::shared_ptr< MemoryAllocator >& allocator,
+                                VkDeviceSize                              compactSize );
+    void         SwapResources( ASComponent& other );
+
     VkAccelerationStructureKHR GetAS() const;
     VkDeviceAddress            GetASAddress() const;
 

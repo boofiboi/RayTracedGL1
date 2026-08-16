@@ -53,6 +53,8 @@ constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
     VK_EXTENSION_FUNCTION( vkGetAccelerationStructureDeviceAddressKHR ) \
     VK_EXTENSION_FUNCTION( vkGetAccelerationStructureBuildSizesKHR )    \
     VK_EXTENSION_FUNCTION( vkCmdBuildAccelerationStructuresKHR )        \
+    VK_EXTENSION_FUNCTION( vkCmdWriteAccelerationStructuresPropertiesKHR ) \
+    VK_EXTENSION_FUNCTION( vkCmdCopyAccelerationStructureKHR )          \
     VK_EXTENSION_FUNCTION( vkCmdTraceRaysKHR )
 
 #define VK_DEVICE_DEBUG_UTILS_FUNCTION_LIST               \

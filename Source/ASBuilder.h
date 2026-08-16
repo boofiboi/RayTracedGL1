@@ -48,7 +48,8 @@ public:
                   const VkAccelerationStructureGeometryKHR*       pGeometries,
                   const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos,
                   const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
-                  bool                                            fastTrace );
+                  bool                                            fastTrace,
+                  bool                                            allowCompaction = false );
 
     void BuildBottomLevel( VkCommandBuffer cmd );
 
@@ -70,14 +71,16 @@ public:
         uint32_t                                  geometryCount,
         const VkAccelerationStructureGeometryKHR* pGeometries,
         const uint32_t*                           pMaxPrimitiveCount,
-        bool                                      fastTrace ) const;
+        bool                                      fastTrace,
+        bool                                      allowCompaction = false ) const;
 
     // GetBuildSizes(..) for BLAS
     VkAccelerationStructureBuildSizesInfoKHR GetBottomBuildSizes(
         uint32_t                                  geometryCount,
         const VkAccelerationStructureGeometryKHR* pGeometries,
         const uint32_t*                           pMaxPrimitiveCount,
-        bool                                      fastTrace ) const;
+        bool                                      fastTrace,
+        bool                                      allowCompaction = false ) const;
     // GetBuildSizes(..) for TLAS
     VkAccelerationStructureBuildSizesInfoKHR GetTopBuildSizes(
         const VkAccelerationStructureGeometryKHR* pGeometry,

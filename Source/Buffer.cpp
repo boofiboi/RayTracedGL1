@@ -111,6 +111,16 @@ void Buffer::Destroy()
     size    = 0;
 }
 
+void Buffer::Swap( Buffer& other )
+{
+    std::swap( device, other.device );
+    std::swap( buffer, other.buffer );
+    std::swap( memory, other.memory );
+    std::swap( address, other.address );
+    std::swap( size, other.size );
+    std::swap( isMapped, other.isMapped );
+}
+
 void* Buffer::Map()
 {
     assert( device != VK_NULL_HANDLE );

@@ -37,13 +37,19 @@ VkAccelerationStructureBuildSizesInfoKHR ASBuilder::GetBuildSizes(
     uint32_t                                  geometryCount,
     const VkAccelerationStructureGeometryKHR* pGeometries,
     const uint32_t*                           pMaxPrimitiveCount,
-    bool                                      fastTrace ) const
+    bool                                      fastTrace,
+    bool                                      allowCompaction ) const
 {
     assert( geometryCount > 0 );
 
     VkBuildAccelerationStructureFlagsKHR flags =
         fastTrace ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR
                   : VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+
+    if( allowCompaction )
+    {
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    }
 
     // mode, srcAccelerationStructure, dstAccelerationStructure
     // and all VkDeviceOrHostAddressKHR except transformData are ignored
@@ -74,13 +80,15 @@ VkAccelerationStructureBuildSizesInfoKHR ASBuilder::GetBottomBuildSizes(
     uint32_t                                  geometryCount,
     const VkAccelerationStructureGeometryKHR* pGeometries,
     const uint32_t*                           pMaxPrimitiveCount,
-    bool                                      fastTrace ) const
+    bool                                      fastTrace,
+    bool                                      allowCompaction ) const
 {
     return GetBuildSizes( VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
                           geometryCount,
                           pGeometries,
                           pMaxPrimitiveCount,
-                          fastTrace );
+                          fastTrace,
+                          allowCompaction );
 }
 
 VkAccelerationStructureBuildSizesInfoKHR ASBuilder::GetTopBuildSizes(
@@ -89,7 +97,7 @@ VkAccelerationStructureBuildSizesInfoKHR ASBuilder::GetTopBuildSizes(
     bool                                      fastTrace ) const
 {
     return GetBuildSizes(
-        VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, 1, pGeometry, &maxPrimitiveCount, fastTrace );
+        VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, 1, pGeometry, &maxPrimitiveCount, fastTrace, false );
 }
 
 void ASBuilder::AddBLAS( VkAccelerationStructureKHR                      as,
@@ -97,7 +105,8 @@ void ASBuilder::AddBLAS( VkAccelerationStructureKHR                      as,
                          const VkAccelerationStructureGeometryKHR*       pGeometries,
                          const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos,
                          const VkAccelerationStructureBuildSizesInfoKHR& buildSizes,
-                         bool                                            fastTrace )
+                         bool                                            fastTrace,
+                         bool                                            allowCompaction )
 {
     // while building bottom level, top level must be not
     assert( topLBuildInfo.geomInfos.empty() && topLBuildInfo.rangeInfos.empty() );
@@ -109,6 +118,11 @@ void ASBuilder::AddBLAS( VkAccelerationStructureKHR                      as,
     VkBuildAccelerationStructureFlagsKHR flags =
         fastTrace ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR
                   : VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+
+    if( allowCompaction )
+    {
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    }
 
     VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,

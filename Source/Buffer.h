@@ -39,6 +39,7 @@ public:
                VkMemoryPropertyFlags properties,
                const char*           debugName = nullptr );
     void Destroy();
+    void Swap( Buffer& other );
 
     void* Map();
     void  Unmap();
