@@ -92,19 +92,8 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
             physDevice, surface, &formatCount, surfaceFormats.data() );
         VK_CHECKERROR( r );
 
-        std::vector< VkFormat > acceptFormats;
-        if( enableFrameGeneration )
-        {
-            acceptFormats = { VK_FORMAT_B8G8R8A8_UNORM,
-                              VK_FORMAT_R8G8B8A8_UNORM,
-                              VK_FORMAT_B8G8R8A8_SRGB,
-                              VK_FORMAT_R8G8B8A8_SRGB };
-        }
-        else
-        {
-            acceptFormats = { VK_FORMAT_R8G8B8A8_SRGB,
-                              VK_FORMAT_B8G8R8A8_SRGB };
-        }
+        std::vector< VkFormat > acceptFormats = { VK_FORMAT_R8G8B8A8_SRGB,
+                                                  VK_FORMAT_B8G8R8A8_SRGB };
 
         for( VkFormat f : acceptFormats )
         {
