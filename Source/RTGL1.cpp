@@ -90,15 +90,12 @@ RgResult rgCreateInstance( const RgInstanceCreateInfo* pInfo, RgInstance* pResul
 
         *pResult = g_deviceRgInstance;
     }
-    // TODO: VulkanDevice must clean all the resources if initialization failed!
-    // So for now exceptions must not happen. But if they did, target application must be closed.
     catch( RTGL1::RgException& e )
     {
         RTGL1::debug::Error( e.what() );
         return e.GetErrorCode();
     }
 
-    // now use a fancy logger
     {
         RgMessageSeverityFlags allmsg = RG_MESSAGE_SEVERITY_VERBOSE | RG_MESSAGE_SEVERITY_INFO |
                                         RG_MESSAGE_SEVERITY_WARNING | RG_MESSAGE_SEVERITY_ERROR;

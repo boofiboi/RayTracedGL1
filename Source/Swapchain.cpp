@@ -552,30 +552,48 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
 #ifdef RG_USE_AMD_FSR3
     if( enableFrameGeneration && fgSwapchainContext == nullptr && queues )
     {
-        ffxCreateContextDescFrameGenerationSwapChainVK createSwapChainDesc = {};
-        createSwapChainDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
-        createSwapChainDesc.physicalDevice = physDevice;
-        createSwapChainDesc.device = device;
-        createSwapChainDesc.swapchain = &swapchain;
-        createSwapChainDesc.createInfo = swapchainInfo;
-        createSwapChainDesc.allocator = nullptr;
-        createSwapChainDesc.gameQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
-        createSwapChainDesc.asyncComputeQueue = { queues->GetCompute(), queues->GetIndexCompute(), nullptr };
-        createSwapChainDesc.presentQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
-        createSwapChainDesc.imageAcquireQueue = { queues->GetTransfer() ? queues->GetTransfer() : queues->GetGraphics(), queues->GetIndexTransfer(), nullptr };
-
-        ffxReturnCode_t retCode = ffxCreateContext( (ffxContext*)&fgSwapchainContext, &createSwapChainDesc.header, nullptr );
-        if( retCode == FFX_API_RETURN_OK )
+        try
         {
-            ffxQueryDescSwapchainReplacementFunctionsVK replacementFunctions = {};
-            replacementFunctions.header.type = FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
-            ffxQuery( (ffxContext*)&fgSwapchainContext, &replacementFunctions.header );
+            ffxCreateContextDescFrameGenerationSwapChainVK createSwapChainDesc = {};
+            createSwapChainDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
+            createSwapChainDesc.physicalDevice = physDevice;
+            createSwapChainDesc.device = device;
+            createSwapChainDesc.swapchain = &swapchain;
+            createSwapChainDesc.createInfo = swapchainInfo;
+            createSwapChainDesc.createInfo.oldSwapchain = VK_NULL_HANDLE;
+            createSwapChainDesc.allocator = nullptr;
+            createSwapChainDesc.gameQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
+            createSwapChainDesc.asyncComputeQueue = { queues->GetCompute(), queues->GetIndexCompute(), nullptr };
+            createSwapChainDesc.presentQueue = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
+            createSwapChainDesc.imageAcquireQueue = { queues->GetTransfer() ? queues->GetTransfer() : queues->GetGraphics(), queues->GetIndexTransfer(), nullptr };
 
-            pfnCreateSwapchainFFX = (void*)replacementFunctions.pOutCreateSwapchainFFXAPI;
-            pfnDestroySwapchainFFX = (void*)replacementFunctions.pOutDestroySwapchainFFXAPI;
-            pfnGetSwapchainImagesKHR = (void*)replacementFunctions.pOutGetSwapchainImagesKHR;
-            pfnAcquireNextImageKHR = (void*)replacementFunctions.pOutAcquireNextImageKHR;
-            pfnQueuePresentKHR = (void*)replacementFunctions.pOutQueuePresentKHR;
+            ffxReturnCode_t retCode = ffxCreateContext( (ffxContext*)&fgSwapchainContext, &createSwapChainDesc.header, nullptr );
+            if( retCode == FFX_API_RETURN_OK )
+            {
+                ffxQueryDescSwapchainReplacementFunctionsVK replacementFunctions = {};
+                replacementFunctions.header.type = FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
+                ffxQuery( (ffxContext*)&fgSwapchainContext, &replacementFunctions.header );
+
+                pfnCreateSwapchainFFX = (void*)replacementFunctions.pOutCreateSwapchainFFXAPI;
+                pfnDestroySwapchainFFX = (void*)replacementFunctions.pOutDestroySwapchainFFXAPI;
+                pfnGetSwapchainImagesKHR = (void*)replacementFunctions.pOutGetSwapchainImagesKHR;
+                pfnAcquireNextImageKHR = (void*)replacementFunctions.pOutAcquireNextImageKHR;
+                pfnQueuePresentKHR = (void*)replacementFunctions.pOutQueuePresentKHR;
+            }
+            else
+            {
+                fgSwapchainContext = nullptr;
+            }
+        }
+        catch( const std::exception& e )
+        {
+            RTGL1::debug::Error( "FSR3: Exception during swapchain context creation: {}", e.what() );
+            fgSwapchainContext = nullptr;
+        }
+        catch( ... )
+        {
+            RTGL1::debug::Error( "FSR3: Unknown exception during swapchain context creation" );
+            fgSwapchainContext = nullptr;
         }
     }
 #endif

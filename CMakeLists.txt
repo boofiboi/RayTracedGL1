@@ -257,11 +257,11 @@ if (RG_WITH_AMD_FSR3)
     set(FFX_AUTO_COMPILE_SHADERS OFF CACHE BOOL "" FORCE)
     add_subdirectory(Source/FSR3/sdk)
     target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include" "Source/FSR3/ffx-api/include")
-    target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_vk_x64 "${CMAKE_SOURCE_DIR}/Source/FSR3/PrebuiltSignedDLL/amd_fidelityfx_vk.lib")
+    target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_vk_x64 "${CMAKE_SOURCE_DIR}/Source/FSR3/ffx-api/bin/amd_fidelityfx_vk.lib")
 
     add_custom_command(TARGET RayTracedGL1 POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/Source/FSR3/PrebuiltSignedDLL/amd_fidelityfx_vk.dll"
+            "${CMAKE_SOURCE_DIR}/Source/FSR3/ffx-api/bin/amd_fidelityfx_vk.dll"
             "$<TARGET_FILE_DIR:RayTracedGL1>")
 endif()
 
