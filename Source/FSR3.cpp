@@ -459,10 +459,8 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
     ffxConfigureDescFrameGeneration configDesc = {};
     configDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
     configDesc.swapChain = (void*)swapchain;
-    configDesc.presentCallback = []( ffxCallbackDescFrameGenerationPresent* params, void* pUserCtx ) -> ffxReturnCode_t {
-        return ffxDispatch( (ffxContext*)pUserCtx, &params->header );
-    };
-    configDesc.presentCallbackUserContext = &fgContext;
+    configDesc.presentCallback = nullptr;
+    configDesc.presentCallbackUserContext = nullptr;
     configDesc.frameGenerationCallback = []( ffxDispatchDescFrameGeneration* params, void* pUserCtx ) -> ffxReturnCode_t {
         return ffxDispatch( (ffxContext*)pUserCtx, &params->header );
     };

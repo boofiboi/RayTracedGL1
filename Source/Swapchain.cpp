@@ -530,8 +530,13 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
     {
         swapchain = VK_NULL_HANDLE;
 
+        ffxCreateContextDescFrameGenerationSwapChainModeVK modeDesc = {};
+        modeDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_MODE_VK;
+        modeDesc.composeOnPresentQueue = false;
+
         ffxCreateContextDescFrameGenerationSwapChainVK createSwapChainDesc = {};
         createSwapChainDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
+        createSwapChainDesc.header.pNext = &modeDesc.header;
         createSwapChainDesc.physicalDevice = physDevice;
         createSwapChainDesc.device = device;
         createSwapChainDesc.swapchain = &swapchain;
