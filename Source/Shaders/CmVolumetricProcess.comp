@@ -35,11 +35,11 @@ layout( local_size_x = COMPUTE_VOLUMETRIC_GROUP_SIZE_X,
 
 const float g_temporalWeight = 0.0;
 
-// rgb - in−scattered light accumulated so far
-// a   - accumulated optical depth
 vec4 accumulateScattering( const vec4 front, const vec4 back )
 {
-    vec3 light = front.rgb + saturate( exp( -front.a ) ) * back.rgb;
+    float sliceTransmittance = exp( -back.a );
+    vec3 sliceInscatter = back.rgb * ( ( back.a > 0.0001 ) ? ( ( 1.0 - sliceTransmittance ) / back.a ) : ( 1.0 - 0.5 * back.a ) );
+    vec3 light = front.rgb + saturate( exp( -front.a ) ) * sliceInscatter;
 
     return vec4( light.rgb, front.a + back.a );
 }

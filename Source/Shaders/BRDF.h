@@ -115,6 +115,35 @@ float G1_GGX( float ns, float alpha )
 
 #define MIN_GGX_ROUGHNESS 0.005
 
+vec2 getEnvBRDFApprox(float nv, float alpha)
+{
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+    const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 r = alpha * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28 * nv)) * r.x + r.y;
+    return vec2(-1.04, 1.04) * a004 + r.zw;
+}
+
+float evalBRDFHammonDiffuse(const vec3 n, const vec3 v, const vec3 l, float alpha)
+{
+    float nl = max(dot(n, l), 0.0);
+    float nv = max(dot(n, v), 0.0);
+    if (nl <= 0.0 || nv <= 0.0)
+    {
+        return 0.0;
+    }
+    vec3 h = normalize(v + l);
+    float vh = clamp(dot(v, h), 0.0, 1.0);
+    float facing = 0.5 + 0.5 * dot(v, l);
+    float rough = facing * (0.9 - 0.4 * facing) * safePositiveRcp(max(nl, nv) + 0.1) + 0.5;
+    float tL = 1.0 - nl;
+    float tV = 1.0 - nv;
+    float tL5 = square(square(tL)) * tL;
+    float tV5 = square(square(tV)) * tV;
+    float smoothVal = 1.05 * (1.0 - tL5) * (1.0 - tV5);
+    return mix(smoothVal, rough, alpha) / M_PI;
+}
+
 // n -- macrosurface normal
 // v -- direction to viewer
 // l -- direction to light
@@ -123,9 +152,10 @@ vec3 evalBRDFSmithGGX(const vec3 n, const vec3 v, const vec3 l, float alpha, con
 {
     alpha = max(alpha, MIN_GGX_ROUGHNESS);
 
-    const float nl = max(dot(n, l), 0);
+    const float nl = max(dot(n, l), 0.0);
+    const float nv = max(dot(n, v), 0.0);
 
-    if (nl <= 0)
+    if (nl <= 0.0 || nv <= 0.0)
     {
         return vec3(0.0);
     }
@@ -134,16 +164,19 @@ vec3 evalBRDFSmithGGX(const vec3 n, const vec3 v, const vec3 l, float alpha, con
     const vec3  F = getFresnelSchlick(clamp(dot(v, h), 0.0, 1.0), specularColor);
     const float D = D_GGX( dot( n, h ), alpha );
 
-    float G2Modif;
-    {
-        const float nv = max(dot(n, v), 0);
+    const float G2Modif = 0.5 / mix(2.0 * nl * nv, nl + nv, alpha);
+    vec3 fSingle = F * G2Modif * D;
 
-        // approximation for SmithGGX, Hammon ("PBR Diffuse Lighting for GGX+Smith Microsurfaces")
-        // inlcudes 1 / (4 * nl * nv)
-        G2Modif = 0.5 / mix(2 * nl * nv, nl + nv, alpha);
-    }
+    vec2 dfgV = getEnvBRDFApprox(nv, alpha);
+    vec2 dfgL = getEnvBRDFApprox(nl, alpha);
+    float Ev = dfgV.x + dfgV.y;
+    float El = dfgL.x + dfgL.y;
+    float Eavg = mix(1.0, 0.45, alpha);
 
-    return F * G2Modif * D;
+    vec3 Favg = specularColor + (vec3(1.0) - specularColor) * (1.0 / 21.0);
+    vec3 fMs = (vec3(1.0 - Ev) * vec3(1.0 - El) / (M_PI * (1.0 - Eavg + 1e-4))) * (Favg * Eavg / max(vec3(1e-4), vec3(1.0) - Favg * (1.0 - Eavg)));
+
+    return fSingle + fMs;
 }
 
 
@@ -157,43 +190,24 @@ vec3 sampleGGXVNDF(const vec3 v, float alpha, float u1, float u2, out float oneO
 {
     alpha = max( alpha, MIN_GGX_ROUGHNESS );
 
-    // fix: avoid grazing angles
-    u1 *= 0.98;
-    u2 *= 0.98;
-
-    // Section 3.2: transforming the view direction to the hemisphere configuration
     vec3 Vh = normalize(vec3(alpha * v.x, alpha * v.y, v.z));
-    
-    // Section 4.1: orthonormal basis (with special case if cross product is zero)
-    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-    const vec3 T1 = lensq > 0 ? vec3(-Vh.y, Vh.x, 0) * inversesqrt(lensq) : vec3(1,0,0);
-    const vec3 T2 = cross(Vh, T1);
 
-    // Section 4.2: parameterization of the projected area
-    float r = sqrt(u1);    
-    float phi = 2.0 * M_PI * u2;    
-    float t1 = r * cos(phi);
-    float t2 = r * sin(phi);
-    float s = 0.5 * (1.0 + Vh.z);
-    t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
+    float phi = 2.0 * M_PI * u2;
+    float z = (1.0 - u1) * (1.0 + Vh.z) - Vh.z;
+    float sinTheta = sqrt(clamp(1.0 - z * z, 0.0, 1.0));
+    float x = sinTheta * cos(phi);
+    float y = sinTheta * sin(phi);
+    vec3 c = vec3(x, y, z);
+    vec3 Nh = c + Vh;
 
-    // Section 4.3: reprojection onto hemisphere
-    const vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
-    
-    // Section 3.4: transforming the normal back to the ellipsoid configuration
-    const vec3 Ne = normalize(vec3(alpha * Nh.x, alpha * Nh.y, max(0.02, Nh.z)));
+    const vec3 Ne = normalize(vec3(alpha * Nh.x, alpha * Nh.y, max(0.001, Nh.z)));
 
-    {
-        // here, macro normal is (0,0,1), so nm=m.z
-        const float nm = Ne.z;
-        const float D = D_GGX( nm, alpha );
+    const float nm = Ne.z;
+    const float D = D_GGX( nm, alpha );
+    const float nv = v.z;
+    const float G1 = G1_GGX( nv, alpha );
 
-        // here, macro normal is (0,0,1), so nv=v.z
-        const float nv = v.z;
-        const float G1 = G1_GGX( nv, alpha );
-
-        oneOverPdf = v.z * safePositiveRcp(G1 * max(0, dot(v, Ne)) * D);
-    }
+    oneOverPdf = v.z * safePositiveRcp(G1 * max(0.0, dot(v, Ne)) * D);
 
     return Ne;
 }
