@@ -138,68 +138,57 @@ Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface, bool enableFr
     {
         uint32_t allocated[ 16 ] = {};
 
-        indexGraphics = indexGraphics;
-        subIndexGraphics = allocated[ indexGraphics ]++;
+        subIndexGraphics = 0;
+        allocated[ indexGraphics ] = std::max( allocated[ indexGraphics ], 1U );
 
-        if( dedicatedCompute != UINT32_MAX && allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
+        if( dedicatedCompute != UINT32_MAX )
         {
             indexCompute = dedicatedCompute;
-        }
-        else if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
-        {
-            indexCompute = indexGraphics;
-        }
-        else
-        {
-            indexCompute = indexGraphics;
-        }
-        subIndexCompute = allocated[ indexCompute ]++;
-
-        if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
-        {
-            indexPresent = indexGraphics;
-        }
-        else
-        {
-            indexPresent = indexGraphics;
-            for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
+            subIndexCompute = allocated[ dedicatedCompute ];
+            if( allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
             {
-                VkBool32 ps = VK_FALSE;
-                vkGetPhysicalDeviceSurfaceSupportKHR( physDevice, i, surface, &ps );
-                if( ps && allocated[ i ] < queueFamilyProperties[ i ].queueCount )
-                {
-                    indexPresent = i;
-                    break;
-                }
+                allocated[ dedicatedCompute ]++;
             }
         }
-        subIndexPresent = allocated[ indexPresent ]++;
+        else
+        {
+            indexCompute = indexGraphics;
+            if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
+            {
+                subIndexCompute = allocated[ indexGraphics ]++;
+            }
+            else
+            {
+                subIndexCompute = 0;
+            }
+        }
 
-        if( dedicatedTransfer != UINT32_MAX && allocated[ dedicatedTransfer ] < queueFamilyProperties[ dedicatedTransfer ].queueCount )
+        indexPresent = indexGraphics;
+        if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
+        {
+            subIndexPresent = allocated[ indexGraphics ]++;
+        }
+        else
+        {
+            subIndexPresent = 0;
+        }
+
+        if( dedicatedTransfer != UINT32_MAX )
         {
             indexAcquire = dedicatedTransfer;
+            subIndexAcquire = 0;
+            allocated[ dedicatedTransfer ] = std::max( allocated[ dedicatedTransfer ], 1U );
         }
         else if( dedicatedCompute != UINT32_MAX && allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
         {
             indexAcquire = dedicatedCompute;
-        }
-        else if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
-        {
-            indexAcquire = indexGraphics;
+            subIndexAcquire = allocated[ dedicatedCompute ]++;
         }
         else
         {
             indexAcquire = indexGraphics;
-            for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
-            {
-                if( allocated[ i ] < queueFamilyProperties[ i ].queueCount )
-                {
-                    indexAcquire = i;
-                    break;
-                }
-            }
+            subIndexAcquire = 0;
         }
-        subIndexAcquire = allocated[ indexAcquire ]++;
 
         indexTransfer = ( dedicatedTransfer != UINT32_MAX ) ? dedicatedTransfer : indexGraphics;
         subIndexTransfer = ( indexTransfer == dedicatedTransfer ) ? 0 : subIndexGraphics;

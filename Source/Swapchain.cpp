@@ -544,7 +544,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         createSwapChainDesc.imageAcquireQueue = { queues->GetImageAcquireQueue(), queues->GetIndexImageAcquire(), nullptr };
 
         ffxReturnCode_t retCode = ffxCreateContext( (ffxContext*)&fgSwapchainContext, &createSwapChainDesc.header, nullptr );
-        if( retCode == FFX_API_RETURN_OK )
+        if( retCode == FFX_API_RETURN_OK && swapchain != VK_NULL_HANDLE )
         {
             ffxQueryDescSwapchainReplacementFunctionsVK replacementFunctions = {};
             replacementFunctions.header.type = FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
@@ -559,6 +559,8 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         else
         {
             fgSwapchainContext = nullptr;
+            r = vkCreateSwapchainKHR( device, &swapchainInfo, nullptr, &swapchain );
+            VK_CHECKERROR( r );
         }
     }
     else
