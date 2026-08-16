@@ -42,13 +42,16 @@ void main()
     vec2 delta = offset / iterCount;
 
     vec3 color = vec3(0);
+    float totalWeight = 0.0;
 
     for (int i = 0; i < iterCount; i++)
     {
         vec3 a = effect_loadFromSource_Centered(c - delta * i);
+        float w = 1.0 - (float(i) / float(iterCount)) * 0.5;
 
-        color += a / float(iterCount);
+        color += a * w;
+        totalWeight += w;
     }
 
-    effect_storeToTarget(color, pix);
+    effect_storeToTarget(color / totalWeight, pix);
 }
