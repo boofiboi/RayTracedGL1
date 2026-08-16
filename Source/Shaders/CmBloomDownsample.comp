@@ -95,13 +95,12 @@ vec3 downsample13tap(sampler2D srcSampler, const vec2 centerUV)
             0.25 * (taps[6] + taps[7] + taps[11] + taps[12]), 
         };
 
-        // weight by partial Karis average to reduce fireflies
-        return 
-            0.5   * getKarisWeight(box[0]) * box[0] + 
-            0.125 * getKarisWeight(box[1]) * box[1] + 
-            0.125 * getKarisWeight(box[2]) * box[2] + 
-            0.125 * getKarisWeight(box[3]) * box[3] + 
-            0.125 * getKarisWeight(box[4]) * box[4];
+        float w0 = 0.5   * getKarisWeight(box[0]);
+        float w1 = 0.125 * getKarisWeight(box[1]);
+        float w2 = 0.125 * getKarisWeight(box[2]);
+        float w3 = 0.125 * getKarisWeight(box[3]);
+        float w4 = 0.125 * getKarisWeight(box[4]);
+        return (w0 * box[0] + w1 * box[1] + w2 * box[2] + w3 * box[3] + w4 * box[4]) / max(w0 + w1 + w2 + w3 + w4, 1e-4);
     }
     else
     {
