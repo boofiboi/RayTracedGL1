@@ -57,22 +57,11 @@ void main()
     Reservoir regularReservoir = emptyReservoir();
     if (globalUniform.lightCount > 0)
     {
-        uint sampleCount = min(uint(LIGHT_GRID_INITIAL_SAMPLES), globalUniform.lightCount);
-        for (uint i = 0; i < sampleCount; i++)
+        for (int i = 0; i < LIGHT_GRID_INITIAL_SAMPLES; i++)
         {
-            uint xi;
-            float oneOverSourcePdf_xi;
-            if (globalUniform.lightCount <= LIGHT_GRID_INITIAL_SAMPLES)
-            {
-                xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + i;
-                oneOverSourcePdf_xi = 1.0;
-            }
-            else
-            {
-                float rnd = (rnd16(seed, salt++) + float(i)) / float(LIGHT_GRID_INITIAL_SAMPLES);
-                xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0u, globalUniform.lightCount - 1u);
-                oneOverSourcePdf_xi = float(globalUniform.lightCount) / float(LIGHT_GRID_INITIAL_SAMPLES);
-            }
+            float rnd = (rnd16(seed, salt++) + float(i)) / float(LIGHT_GRID_INITIAL_SAMPLES);
+            uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0u, globalUniform.lightCount - 1u);
+            float oneOverSourcePdf_xi = globalUniform.lightCount;
 
             float targetPdf_xi = getLightWeight(lightSources[xi], cellCenter, cellRadius);
 

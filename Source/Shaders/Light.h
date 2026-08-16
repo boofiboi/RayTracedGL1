@@ -144,11 +144,9 @@ float safeSolidAngle(float a)
 
 float calcSolidAngleForSphere(float sphereRadius, float distanceToSphereCenter)
 {
-    float r2 = sphereRadius * sphereRadius;
-    float d2 = max(r2, distanceToSphereCenter * distanceToSphereCenter);
-    float sinThetaSq = clamp(r2 / d2, 0.0, 1.0);
-    float cosTheta = sqrt(max(0.0, 1.0 - sinThetaSq));
-    return safeSolidAngle(2.0 * M_PI * (sinThetaSq / (1.0 + cosTheta)));
+    float sinTheta = sphereRadius / max(sphereRadius, distanceToSphereCenter);
+    float cosTheta = sqrt(1.0 - sinTheta * sinTheta);
+    return safeSolidAngle(2 * M_PI * (1.0 - cosTheta));
 }
 
 float calcSolidAngleForArea(float area, const vec3 areaPosition, const vec3 areaNormal, const vec3 surfPosition)
@@ -246,26 +244,13 @@ LightSample sampleSphereLight(const SphereLight l, const vec3 surfPosition, cons
 {
     const DirectionAndLength toLightCenter = calcDirectionAndLength(surfPosition, l.center);
 
-    float r2 = l.radius * l.radius;
-    float d2 = max(r2, toLightCenter.len * toLightCenter.len);
-    float sinThetaMaxSq = clamp(r2 / d2, 0.0, 1.0);
-    float cosThetaMax = sqrt(max(0.0, 1.0 - sinThetaMaxSq));
-
-    float cosTheta = (1.0 - pointRnd.x) + pointRnd.x * cosThetaMax;
-    float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-    float phi = 2.0 * M_PI * pointRnd.y;
-
-    const mat3 basis = getONB(toLightCenter.dir);
-    vec3 rayDir = basis[0] * (sinTheta * cos(phi)) + basis[1] * (sinTheta * sin(phi)) + toLightCenter.dir * cosTheta;
-
-    float discr = max(0.0, r2 - d2 * sinTheta * sinTheta);
-    float d = toLightCenter.len * cosTheta - sqrt(discr);
-    d = max(d, 0.001);
+    float ltHsOneOverPdf;
+    const vec3 lightNormal = sampleOrientedHemisphere(-toLightCenter.dir, pointRnd.x, pointRnd.y, ltHsOneOverPdf);
 
     LightSample r;
-    r.position = surfPosition + rayDir * d;
+    r.position = l.center + lightNormal * l.radius;
     r.color = l.color;
-    r.dw = safeSolidAngle(2.0 * M_PI * (sinThetaMaxSq / (1.0 + cosThetaMax)));
+    r.dw = calcSolidAngleForSphere(l.radius, toLightCenter.len);
 
     return r;
 }
