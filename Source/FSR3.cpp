@@ -170,7 +170,7 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         createFg.displaySize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.maxRenderSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.flags = 0;
-        createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_SRGB );
+        createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_UNORM );
 
         ffxReturnCode_t ret = ffxCreateContext( (ffxContext*)&fgContext, &createFg.header, nullptr );
         if( ret != FFX_API_RETURN_OK )
