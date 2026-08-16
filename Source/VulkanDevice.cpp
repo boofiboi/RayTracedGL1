@@ -582,7 +582,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         pathTracer->TraceIndirectllumination( params );
         pathTracer->TraceVolumetric( params );
 
-        pathTracer->CalculateGradientsSamples( params );
         bool resetHistory =
             AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo ).resetUpscalerHistory;
         denoiser->Denoise( cmd, frameIndex, uniform, jitter, resetHistory );

@@ -251,7 +251,7 @@ void RTGL1::RayTracingPipeline::CreatePipeline( const ShaderManager* shaderManag
         .pStages                      = stages.data(),
         .groupCount                   = static_cast< uint32_t >( shaderGroups.size() ),
         .pGroups                      = shaderGroups.data(),
-        .maxPipelineRayRecursionDepth = 2,
+        .maxPipelineRayRecursionDepth = 1,
         .pLibraryInfo                 = &libInfo,
         .layout                       = rtPipelineLayout,
     };
