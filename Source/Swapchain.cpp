@@ -570,6 +570,11 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         else
         {
             fgSwapchainContext = nullptr;
+            pfnCreateSwapchainFFX = nullptr;
+            pfnDestroySwapchainFFX = nullptr;
+            pfnGetSwapchainImagesKHR = nullptr;
+            pfnAcquireNextImageKHR = nullptr;
+            pfnQueuePresentKHR = nullptr;
             r = vkCreateSwapchainKHR( device, &swapchainInfo, nullptr, &swapchain );
             VK_CHECKERROR( r );
         }
