@@ -513,7 +513,9 @@ void main()
         if (toRefract && calcRefractionDirection(curIndexOfRefraction, newIndexOfRefraction, rayDir, normal, refractionDir))
         {
             doRefraction = isPixOdd;
-            F = getFresnelSchlick(curIndexOfRefraction, newIndexOfRefraction, -rayDir, normal);
+            float cosI = abs(dot(normal, rayDir));
+            float cosT = abs(dot(normal, refractionDir));
+            F = getFresnelDielectric(curIndexOfRefraction, newIndexOfRefraction, cosI, cosT);
         }
         else
         {

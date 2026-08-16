@@ -88,6 +88,13 @@ float getFresnelSchlick(float n1, float n2, const vec3 V, const vec3 N)
     return mix(R0, 1.0, t5);
 }
 
+float getFresnelDielectric(float n1, float n2, float cosThetaI, float cosThetaT)
+{
+    float rParallel = (n2 * cosThetaI - n1 * cosThetaT) / max(1e-4, n2 * cosThetaI + n1 * cosThetaT);
+    float rPerp = (n1 * cosThetaI - n2 * cosThetaT) / max(1e-4, n1 * cosThetaI + n2 * cosThetaT);
+    return clamp(0.5 * (rParallel * rParallel + rPerp * rPerp), 0.0, 1.0);
+}
+
 // GGX distribution
 float D_GGX( float nm, float alpha )
 {
