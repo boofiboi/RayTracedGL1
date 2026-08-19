@@ -422,12 +422,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         physDevice->Get(),
         enableFrameGeneration );
 
-    amdFsr4 = std::make_shared< FSR4 >( 
-        instance,
-        device, 
-        physDevice,
-        enableFrameGeneration );
-
     nvDlss = std::make_shared< DLSS >(
         instance, 
         device, 
@@ -504,7 +498,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
     framebuffers->Subscribe( amdFsr3 );
-    framebuffers->Subscribe( amdFsr4 );
     framebuffers->Subscribe( restirBuffers );
 
     if( observer )
@@ -532,7 +525,6 @@ RTGL1::VulkanDevice::~VulkanDevice()
     imageComposition.reset();
     bloom.reset();
     amdFsr3.reset();
-    amdFsr4.reset();
     nvDlss.reset();
     sharpening.reset();
     effectWipe.reset();
@@ -711,25 +703,6 @@ void RTGL1::VulkanDevice::CreateInstance( const RgInstanceCreateInfo& info )
         extensions.push_back( n );
     }
 
-#ifdef RG_USE_SURFACE_WIN32
-    const char* win32InstanceExts[] = {
-        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
-    };
-    for( const char* n : win32InstanceExts )
-    {
-        const bool isSupported =
-            std::ranges::any_of( std::as_const( supportedInstanceExtensions ),
-                                 [ n ]( const VkExtensionProperties& ext ) {
-                                     return std::strcmp( ext.extensionName, n ) == 0;
-                                 } );
-        if( isSupported )
-        {
-            extensions.push_back( n );
-        }
-    }
-#endif
 
     VkApplicationInfo appInfo = {
         .sType            = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -874,29 +847,6 @@ void RTGL1::VulkanDevice::CreateDevice()
     {
         deviceExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
     }
-
-#ifdef RG_USE_SURFACE_WIN32
-    const char* win32DeviceExts[] = {
-        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
-    };
-    for( const char* n : win32DeviceExts )
-    {
-        const bool isSupported =
-            std::ranges::any_of( std::as_const( supportedDeviceExtensions ),
-                                 [ n ]( const VkExtensionProperties& ext ) {
-                                     return std::strcmp( ext.extensionName, n ) == 0;
-                                 } );
-        if( isSupported )
-        {
-            deviceExtensions.push_back( n );
-        }
-    }
-#endif
 
     VkPhysicalDeviceVulkan12Features vulkan12Features = {
         .sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,

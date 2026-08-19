@@ -53,7 +53,6 @@
 #include "EffectSimple_Instances.h"
 #include "LightGrid.h"
 #include "FSR3.h"
-#include "FSR4.h"
 #include "FrameState.h"
 #include "PortalList.h"
 #include "RestirBuffers.h"
@@ -200,7 +199,6 @@ private:
     std::shared_ptr< ImageComposition >          imageComposition;
     std::shared_ptr< Bloom >                     bloom;
     std::shared_ptr< FSR3 > amdFsr3;
-    std::shared_ptr< FSR4 > amdFsr4;
     std::shared_ptr< DLSS >                      nvDlss;
     std::shared_ptr< Sharpening >                sharpening;
     std::shared_ptr< EffectWipe >                effectWipe;

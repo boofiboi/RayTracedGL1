@@ -24,11 +24,10 @@
 namespace RTGL1
 {
 // extension functions' definitions
-#define VK_EXTENSION_FUNCTION( fname ) PFN_##fname s##fname = nullptr;
+#define VK_EXTENSION_FUNCTION( fname ) PFN_##fname s##fname;
 VK_INSTANCE_DEBUG_UTILS_FUNCTION_LIST
 VK_DEVICE_FUNCTION_LIST
 VK_DEVICE_DEBUG_UTILS_FUNCTION_LIST
-VK_DEVICE_WIN32_INTEROP_FUNCTION_LIST
 #undef VK_EXTENSION_FUNCTION
 }
 
@@ -49,12 +48,6 @@ void RTGL1::InitDeviceExtensionFunctions( VkDevice device )
     assert( s##fname != nullptr );
 
     VK_DEVICE_FUNCTION_LIST
-#undef VK_EXTENSION_FUNCTION
-
-#define VK_EXTENSION_FUNCTION( fname ) \
-    s##fname = ( PFN_##fname )vkGetDeviceProcAddr( device, #fname );
-
-    VK_DEVICE_WIN32_INTEROP_FUNCTION_LIST
 #undef VK_EXTENSION_FUNCTION
 }
 
