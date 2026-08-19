@@ -195,6 +195,8 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
                                ? HaltonSequence::GetJitter_Halton23( frameId )
                            : renderResolution.IsAmdFsr3Enabled()
                                ? FSR3::GetJitter( renderResolution.GetResolutionState(), frameId )
+                           : renderResolution.IsAmdFsr4Enabled()
+                               ? FSR4::GetJitter( renderResolution.GetResolutionState(), frameId )
                                : RgFloat2D{ 0, 0 };
 
         gu->jitterX = jitter.data[ 0 ];
@@ -640,6 +642,19 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         else if( renderResolution.IsAmdFsr3Enabled() )
         {
             accum = amdFsr3->Apply( cmd,
+                                    frameIndex,
+                                    framebuffers,
+                                    renderResolution,
+                                    jitter,
+                                    timeDelta,
+                                    drawInfo.cameraNear,
+                                    drawInfo.cameraFar,
+                                    drawInfo.fovYRadians,
+                                    params.resetUpscalerHistory );
+        }
+        else if( renderResolution.IsAmdFsr4Enabled() )
+        {
+            accum = amdFsr4->Apply( cmd,
                                     frameIndex,
                                     framebuffers,
                                     renderResolution,
@@ -1333,6 +1348,7 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
         case RG_RENDER_UPSCALE_TECHNIQUE_LINEAR: return true;
 
         case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3: return amdFsr3->IsFsr3Available();
+        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR4: return amdFsr4->IsFsr4Available();
 
         case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: return nvDlss->IsDlssAvailable();
 

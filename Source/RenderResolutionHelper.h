@@ -63,6 +63,7 @@ public:
                 case RG_RENDER_UPSCALE_TECHNIQUE_NEAREST:
                 case RG_RENDER_UPSCALE_TECHNIQUE_LINEAR:
                 case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3:
+                case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR4:
                 case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: break;
                 default:
                     throw RgException(
@@ -95,12 +96,13 @@ public:
         }
 
 
-        if( upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 )
+        if( upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 ||
+            upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR4 )
         {
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_ULTRA_QUALITY )
             {
                 resolutionMode = RG_RENDER_RESOLUTION_MODE_QUALITY;
-                assert( 0 && "Ultra quality should not be used with FSR3" );
+                assert( 0 && "Ultra quality should not be used with FSR" );
             }
 
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_CUSTOM )
@@ -141,7 +143,6 @@ public:
                                           &renderWidth,
                                           &renderHeight );
 
-                // ultra quality returns (0,0)
                 if( renderWidth == 0 || renderHeight == 0 )
                 {
                     renderWidth  = windowWidth;
@@ -161,20 +162,17 @@ public:
 
     float GetMipLodBias( float nativeBias = 0.0f ) const
     {
-        // softer if none
         if( !IsUpscaleEnabled() )
         {
             return nativeBias;
         }
 
-        // DLSS Programming Guide, Section 3.5
         float ratio = float( Width() ) / float( UpscaledWidth() );
         float bias  = nativeBias + std::log2( std::max( 0.01f, ratio ) ) - 1.0f;
 
         return bias;
     }
 
-    // Render width always must be even for checkerboarding!
     uint32_t Width() const { return renderWidth + renderWidth % 2; }
     uint32_t Height() const { return renderHeight; }
 
@@ -185,21 +183,25 @@ public:
     {
         return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3;
     }
+    bool     IsAmdFsr4Enabled() const
+    {
+        return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR4;
+    }
     bool IsNvDlssEnabled() const
     {
         return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS;
     }
-    bool  IsUpscaleEnabled() const { return IsAmdFsr3Enabled() || IsNvDlssEnabled(); }
+    bool  IsUpscaleEnabled() const { return IsAmdFsr3Enabled() || IsAmdFsr4Enabled() || IsNvDlssEnabled(); }
 
-    float GetAmdFsrSharpness() const { return 1.0f; } // 0.0 - max, 1.0 - min
+    float GetAmdFsrSharpness() const { return 1.0f; }
 
     bool  IsCASInsideFSR3() const
     {
-        return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 &&
+        return ( upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 ||
+                 upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR4 ) &&
                sharpenTechnique == RG_RENDER_SHARPEN_TECHNIQUE_AMD_CAS;
     }
 
-    // For the additional sharpening pass
     bool IsDedicatedSharpeningEnabled() const
     {
         return IsCASInsideFSR3() ? false : sharpenTechnique != RG_RENDER_SHARPEN_TECHNIQUE_NONE;

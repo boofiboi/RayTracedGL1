@@ -422,6 +422,11 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         physDevice->Get(),
         enableFrameGeneration );
 
+    amdFsr4 = std::make_shared< FSR4 >( 
+        device, 
+        physDevice->Get(),
+        enableFrameGeneration );
+
     nvDlss = std::make_shared< DLSS >(
         instance, 
         device, 
@@ -498,6 +503,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
     framebuffers->Subscribe( amdFsr3 );
+    framebuffers->Subscribe( amdFsr4 );
     framebuffers->Subscribe( restirBuffers );
 
     if( observer )
@@ -525,6 +531,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
     imageComposition.reset();
     bloom.reset();
     amdFsr3.reset();
+    amdFsr4.reset();
     nvDlss.reset();
     sharpening.reset();
     effectWipe.reset();

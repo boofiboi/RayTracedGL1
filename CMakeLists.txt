@@ -82,6 +82,7 @@ set(Sources
     "Source/EffectBase.cpp"
     "Source/LightGrid.cpp"
     "Source/FSR3.cpp"
+    "Source/FSR4.cpp"
     "Source/Stb/stb_image.cpp"
     "Source/Stb/stb_image_write.cpp"
     "Source/ImageLoaderDev.cpp"
@@ -133,6 +134,7 @@ option(RG_WITH_SURFACE_XLIB     "Build with Xlib VkSurfaceKHR support"      OFF)
 option(RG_WITH_NVIDIA_DLSS      "Build RTGL1 with Nvidia DLSS"              OFF)
 option(RG_WITH_IMGUI            "Build RTGL1 with ImGui debug windows"      ON)
 option(RG_WITH_AMD_FSR3 "Build RTGL1 with AMD FSR3 Upscaling" ON)
+option(RG_WITH_AMD_FSR4 "Build RTGL1 with AMD FSR4 Upscaling" ON)
 option(RG_WITH_NVIDIA_NRD       "Build RTGL1 with NVIDIA Real-Time Denoisers (NRD)" ON)
 
 option(RG_WITH_EXAMPLES         "Build with examples executable"            ON)
@@ -258,8 +260,14 @@ if (RG_WITH_AMD_FSR3)
     set(FFX_AUTO_COMPILE_SHADERS OFF CACHE BOOL "" FORCE)
     add_subdirectory(Source/FSR3/sdk)
     add_subdirectory(Source/FSR3/ffx-api)
-    target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include" "Source/FSR3/ffx-api/include")
+    target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include" "Source/FSR3/ffx-api/include" "Source/FSR4/ffx-api/include")
     target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_vk_x64 amd_fidelityfx_vk)
+endif()
+
+if (RG_WITH_AMD_FSR4)
+    message(STATUS "RG_WITH_AMD_FSR4 enabled")
+    add_definitions(-DRG_USE_AMD_FSR4)
+    target_include_directories(RayTracedGL1 PRIVATE "Source/FSR4/ffx-api/include")
 endif()
 
 if (RG_WITH_NVIDIA_NRD)
