@@ -725,35 +725,44 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
     if( enableFrameGeneration )
     {
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
-        amdFsr3->PrepareFrameGeneration( cmd,
-                                         frameIndex,
-                                         framebuffers,
-                                         renderResolution,
-                                         jitter,
-                                         currentFrameTime - previousFrameTime,
-                                         drawInfo.cameraNear,
-                                         drawInfo.cameraFar,
-                                         drawInfo.fovYRadians,
-                                         params.resetUpscalerHistory,
-                                         uniform->GetData()->view,
-                                         frameId );
+        bool isFgActive = params.enableFrameGeneration;
+
+        if( isFgActive )
+        {
+            amdFsr3->PrepareFrameGeneration( cmd,
+                                             frameIndex,
+                                             framebuffers,
+                                             renderResolution,
+                                             jitter,
+                                             currentFrameTime - previousFrameTime,
+                                             drawInfo.cameraNear,
+                                             drawInfo.cameraFar,
+                                             drawInfo.fovYRadians,
+                                             params.resetUpscalerHistory,
+                                             uniform->GetData()->view,
+                                             frameId );
+        }
 
         FramebufferImageIndex hudlessFbIndex =
             ( accum == FB_IMAGE_INDEX_UPSCALED_PONG )
                 ? FB_IMAGE_INDEX_UPSCALED_PING
                 : FB_IMAGE_INDEX_UPSCALED_PONG;
 
-        framebuffers->CopyImage( cmd, frameIndex, accum, hudlessFbIndex, renderResolution.GetResolutionState() );
+        if( isFgActive )
+        {
+            framebuffers->CopyImage( cmd, frameIndex, accum, hudlessFbIndex, renderResolution.GetResolutionState() );
+        }
 
         auto [ hudlessImage, hudlessView, hudlessFormat, hudlessSz ] =
             framebuffers->GetImageHandles( hudlessFbIndex, frameIndex, renderResolution.GetResolutionState() );
 
         amdFsr3->ConfigureFrameGeneration( swapchain->GetHandle(),
-                                           hudlessImage,
+                                           isFgActive ? hudlessImage : VK_NULL_HANDLE,
                                            hudlessFormat,
                                            renderResolution.UpscaledWidth(),
                                            renderResolution.UpscaledHeight(),
-                                           frameId );
+                                           frameId,
+                                           isFgActive );
     }
 
     if( !drawInfo.disableRasterization )

@@ -914,6 +914,7 @@ typedef struct RgDrawFrameRenderResolutionParams
     const RgExtent2D*           pPixelizedRenderSize;
     // Drop history, e.g. if there's camera changed its position drastically.
     RgBool32                    resetUpscalerHistory;
+    RgBool32                    enableFrameGeneration;
 } RgDrawFrameRenderResolutionParams;
 
 typedef struct RgDrawFrameLightmapParams

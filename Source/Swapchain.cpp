@@ -551,6 +551,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         ffxReturnCode_t retCode = ffxCreateContext( (ffxContext*)&fgSwapchainContext, &createSwapChainDesc.header, nullptr );
         if( retCode == FFX_API_RETURN_OK && swapchain != VK_NULL_HANDLE )
         {
+            debug::Info( "FSR3: swapchain FFX context created successfully" );
             ffxQueryDescSwapchainReplacementFunctionsVK replacementFunctions = {};
             replacementFunctions.header.type = FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
             ffxQuery( (ffxContext*)&fgSwapchainContext, &replacementFunctions.header );
@@ -563,6 +564,8 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         }
         else
         {
+            debug::Warning( "FSR3: swapchain FFX context creation failed, ffxCreateContext returned {}, falling back to plain swapchain",
+                            static_cast<int>( retCode ) );
             fgSwapchainContext = nullptr;
             pfnCreateSwapchainFFX = nullptr;
             pfnDestroySwapchainFFX = nullptr;

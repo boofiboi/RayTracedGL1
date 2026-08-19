@@ -75,7 +75,8 @@ public:
                                    VkFormat       hudlessFormat,
                                    uint32_t       width,
                                    uint32_t       height,
-                                   uint64_t       frameId );
+                                   uint64_t       frameId,
+                                   bool           frameGenEnabled );
 
     static RgFloat2D GetJitter( const ResolutionState& resolutionState, uint32_t frameId );
 

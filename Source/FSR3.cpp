@@ -180,7 +180,12 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         ffxReturnCode_t ret = ffxCreateContext( (ffxContext*)&fgContext, &createFg.header, nullptr );
         if( ret != FFX_API_RETURN_OK )
         {
+            debug::Warning( "FSR3: fgContext creation failed, ffxCreateContext returned {}", static_cast<int>( ret ) );
             fgContext = nullptr;
+        }
+        else
+        {
+            debug::Info( "FSR3: fgContext created successfully" );
         }
     }
 }
@@ -454,7 +459,8 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
                                             VkFormat       hudlessFormat,
                                             uint32_t       width,
                                             uint32_t       height,
-                                            uint64_t       frameId )
+                                            uint64_t       frameId,
+                                            bool           frameGenEnabled )
 {
     if( !enableFrameGeneration || !fgContext )
     {
@@ -462,7 +468,7 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
     }
 
     FfxApiResource hudlessRes = {};
-    if( hudlessImage != VK_NULL_HANDLE )
+    if( hudlessImage != VK_NULL_HANDLE && frameGenEnabled )
     {
         VkImageCreateInfo hudlessInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -487,7 +493,7 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
         return ffxDispatch( (ffxContext*)pUserCtx, &params->header );
     };
     configDesc.frameGenerationCallbackUserContext = &fgContext;
-    configDesc.frameGenerationEnabled = true;
+    configDesc.frameGenerationEnabled = frameGenEnabled;
     configDesc.allowAsyncWorkloads = true;
     configDesc.HUDLessColor = hudlessRes;
     configDesc.flags = 0;
@@ -549,7 +555,8 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
                                             VkFormat       hudlessFormat,
                                             uint32_t       width,
                                             uint32_t       height,
-                                            uint64_t       frameId )
+                                            uint64_t       frameId,
+                                            bool           frameGenEnabled )
 {
 }
 
