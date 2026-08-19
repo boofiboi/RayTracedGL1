@@ -35,7 +35,8 @@ public:
     enum class AllocType
     {
         DEFAULT,
-        WITH_ADDRESS_QUERY
+        WITH_ADDRESS_QUERY,
+        EXPORT_WIN32,
     };
 
 public:
@@ -52,8 +53,6 @@ public:
     VkDevice         GetDevice();
     VkPhysicalDevice GetPhysicalDevice();
 
-
-    // If addressQuery=true device address can be queried
     VkDeviceMemory   AllocDedicated( const VkMemoryRequirements& memReqs,
                                      VkMemoryPropertyFlags       properties,
                                      AllocType                   allocType,
@@ -63,6 +62,8 @@ public:
                                      AllocType                    allocType,
                                      const char*                  pDebugName = nullptr ) const;
     static void      FreeDedicated( VkDevice device, VkDeviceMemory memory );
+
+    void*            GetWin32Handle( VkDeviceMemory memory ) const;
 
 
     VkBuffer         CreateStagingSrcTextureBuffer( const VkBufferCreateInfo* info,

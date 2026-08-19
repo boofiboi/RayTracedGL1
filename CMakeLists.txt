@@ -83,6 +83,7 @@ set(Sources
     "Source/LightGrid.cpp"
     "Source/FSR3.cpp"
     "Source/FSR4.cpp"
+    "Source/Dx12Interop.cpp"
     "Source/Stb/stb_image.cpp"
     "Source/Stb/stb_image_write.cpp"
     "Source/ImageLoaderDev.cpp"
@@ -268,6 +269,9 @@ if (RG_WITH_AMD_FSR4)
     message(STATUS "RG_WITH_AMD_FSR4 enabled")
     add_definitions(-DRG_USE_AMD_FSR4)
     target_include_directories(RayTracedGL1 PRIVATE "Source/FSR4/ffx-api/include")
+    if (WIN32)
+        target_link_libraries(RayTracedGL1 PRIVATE d3d12 dxgi)
+    endif()
 endif()
 
 if (RG_WITH_NVIDIA_NRD)

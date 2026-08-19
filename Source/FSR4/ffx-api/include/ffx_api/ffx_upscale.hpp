@@ -21,8 +21,7 @@
 // THE SOFTWARE.
 
 #pragma once
-
-#include "../../api/include/ffx_api.hpp"
+#include "ffx_api.hpp"
 #include "ffx_upscale.h"
 
 // Helper types for header initialization. Api definition is in .h file.

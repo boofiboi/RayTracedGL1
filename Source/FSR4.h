@@ -2,12 +2,10 @@
 
 #include <memory>
 #include <vector>
+#include <vulkan/vulkan.h>
 
 #include "Framebuffers.h"
-
-#include <FidelityFX/host/ffx_interface.h>
-
-struct FfxFsr3UpscalerContext;
+#include "Dx12Interop.h"
 
 namespace RTGL1
 {
@@ -16,7 +14,7 @@ class RenderResolutionHelper;
 class FSR4 : public IFramebuffersDependency
 {
 public:
-    FSR4( VkDevice device, VkPhysicalDevice physDevice, bool enableFrameGeneration );
+    FSR4( VkInstance instance, VkDevice device, VkPhysicalDevice physDevice, bool enableFrameGeneration );
     ~FSR4() override;
 
     FSR4( const FSR4& other )                = delete;
@@ -45,20 +43,17 @@ public:
 private:
     void DestroyResources();
 
+    VkInstance             instance;
     VkDevice               device;
     VkPhysicalDevice       physDevice;
     bool                   enableFrameGeneration;
     bool                   isSupported;
 
-    std::unique_ptr< FfxFsr3UpscalerContext > context;
-    std::vector< uint8_t >                    scratchBuffer;
-    FfxInterface                              backendInterface{};
-    FfxResourceInternal                       dilatedDepthInternal{};
-    FfxResourceInternal                       dilatedMotionVectorsInternal{};
-    FfxResourceInternal                       reconstructedPrevNearestDepthInternal{};
-    FfxResource                               dilatedDepthRes{};
-    FfxResource                               dilatedMotionVectorsRes{};
-    FfxResource                               reconstructedPrevNearestDepthRes{};
-    bool                                      isContextCreated{ false };
+#ifdef RG_USE_AMD_FSR4
+    std::unique_ptr< Dx12Interop > dx12;
+    HMODULE                        ffxModule{ nullptr };
+    void*                          context{ nullptr };
+    bool                           isContextCreated{ false };
+#endif
 };
 }

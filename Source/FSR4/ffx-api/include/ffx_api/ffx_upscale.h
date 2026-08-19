@@ -21,8 +21,8 @@
 // THE SOFTWARE.
 
 #pragma once
-#include "../../api/include/ffx_api.h"
-#include "../../api/include/ffx_api_types.h"
+#include "ffx_api.h"
+#include "ffx_api_types.h"
 
 #ifdef __cplusplus
 extern "C" {

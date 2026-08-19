@@ -255,6 +255,7 @@ VkDeviceMemory RTGL1::MemoryAllocator::AllocDedicated( const VkMemoryRequirement
     };
 
     VkMemoryAllocateFlagsInfo allocFlagInfo = {};
+    VkExportMemoryAllocateInfo exportAllocInfo = {};
     if( allocType == AllocType::WITH_ADDRESS_QUERY )
     {
         allocFlagInfo = {
@@ -263,6 +264,16 @@ VkDeviceMemory RTGL1::MemoryAllocator::AllocDedicated( const VkMemoryRequirement
         };
         memAllocInfo.pNext = &allocFlagInfo;
     }
+#ifdef VK_USE_PLATFORM_WIN32_KHR
+    else if( allocType == AllocType::EXPORT_WIN32 )
+    {
+        exportAllocInfo = {
+            .sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+            .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT,
+        };
+        memAllocInfo.pNext = &exportAllocInfo;
+    }
+#endif
 
     VkResult r = vkAllocateMemory( device, &memAllocInfo, nullptr, &memory );
 
@@ -287,4 +298,25 @@ VkDeviceMemory RTGL1::MemoryAllocator::AllocDedicated( const VkMemoryRequirement
 void RTGL1::MemoryAllocator::FreeDedicated( VkDevice device, VkDeviceMemory memory )
 {
     vkFreeMemory( device, memory, nullptr );
+}
+
+void* RTGL1::MemoryAllocator::GetWin32Handle( VkDeviceMemory memory ) const
+{
+#ifdef VK_USE_PLATFORM_WIN32_KHR
+    if( svkGetMemoryWin32HandleKHR != nullptr && memory != VK_NULL_HANDLE )
+    {
+        VkMemoryGetWin32HandleInfoKHR handleInfo = {
+            .sType      = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+            .memory     = memory,
+            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT,
+        };
+        HANDLE h = NULL;
+        VkResult r = svkGetMemoryWin32HandleKHR( device, &handleInfo, &h );
+        if( r == VK_SUCCESS )
+        {
+            return h;
+        }
+    }
+#endif
+    return nullptr;
 }
