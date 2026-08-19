@@ -61,12 +61,12 @@ bool RTGL1::FSR4::IsFsr4Available() const
     return isSupported;
 }
 
-RTGL1::FSR4::FSR4( VkInstance _instance, VkDevice _device, VkPhysicalDevice _physDevice, bool _enableFrameGeneration )
+RTGL1::FSR4::FSR4( VkInstance _instance, VkDevice _device, std::shared_ptr< PhysicalDevice > _physDevice, bool _enableFrameGeneration )
     : instance( _instance )
     , device( _device )
-    , physDevice( _physDevice )
+    , physDevice( std::move( _physDevice ) )
     , enableFrameGeneration( _enableFrameGeneration )
-    , isSupported( IsHardwareSupported( _physDevice ) )
+    , isSupported( IsHardwareSupported( physDevice ? physDevice->Get() : VK_NULL_HANDLE ) )
 {
     if( isSupported )
     {
@@ -136,17 +136,37 @@ void RTGL1::FSR4::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
 
     DestroyResources();
 
+    if( !dx12->RecreateSharedTextures( resolutionState.renderWidth,
+                                       resolutionState.renderHeight,
+                                       resolutionState.upscaledWidth,
+                                       resolutionState.upscaledHeight ) )
+    {
+        isContextCreated = false;
+        return;
+    }
+
     ffxCreateBackendDX12Desc backendDesc = {
-        .header = { .type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12 },
+        .header = {
+            .type  = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12,
+            .pNext = nullptr,
+        },
         .device = dx12->GetDevice(),
+    };
+
+    ffxCreateContextDescUpscaleVersion versionDesc = {
+        .header = {
+            .type  = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE_VERSION,
+            .pNext = &backendDesc.header,
+        },
+        .version = FFX_UPSCALER_VERSION,
     };
 
     ffxCreateContextDescUpscale createDesc = {
         .header = {
             .type  = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,
-            .pNext = &backendDesc.header,
+            .pNext = &versionDesc.header,
         },
-        .flags = FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE,
+        .flags = FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE,
         .maxRenderSize = { resolutionState.renderWidth, resolutionState.renderHeight },
         .maxUpscaleSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .fpMessage = nullptr,
@@ -191,25 +211,13 @@ RTGL1::FramebufferImageIndex RTGL1::FSR4::Apply(
         }
     }
 
-    using FI = FramebufferImageIndex;
-    FI rs[] = {
-        FI::FB_IMAGE_INDEX_FINAL,
-        FI::FB_IMAGE_INDEX_DEPTH_NDC,
-        FI::FB_IMAGE_INDEX_MOTION_DLSS,
-        FI::FB_IMAGE_INDEX_REACTIVITY,
-        OUTPUT_IMAGE_INDEX,
-    };
-    for( auto fb : rs )
-    {
-        framebuffers->BarrierOne( cmd, frameIndex, fb, Framebuffers::BarrierType::Storage );
-    }
+    const auto& sc = dx12->GetColorTexture();
+    const auto& sd = dx12->GetDepthTexture();
+    const auto& sm = dx12->GetMotionTexture();
+    const auto& so = dx12->GetOutputTexture();
 
-    HANDLE colorHandle  = framebuffers->GetWin32MemoryHandle( FI::FB_IMAGE_INDEX_FINAL, frameIndex );
-    HANDLE depthHandle  = framebuffers->GetWin32MemoryHandle( FI::FB_IMAGE_INDEX_DEPTH_NDC, frameIndex );
-    HANDLE motionHandle = framebuffers->GetWin32MemoryHandle( FI::FB_IMAGE_INDEX_MOTION_DLSS, frameIndex );
-    HANDLE outputHandle = framebuffers->GetWin32MemoryHandle( OUTPUT_IMAGE_INDEX, frameIndex );
-
-    if( colorHandle == NULL || depthHandle == NULL || motionHandle == NULL || outputHandle == NULL )
+    if( sc.vkImage == VK_NULL_HANDLE || sd.vkImage == VK_NULL_HANDLE ||
+        sm.vkImage == VK_NULL_HANDLE || so.vkImage == VK_NULL_HANDLE )
     {
         return OUTPUT_IMAGE_INDEX;
     }
@@ -219,64 +227,212 @@ RTGL1::FramebufferImageIndex RTGL1::FSR4::Apply(
     uint32_t uW = renderResolution.GetResolutionState().upscaledWidth;
     uint32_t uH = renderResolution.GetResolutionState().upscaledHeight;
 
-    D3D12_RESOURCE_DESC colorDesc = {
-        .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        .Alignment        = 0,
-        .Width            = rW,
-        .Height           = rH,
-        .DepthOrArraySize = 1,
-        .MipLevels        = 1,
-        .Format           = DXGI_FORMAT_R11G11B10_FLOAT,
-        .SampleDesc       = { .Count = 1, .Quality = 0 },
-        .Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-        .Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-    };
-    D3D12_RESOURCE_DESC depthDesc = {
-        .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        .Alignment        = 0,
-        .Width            = rW,
-        .Height           = rH,
-        .DepthOrArraySize = 1,
-        .MipLevels        = 1,
-        .Format           = DXGI_FORMAT_R32_FLOAT,
-        .SampleDesc       = { .Count = 1, .Quality = 0 },
-        .Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-        .Flags            = D3D12_RESOURCE_FLAG_NONE,
-    };
-    D3D12_RESOURCE_DESC motionDesc = {
-        .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        .Alignment        = 0,
-        .Width            = rW,
-        .Height           = rH,
-        .DepthOrArraySize = 1,
-        .MipLevels        = 1,
-        .Format           = DXGI_FORMAT_R16G16_FLOAT,
-        .SampleDesc       = { .Count = 1, .Quality = 0 },
-        .Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-        .Flags            = D3D12_RESOURCE_FLAG_NONE,
-    };
-    D3D12_RESOURCE_DESC outputDesc = {
-        .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        .Alignment        = 0,
-        .Width            = uW,
-        .Height           = uH,
-        .DepthOrArraySize = 1,
-        .MipLevels        = 1,
-        .Format           = DXGI_FORMAT_R16G16B16A16_FLOAT,
-        .SampleDesc       = { .Count = 1, .Quality = 0 },
-        .Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-        .Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+    const VkImageSubresourceRange subresRange = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
     };
 
-    auto colorRes  = dx12->ImportPlacedResource( colorHandle, colorDesc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
-    auto depthRes  = dx12->ImportPlacedResource( depthHandle, depthDesc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
-    auto motionRes = dx12->ImportPlacedResource( motionHandle, motionDesc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE );
-    auto outputRes = dx12->ImportPlacedResource( outputHandle, outputDesc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS );
+    const VkImageSubresourceLayers subresLayers = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel       = 0,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
 
-    if( !colorRes || !depthRes || !motionRes || !outputRes )
-    {
-        return OUTPUT_IMAGE_INDEX;
-    }
+    VkImage srcColor  = framebuffers->GetImage( FramebufferImageIndex::FB_IMAGE_INDEX_FINAL, frameIndex );
+    VkImage srcDepth  = framebuffers->GetImage( FramebufferImageIndex::FB_IMAGE_INDEX_DEPTH_NDC, frameIndex );
+    VkImage srcMotion = framebuffers->GetImage( FramebufferImageIndex::FB_IMAGE_INDEX_MOTION_DLSS, frameIndex );
+    VkImage dstPong   = framebuffers->GetImage( OUTPUT_IMAGE_INDEX, frameIndex );
+
+    VkImageMemoryBarrier2 preCopyBarriers[] = {
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcColor,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcDepth,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcMotion,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_NONE,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = sc.vkImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_NONE,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = sd.vkImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_NONE,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = sm.vkImage,
+            .subresourceRange    = subresRange,
+        },
+    };
+
+    VkDependencyInfo preDep = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = std::size( preCopyBarriers ),
+        .pImageMemoryBarriers    = preCopyBarriers,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &preDep );
+
+    VkImageCopy copyRenderRegion = {
+        .srcSubresource = subresLayers,
+        .srcOffset      = { 0, 0, 0 },
+        .dstSubresource = subresLayers,
+        .dstOffset      = { 0, 0, 0 },
+        .extent         = { rW, rH, 1 },
+    };
+    vkCmdCopyImage( cmd, srcColor, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, sc.vkImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRenderRegion );
+    vkCmdCopyImage( cmd, srcDepth, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, sd.vkImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRenderRegion );
+    vkCmdCopyImage( cmd, srcMotion, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, sm.vkImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRenderRegion );
+
+    VkImageMemoryBarrier2 postCopyBarriers[] = {
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcColor,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcDepth,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcMotion,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = sc.vkImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = sd.vkImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = sm.vkImage,
+            .subresourceRange    = subresRange,
+        },
+    };
+
+    VkDependencyInfo postDep = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = std::size( postCopyBarriers ),
+        .pImageMemoryBarriers    = postCopyBarriers,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &postDep );
 
     dx12->BeginCommands();
     ID3D12GraphicsCommandList* cl = dx12->GetCommandList();
@@ -284,19 +440,19 @@ RTGL1::FramebufferImageIndex RTGL1::FSR4::Apply(
     ffxDispatchDescUpscale dispatchDesc = {
         .header                  = { .type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE },
         .commandList             = cl,
-        .color                   = ffxApiGetResourceDX12( colorRes.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ ),
-        .depth                   = ffxApiGetResourceDX12( depthRes.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ ),
-        .motionVectors           = ffxApiGetResourceDX12( motionRes.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ ),
+        .color                   = ffxApiGetResourceDX12( sc.d3d12Resource.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ ),
+        .depth                   = ffxApiGetResourceDX12( sd.d3d12Resource.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ ),
+        .motionVectors           = ffxApiGetResourceDX12( sm.d3d12Resource.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ ),
         .exposure                = {},
         .reactive                = {},
         .transparencyAndComposition = {},
-        .output                  = ffxApiGetResourceDX12( outputRes.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS ),
+        .output                  = ffxApiGetResourceDX12( so.d3d12Resource.Get(), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS ),
         .jitterOffset            = { -jitterOffset.data[ 0 ], -jitterOffset.data[ 1 ] },
         .motionVectorScale       = { float( rW ), float( rH ) },
         .renderSize              = { rW, rH },
         .upscaleSize             = { uW, uH },
-        .enableSharpening        = false,
-        .sharpness               = 0.0f,
+        .enableSharpening        = renderResolution.IsCASInsideFSR3(),
+        .sharpness               = renderResolution.GetSharpeningIntensity(),
         .frameTimeDelta          = float( timeDelta * 1000.0 ),
         .preExposure             = 1.0f,
         .reset                   = resetAccumulation,
@@ -304,13 +460,95 @@ RTGL1::FramebufferImageIndex RTGL1::FSR4::Apply(
         .cameraFar               = farPlane,
         .cameraFovAngleVertical  = fovVerticalRad,
         .viewSpaceToMetersFactor = 1.0f,
-        .flags                   = 0,
+        .flags                   = FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB,
     };
 
     ffxContext ctx = ( ffxContext )context;
     ffxFuncs.Dispatch( &ctx, &dispatchDesc.header );
 
     dx12->EndAndExecuteCommands();
+    dx12->WaitForGpu();
+
+    VkImageMemoryBarrier2 preOutputBarriers[] = {
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_NONE,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = so.vkImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_NONE,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = dstPong,
+            .subresourceRange    = subresRange,
+        },
+    };
+
+    VkDependencyInfo preOutputDep = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = std::size( preOutputBarriers ),
+        .pImageMemoryBarriers    = preOutputBarriers,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &preOutputDep );
+
+    VkImageCopy copyUpscaleRegion = {
+        .srcSubresource = subresLayers,
+        .srcOffset      = { 0, 0, 0 },
+        .dstSubresource = subresLayers,
+        .dstOffset      = { 0, 0, 0 },
+        .extent         = { uW, uH, 1 },
+    };
+    vkCmdCopyImage( cmd, so.vkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstPong, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyUpscaleRegion );
+
+    VkImageMemoryBarrier2 postOutputBarriers[] = {
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = so.vkImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = dstPong,
+            .subresourceRange    = subresRange,
+        },
+    };
+
+    VkDependencyInfo postOutputDep = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = std::size( postOutputBarriers ),
+        .pImageMemoryBarriers    = postOutputBarriers,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &postOutputDep );
 
     return OUTPUT_IMAGE_INDEX;
 }
@@ -354,8 +592,8 @@ RgFloat2D RTGL1::FSR4::GetJitter( const ResolutionState& resolutionState, uint32
 
 using namespace RTGL1;
 
-FSR4::FSR4( VkInstance instance, VkDevice device, VkPhysicalDevice physDevice, bool enableFrameGeneration )
-    : instance( instance ), device( device ), physDevice( physDevice ), enableFrameGeneration( enableFrameGeneration ), isSupported( false )
+FSR4::FSR4( VkInstance instance, VkDevice device, std::shared_ptr< PhysicalDevice > physDevice, bool enableFrameGeneration )
+    : instance( instance ), device( device ), physDevice( std::move( physDevice ) ), enableFrameGeneration( enableFrameGeneration ), isSupported( false )
 {
 }
 

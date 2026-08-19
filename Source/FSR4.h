@@ -14,7 +14,7 @@ class RenderResolutionHelper;
 class FSR4 : public IFramebuffersDependency
 {
 public:
-    FSR4( VkInstance instance, VkDevice device, VkPhysicalDevice physDevice, bool enableFrameGeneration );
+    FSR4( VkInstance instance, VkDevice device, std::shared_ptr< PhysicalDevice > physDevice, bool enableFrameGeneration );
     ~FSR4() override;
 
     FSR4( const FSR4& other )                = delete;
@@ -43,11 +43,11 @@ public:
 private:
     void DestroyResources();
 
-    VkInstance             instance;
-    VkDevice               device;
-    VkPhysicalDevice       physDevice;
-    bool                   enableFrameGeneration;
-    bool                   isSupported;
+    VkInstance                          instance;
+    VkDevice                            device;
+    std::shared_ptr< PhysicalDevice >   physDevice;
+    bool                                enableFrameGeneration;
+    bool                                isSupported;
 
 #ifdef RG_USE_AMD_FSR4
     std::unique_ptr< Dx12Interop > dx12;

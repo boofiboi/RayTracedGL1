@@ -36,7 +36,6 @@ public:
     {
         DEFAULT,
         WITH_ADDRESS_QUERY,
-        EXPORT_WIN32,
     };
 
 public:
@@ -62,9 +61,6 @@ public:
                                      AllocType                    allocType,
                                      const char*                  pDebugName = nullptr ) const;
     static void      FreeDedicated( VkDevice device, VkDeviceMemory memory );
-
-    void*            GetWin32Handle( VkDeviceMemory memory ) const;
-
 
     VkBuffer         CreateStagingSrcTextureBuffer( const VkBufferCreateInfo* info,
                                                     const char*               pDebugName,

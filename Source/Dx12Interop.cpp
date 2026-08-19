@@ -9,8 +9,7 @@
 using namespace RTGL1;
 
 Dx12Interop::Dx12Interop()
-    : fenceSharedHandle( NULL )
-    , vkTimelineSemaphore( VK_NULL_HANDLE )
+    : fenceEvent( nullptr )
     , vkDevice( VK_NULL_HANDLE )
     , currentFenceValue( 0 )
     , frameIndex( 0 )
@@ -23,6 +22,41 @@ Dx12Interop::~Dx12Interop()
     Destroy();
 }
 
+void Dx12Interop::DestroySingleSharedTexture( SharedTexture& tex )
+{
+    if( vkDevice != VK_NULL_HANDLE )
+    {
+        if( tex.vkImage != VK_NULL_HANDLE )
+        {
+            vkDestroyImage( vkDevice, tex.vkImage, nullptr );
+            tex.vkImage = VK_NULL_HANDLE;
+        }
+        if( tex.vkMemory != VK_NULL_HANDLE )
+        {
+            vkFreeMemory( vkDevice, tex.vkMemory, nullptr );
+            tex.vkMemory = VK_NULL_HANDLE;
+        }
+    }
+
+    if( tex.sharedHandle != nullptr )
+    {
+        CloseHandle( tex.sharedHandle );
+        tex.sharedHandle = nullptr;
+    }
+
+    tex.d3d12Resource.Reset();
+    tex.width = 0;
+    tex.height = 0;
+}
+
+void Dx12Interop::DestroySharedTextures()
+{
+    DestroySingleSharedTexture( sharedColor );
+    DestroySingleSharedTexture( sharedDepth );
+    DestroySingleSharedTexture( sharedMotion );
+    DestroySingleSharedTexture( sharedOutput );
+}
+
 void Dx12Interop::Destroy()
 {
     if( !initialized )
@@ -30,32 +64,13 @@ void Dx12Interop::Destroy()
         return;
     }
 
-    if( queue && fence )
-    {
-        uint64_t val = ++currentFenceValue;
-        queue->Signal( fence.Get(), val );
-        if( fence->GetCompletedValue() < val )
-        {
-            HANDLE event = CreateEventEx( nullptr, nullptr, 0, EVENT_ALL_ACCESS );
-            if( event )
-            {
-                fence->SetEventOnCompletion( val, event );
-                WaitForSingleObject( event, 2000 );
-                CloseHandle( event );
-            }
-        }
-    }
+    WaitForGpu();
+    DestroySharedTextures();
 
-    if( vkDevice != VK_NULL_HANDLE && vkTimelineSemaphore != VK_NULL_HANDLE )
+    if( fenceEvent != nullptr )
     {
-        vkDestroySemaphore( vkDevice, vkTimelineSemaphore, nullptr );
-        vkTimelineSemaphore = VK_NULL_HANDLE;
-    }
-
-    if( fenceSharedHandle != NULL )
-    {
-        CloseHandle( fenceSharedHandle );
-        fenceSharedHandle = NULL;
+        CloseHandle( fenceEvent );
+        fenceEvent = nullptr;
     }
 
     cmdList.Reset();
@@ -67,10 +82,12 @@ void Dx12Interop::Destroy()
     adapter.Reset();
     factory.Reset();
 
+    vkDevice = VK_NULL_HANDLE;
+    physDevice.reset();
     initialized = false;
 }
 
-bool Dx12Interop::Init( VkInstance vkInstance, VkPhysicalDevice vkPhysDevice, VkDevice inVkDevice )
+bool Dx12Interop::Init( VkInstance vkInstance, std::shared_ptr< PhysicalDevice > inPhysDevice, VkDevice inVkDevice )
 {
     if( initialized )
     {
@@ -78,6 +95,7 @@ bool Dx12Interop::Init( VkInstance vkInstance, VkPhysicalDevice vkPhysDevice, Vk
     }
 
     vkDevice = inVkDevice;
+    physDevice = inPhysDevice;
 
     VkPhysicalDeviceIDProperties idProps = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES,
@@ -86,7 +104,7 @@ bool Dx12Interop::Init( VkInstance vkInstance, VkPhysicalDevice vkPhysDevice, Vk
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
         .pNext = &idProps,
     };
-    vkGetPhysicalDeviceProperties2( vkPhysDevice, &props2 );
+    vkGetPhysicalDeviceProperties2( physDevice->Get(), &props2 );
 
     HRESULT hr = CreateDXGIFactory1( IID_PPV_ARGS( &factory ) );
     if( FAILED( hr ) )
@@ -159,49 +177,16 @@ bool Dx12Interop::Init( VkInstance vkInstance, VkPhysicalDevice vkPhysDevice, Vk
     }
     cmdList->Close();
 
-    hr = device->CreateFence( 0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS( &fence ) );
+    hr = device->CreateFence( 0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS( &fence ) );
     if( FAILED( hr ) )
     {
         return false;
     }
 
-    hr = device->CreateSharedHandle( fence.Get(), nullptr, GENERIC_ALL, nullptr, &fenceSharedHandle );
-    if( FAILED( hr ) || fenceSharedHandle == NULL )
+    fenceEvent = CreateEventEx( nullptr, nullptr, 0, EVENT_ALL_ACCESS );
+    if( fenceEvent == nullptr )
     {
         return false;
-    }
-
-    PFN_vkImportSemaphoreWin32HandleKHR pfnVkImportSemaphoreWin32Handle =
-        ( PFN_vkImportSemaphoreWin32HandleKHR )vkGetDeviceProcAddr( vkDevice, "vkImportSemaphoreWin32HandleKHR" );
-
-    if( pfnVkImportSemaphoreWin32Handle != nullptr )
-    {
-        VkSemaphoreTypeCreateInfo timelineInfo = {
-            .sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-            .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-            .initialValue  = 0,
-        };
-        VkSemaphoreCreateInfo semInfo = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            .pNext = &timelineInfo,
-        };
-        VkResult r = vkCreateSemaphore( vkDevice, &semInfo, nullptr, &vkTimelineSemaphore );
-        if( r == VK_SUCCESS )
-        {
-            VkImportSemaphoreWin32HandleInfoKHR importInfo = {
-                .sType      = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
-                .semaphore  = vkTimelineSemaphore,
-                .flags      = 0,
-                .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT,
-                .handle     = fenceSharedHandle,
-            };
-            r = pfnVkImportSemaphoreWin32Handle( vkDevice, &importInfo );
-            if( r != VK_SUCCESS )
-            {
-                vkDestroySemaphore( vkDevice, vkTimelineSemaphore, nullptr );
-                vkTimelineSemaphore = VK_NULL_HANDLE;
-            }
-        }
     }
 
     initialized = true;
@@ -223,43 +208,166 @@ ID3D12GraphicsCommandList* Dx12Interop::GetCommandList() const
     return cmdList.Get();
 }
 
-VkSemaphore Dx12Interop::GetVkTimelineSemaphore() const
+bool Dx12Interop::CreateSharedTexture(
+    uint32_t width,
+    uint32_t height,
+    DXGI_FORMAT dxgiFormat,
+    VkFormat vkFormat,
+    D3D12_RESOURCE_FLAGS d3dFlags,
+    VkImageUsageFlags vkUsage,
+    SharedTexture& outTex )
 {
-    return vkTimelineSemaphore;
+    DestroySingleSharedTexture( outTex );
+
+    outTex.width = width;
+    outTex.height = height;
+
+    D3D12_HEAP_PROPERTIES heapProps = {
+        .Type                 = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty      = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask     = 1,
+        .VisibleNodeMask      = 1,
+    };
+
+    D3D12_RESOURCE_DESC desc = {
+        .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment        = 0,
+        .Width            = width,
+        .Height           = height,
+        .DepthOrArraySize = 1,
+        .MipLevels        = 1,
+        .Format           = dxgiFormat,
+        .SampleDesc       = { .Count = 1, .Quality = 0 },
+        .Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags            = d3dFlags,
+    };
+
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_SHARED,
+        &desc,
+        D3D12_RESOURCE_STATE_COMMON,
+        nullptr,
+        IID_PPV_ARGS( &outTex.d3d12Resource ) );
+    if( FAILED( hr ) || !outTex.d3d12Resource )
+    {
+        return false;
+    }
+
+    hr = device->CreateSharedHandle(
+        outTex.d3d12Resource.Get(),
+        nullptr,
+        GENERIC_ALL,
+        nullptr,
+        &outTex.sharedHandle );
+    if( FAILED( hr ) || outTex.sharedHandle == nullptr )
+    {
+        return false;
+    }
+
+    VkExternalMemoryImageCreateInfo extImageInfo = {
+        .sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+        .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+    };
+
+    VkImageCreateInfo imgInfo = {
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext         = &extImageInfo,
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = vkFormat,
+        .extent        = { width, height, 1 },
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .usage         = vkUsage,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+
+    VkResult r = vkCreateImage( vkDevice, &imgInfo, nullptr, &outTex.vkImage );
+    if( r != VK_SUCCESS )
+    {
+        return false;
+    }
+
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements( vkDevice, outTex.vkImage, &memReqs );
+
+    VkImportMemoryWin32HandleInfoKHR importInfo = {
+        .sType      = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+        .handle     = outTex.sharedHandle,
+    };
+
+    VkMemoryAllocateInfo allocInfo = {
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext           = &importInfo,
+        .allocationSize  = memReqs.size,
+        .memoryTypeIndex = physDevice->GetMemoryTypeIndex( memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT ),
+    };
+
+    r = vkAllocateMemory( vkDevice, &allocInfo, nullptr, &outTex.vkMemory );
+    if( r != VK_SUCCESS )
+    {
+        return false;
+    }
+
+    r = vkBindImageMemory( vkDevice, outTex.vkImage, outTex.vkMemory, 0 );
+    if( r != VK_SUCCESS )
+    {
+        return false;
+    }
+
+    return true;
 }
 
-Microsoft::WRL::ComPtr< ID3D12Resource > Dx12Interop::ImportPlacedResource(
-    HANDLE win32MemoryHandle,
-    const D3D12_RESOURCE_DESC& desc,
-    D3D12_RESOURCE_STATES initialState )
+bool Dx12Interop::RecreateSharedTextures( uint32_t renderWidth, uint32_t renderHeight, uint32_t upscaledWidth, uint32_t upscaledHeight )
 {
-    if( !device || win32MemoryHandle == NULL )
+    if( !initialized )
     {
-        return nullptr;
+        return false;
     }
 
-    Microsoft::WRL::ComPtr< ID3D12Heap > heap;
-    HRESULT hr = device->OpenSharedHandle( win32MemoryHandle, IID_PPV_ARGS( &heap ) );
-    if( FAILED( hr ) || !heap )
-    {
-        return nullptr;
-    }
+    bool ok = true;
 
-    Microsoft::WRL::ComPtr< ID3D12Resource > resource;
-    hr = device->CreatePlacedResource(
-        heap.Get(),
-        0,
-        &desc,
-        initialState,
-        nullptr,
-        IID_PPV_ARGS( &resource ) );
+    ok &= CreateSharedTexture(
+        renderWidth,
+        renderHeight,
+        DXGI_FORMAT_R11G11B10_FLOAT,
+        VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        sharedColor );
 
-    if( FAILED( hr ) )
-    {
-        return nullptr;
-    }
+    ok &= CreateSharedTexture(
+        renderWidth,
+        renderHeight,
+        DXGI_FORMAT_R32_FLOAT,
+        VK_FORMAT_R32_SFLOAT,
+        D3D12_RESOURCE_FLAG_NONE,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        sharedDepth );
 
-    return resource;
+    ok &= CreateSharedTexture(
+        renderWidth,
+        renderHeight,
+        DXGI_FORMAT_R16G16_FLOAT,
+        VK_FORMAT_R16G16_SFLOAT,
+        D3D12_RESOURCE_FLAG_NONE,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        sharedMotion );
+
+    ok &= CreateSharedTexture(
+        upscaledWidth,
+        upscaledHeight,
+        DXGI_FORMAT_R11G11B10_FLOAT,
+        VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        sharedOutput );
+
+    return ok;
 }
 
 void Dx12Interop::BeginCommands()
@@ -276,25 +384,18 @@ void Dx12Interop::EndAndExecuteCommands()
     queue->ExecuteCommandLists( 1, lists );
 }
 
-void Dx12Interop::SyncVulkanToDx12( uint64_t fenceVal )
+void Dx12Interop::WaitForGpu()
 {
-    if( queue && fence )
+    if( queue && fence && fenceEvent )
     {
-        queue->Wait( fence.Get(), fenceVal );
+        uint64_t val = ++currentFenceValue;
+        queue->Signal( fence.Get(), val );
+        if( fence->GetCompletedValue() < val )
+        {
+            fence->SetEventOnCompletion( val, fenceEvent );
+            WaitForSingleObject( fenceEvent, INFINITE );
+        }
     }
-}
-
-void Dx12Interop::SyncDx12ToVulkan( uint64_t fenceVal )
-{
-    if( queue && fence )
-    {
-        queue->Signal( fence.Get(), fenceVal );
-    }
-}
-
-uint64_t Dx12Interop::GetNextFenceValue()
-{
-    return ++currentFenceValue;
 }
 
 #endif

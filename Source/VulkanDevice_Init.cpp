@@ -425,7 +425,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     amdFsr4 = std::make_shared< FSR4 >( 
         instance,
         device, 
-        physDevice->Get(),
+        physDevice,
         enableFrameGeneration );
 
     nvDlss = std::make_shared< DLSS >(

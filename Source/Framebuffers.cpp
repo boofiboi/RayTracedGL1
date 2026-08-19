@@ -856,14 +856,6 @@ void Framebuffers::CreateImages( ResolutionState resolutionState )
                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
             }
 
-#ifdef VK_USE_PLATFORM_WIN32_KHR
-            VkExternalMemoryImageCreateInfo externalImageInfo = {
-                .sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-                .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT,
-            };
-            imageInfo.pNext = &externalImageInfo;
-#endif
-
             VkResult r = vkCreateImage( device, &imageInfo, nullptr, &images[ i ] );
 
             VK_CHECKERROR( r );
@@ -876,15 +868,9 @@ void Framebuffers::CreateImages( ResolutionState resolutionState )
             VkMemoryRequirements memReqs;
             vkGetImageMemoryRequirements( device, images[ i ], &memReqs );
 
-#ifdef VK_USE_PLATFORM_WIN32_KHR
-            MemoryAllocator::AllocType allocType = MemoryAllocator::AllocType::EXPORT_WIN32;
-#else
-            MemoryAllocator::AllocType allocType = MemoryAllocator::AllocType::DEFAULT;
-#endif
-
             imageMemories[ i ] = allocator->AllocDedicated( memReqs,
                                                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                            allocType,
+                                                            MemoryAllocator::AllocType::DEFAULT,
                                                             ShFramebuffers_DebugNames[ i ] );
 
             VkResult r = vkBindImageMemory( device, images[ i ], imageMemories[ i ], 0 );
@@ -1062,10 +1048,4 @@ void Framebuffers::Subscribe( std::shared_ptr< IFramebuffersDependency > subscri
     {
         subscriber->OnFramebuffersSizeChange( currentResolution );
     }
-}
-
-void* Framebuffers::GetWin32MemoryHandle( FramebufferImageIndex fbImageIndex, uint32_t frameIndex ) const
-{
-    fbImageIndex = FrameIndexToFBIndex( fbImageIndex, frameIndex );
-    return allocator->GetWin32Handle( imageMemories[ fbImageIndex ] );
 }

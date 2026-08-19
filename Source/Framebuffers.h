@@ -105,8 +105,6 @@ public:
         uint32_t               frameIndex,
         const ResolutionState& resolutionState ) const;
 
-    void* GetWin32MemoryHandle( FramebufferImageIndex fbImageIndex, uint32_t frameIndex ) const;
-
     // Subscribe to framebuffers' size change event.
     // shared_ptr will be transformed to weak_ptr
     void Subscribe( std::shared_ptr< IFramebuffersDependency > subscriber );
