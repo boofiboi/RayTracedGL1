@@ -753,8 +753,15 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                          uniform->GetData()->view,
                                          frameId );
 
+        FramebufferImageIndex hudlessFbIndex =
+            ( accum == FB_IMAGE_INDEX_UPSCALED_PONG )
+                ? FB_IMAGE_INDEX_UPSCALED_PING
+                : FB_IMAGE_INDEX_UPSCALED_PONG;
+
+        framebuffers->CopyImage( cmd, frameIndex, accum, hudlessFbIndex, renderResolution.GetResolutionState() );
+
         auto [ hudlessImage, hudlessView, hudlessFormat, hudlessSz ] =
-            framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
+            framebuffers->GetImageHandles( hudlessFbIndex, frameIndex, renderResolution.GetResolutionState() );
 
         amdFsr3->ConfigureFrameGeneration( swapchain->GetHandle(),
                                            hudlessImage,
@@ -764,7 +771,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                            frameId );
     }
 
-    // draw geometry such as HUD into an upscaled framebuf
     if( !drawInfo.disableRasterization )
     {
         framebuffers->BarrierOne( cmd, frameIndex, accum, RTGL1::Framebuffers::BarrierType::Storage );

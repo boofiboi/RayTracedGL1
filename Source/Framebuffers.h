@@ -87,6 +87,12 @@ public:
                                           VkFilter              filter,
                                           const RgExtent2D*     pPixelizedRenderSize );
 
+    void CopyImage( VkCommandBuffer       cmd,
+                    uint32_t              frameIndex,
+                    FramebufferImageIndex srcIndex,
+                    FramebufferImageIndex dstIndex,
+                    const ResolutionState& resolutionState );
+
     VkDescriptorSet       GetDescSet( uint32_t frameIndex ) const;
     VkDescriptorSetLayout GetDescSetLayout() const;
 

@@ -593,6 +593,124 @@ RTGL1::FramebufferImageIndex RTGL1::Framebuffers::BlitForEffects(
     return finalDst;
 }
 
+void RTGL1::Framebuffers::CopyImage( VkCommandBuffer       cmd,
+                                     uint32_t              frameIndex,
+                                     FramebufferImageIndex srcIndex,
+                                     FramebufferImageIndex dstIndex,
+                                     const ResolutionState& resolutionState )
+{
+    const VkImageSubresourceRange subresRange = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
+
+    const VkImageSubresourceLayers subresLayers = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .mipLevel       = 0,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
+
+    const FramebufferImageIndex src = FrameIndexToFBIndex( srcIndex, frameIndex );
+    const FramebufferImageIndex dst = FrameIndexToFBIndex( dstIndex, frameIndex );
+
+    const VkImage srcImage = images[ src ];
+    const VkImage dstImage = images[ dst ];
+
+    const VkExtent2D srcSz = GetFramebufSize( resolutionState, src );
+
+    VkImageMemoryBarrier2 bsBefore[] = {
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask       = VK_ACCESS_2_NONE,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = dstImage,
+            .subresourceRange    = subresRange,
+        },
+    };
+
+    VkDependencyInfo depBefore = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = std::size( bsBefore ),
+        .pImageMemoryBarriers    = bsBefore,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &depBefore );
+
+    VkImageCopy region = {
+        .srcSubresource = subresLayers,
+        .srcOffset      = { 0, 0, 0 },
+        .dstSubresource = subresLayers,
+        .dstOffset      = { 0, 0, 0 },
+        .extent         = { srcSz.width, srcSz.height, 1 },
+    };
+
+    vkCmdCopyImage( cmd,
+                    srcImage,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    dstImage,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1,
+                    &region );
+
+    VkImageMemoryBarrier2 bsAfter[] = {
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = srcImage,
+            .subresourceRange    = subresRange,
+        },
+        {
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+            .srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+            .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = dstImage,
+            .subresourceRange    = subresRange,
+        },
+    };
+
+    VkDependencyInfo depAfter = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = std::size( bsAfter ),
+        .pImageMemoryBarriers    = bsAfter,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &depAfter );
+}
+
 VkDescriptorSet Framebuffers::GetDescSet( uint32_t frameIndex ) const
 {
     return descSets[ frameIndex ];

@@ -164,9 +164,14 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         backendDesc.vkPhysicalDevice = physDevice;
         backendDesc.vkDeviceProcAddr = vkGetDeviceProcAddr;
 
+        ffxCreateContextDescFrameGenerationHudless hudlessDesc = {};
+        hudlessDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
+        hudlessDesc.header.pNext = &backendDesc.header;
+        hudlessDesc.hudlessBackBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B10G11R11_UFLOAT_PACK32 );
+
         ffxCreateContextDescFrameGeneration createFg = {};
         createFg.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
-        createFg.header.pNext = &backendDesc.header;
+        createFg.header.pNext = &hudlessDesc.header;
         createFg.displaySize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.maxRenderSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.flags = 0;
@@ -456,6 +461,23 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
         return;
     }
 
+    FfxApiResource hudlessRes = {};
+    if( hudlessImage != VK_NULL_HANDLE )
+    {
+        VkImageCreateInfo hudlessInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = hudlessFormat,
+            .extent = { width, height, 1 },
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        };
+        hudlessRes = ffxApiGetResourceVK( (void*)hudlessImage, ffxApiGetImageResourceDescriptionVK( hudlessImage, hudlessInfo, 0 ), FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ );
+    }
+
     ffxConfigureDescFrameGeneration configDesc = {};
     configDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
     configDesc.swapChain = (void*)swapchain;
@@ -467,7 +489,7 @@ void RTGL1::FSR3::ConfigureFrameGeneration( VkSwapchainKHR swapchain,
     configDesc.frameGenerationCallbackUserContext = &fgContext;
     configDesc.frameGenerationEnabled = true;
     configDesc.allowAsyncWorkloads = true;
-    configDesc.HUDLessColor = {};
+    configDesc.HUDLessColor = hudlessRes;
     configDesc.flags = 0;
     configDesc.onlyPresentGenerated = false;
     configDesc.generationRect = { 0, 0, (int32_t)width, (int32_t)height };
