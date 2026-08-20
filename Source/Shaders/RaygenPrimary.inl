@@ -358,6 +358,15 @@ void main()
             waterDensity = ( globalUniform.waterColorAndDensity.a > 0.0001 ) ? globalUniform.waterColorAndDensity.a : 0.1;
             waterColor = ( globalUniform.waterColorAndDensity.r >= 0.0 ) ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 );
         }
+        if( currentRayMedia == MEDIA_TYPE_WATER && firstHitDepthLinear > 0.0 )
+        {
+            float waveTime = globalUniform.time * globalUniform.waterWaveSpeed * 2.0;
+            vec2 cUV = h.hitPosition.xy * 0.08 / max( 0.01, globalUniform.waterTextureAreaScale );
+            float c1 = sin( cUV.x * 3.14 + waveTime ) * cos( cUV.y * 3.14 - waveTime );
+            float c2 = sin( ( cUV.x + cUV.y ) * 4.5 - waveTime * 1.3 );
+            float caustic = 1.0 + 0.35 * ( c1 + c2 );
+            throughput *= max( 0.2, caustic );
+        }
         vec3 trans = getMediaTransmittance( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity );
         throughput *= trans;
         primaryWaterFog = getWaterVolumetricFog( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity, trans );
