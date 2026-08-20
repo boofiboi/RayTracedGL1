@@ -115,10 +115,7 @@ float getPolySpotFactor(const vec3 lightNormal, const vec3 lightToSurf)
 
 float getSpotFactor(float cosA, float cosAInner, float cosAOuter)
 {
-    float baseFactor = smoothstep(cosAOuter, cosAInner, cosA);
-    float angleFrac = clamp((cosA - cosAOuter) / max(1e-4, cosAInner - cosAOuter), 0.0, 1.0);
-    float vignette = 1.0 - 0.15 * (1.0 - angleFrac * angleFrac);
-    return square(baseFactor) * vignette;
+    return square(smoothstep(cosAOuter, cosAInner, cosA));
 }
 
 float isSphereInFront(const vec3 planeNormal, const vec3 planePos, const vec3 sphereCenter, float sphereRadius)
