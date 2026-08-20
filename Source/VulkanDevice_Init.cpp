@@ -420,6 +420,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     amdFsr3 = std::make_shared< FSR3 >( 
         device, 
         physDevice->Get(),
+        memAllocator,
         enableFrameGeneration );
 
     nvDlss = std::make_shared< DLSS >(

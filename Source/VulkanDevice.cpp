@@ -741,11 +741,19 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                              params.resetUpscalerHistory,
                                              uniform->GetData()->view,
                                              frameId );
+
+            auto [ accumImage, accumView, accumFormat, accumSz ] =
+                framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
+
+            amdFsr3->CaptureHudless( cmd,
+                                     frameIndex,
+                                     accumImage,
+                                     renderResolution.UpscaledWidth(),
+                                     renderResolution.UpscaledHeight() );
         }
 
         amdFsr3->ConfigureFrameGeneration( swapchain->GetHandle(),
-                                           VK_NULL_HANDLE,
-                                           VK_FORMAT_UNDEFINED,
+                                           frameIndex,
                                            renderResolution.UpscaledWidth(),
                                            renderResolution.UpscaledHeight(),
                                            frameId,

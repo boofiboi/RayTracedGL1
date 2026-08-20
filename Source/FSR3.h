@@ -36,7 +36,10 @@ class RenderResolutionHelper;
 class FSR3 : public IFramebuffersDependency
 {
 public:
-    FSR3( VkDevice device, VkPhysicalDevice physDevice, bool enableFrameGeneration );
+    FSR3( VkDevice                                device,
+          VkPhysicalDevice                        physDevice,
+          std::shared_ptr< MemoryAllocator >      allocator,
+          bool                                    enableFrameGeneration );
     ~FSR3() override;
 
     FSR3( const FSR3& other )                = delete;
@@ -70,9 +73,14 @@ public:
                                  const float*                           pView,
                                  uint64_t                               frameId );
 
+    void CaptureHudless( VkCommandBuffer cmd,
+                         uint32_t        frameIndex,
+                         VkImage         srcAccumImage,
+                         uint32_t        width,
+                         uint32_t        height );
+
     void ConfigureFrameGeneration( VkSwapchainKHR swapchain,
-                                   VkImage        hudlessImage,
-                                   VkFormat       hudlessFormat,
+                                   uint32_t       frameIndex,
                                    uint32_t       width,
                                    uint32_t       height,
                                    uint64_t       frameId,
@@ -85,9 +93,10 @@ public:
 private:
     void DestroyResources();
 
-    VkDevice               device;
-    VkPhysicalDevice       physDevice;
-    bool                   enableFrameGeneration;
+    VkDevice                                  device;
+    VkPhysicalDevice                          physDevice;
+    std::shared_ptr< MemoryAllocator >        allocator;
+    bool                                      enableFrameGeneration;
 
     std::unique_ptr< FfxFsr3UpscalerContext > context;
     std::vector< uint8_t >                    scratchBuffer;
@@ -100,5 +109,11 @@ private:
     FfxResource                               reconstructedPrevNearestDepthRes{};
     bool                                      isContextCreated{ false };
     void*                                     fgContext{ nullptr };
+
+    VkImage                                   hudlessImages[ MAX_FRAMES_IN_FLIGHT ]{};
+    VkDeviceMemory                            hudlessMemories[ MAX_FRAMES_IN_FLIGHT ]{};
+    VkImageView                               hudlessViews[ MAX_FRAMES_IN_FLIGHT ]{};
+    VkFormat                                  hudlessFormat{ VK_FORMAT_B8G8R8A8_UNORM };
+    VkExtent2D                                hudlessExtent{};
 };
 }
