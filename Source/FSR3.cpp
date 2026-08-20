@@ -164,22 +164,29 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         backendDesc.vkPhysicalDevice = physDevice;
         backendDesc.vkDeviceProcAddr = vkGetDeviceProcAddr;
 
-        ffxCreateContextDescFrameGenerationHudless hudlessDesc = {};
-        hudlessDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
-        hudlessDesc.header.pNext = &backendDesc.header;
-        hudlessDesc.hudlessBackBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B10G11R11_UFLOAT_PACK32 );
-
         ffxCreateContextDescFrameGeneration createFg = {};
         createFg.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
-        createFg.header.pNext = &hudlessDesc.header;
+        createFg.header.pNext = &backendDesc.header;
         createFg.displaySize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.maxRenderSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
         createFg.flags = 0;
         createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( VK_FORMAT_B8G8R8A8_UNORM );
 
+        remove( "fsr3_error.txt" );
         ffxReturnCode_t ret = ffxCreateContext( (ffxContext*)&fgContext, &createFg.header, nullptr );
         if( ret != FFX_API_RETURN_OK )
         {
+            char errBuf[512] = {};
+            FILE* f = fopen( "fsr3_error.txt", "r" );
+            if( f )
+            {
+                fgets( errBuf, sizeof( errBuf ), f );
+                fclose( f );
+            }
+            if( errBuf[0] )
+            {
+                debug::Warning( "{}", errBuf );
+            }
             debug::Warning( "FSR3: fgContext creation failed, ffxCreateContext returned {}", static_cast<int>( ret ) );
             fgContext = nullptr;
         }

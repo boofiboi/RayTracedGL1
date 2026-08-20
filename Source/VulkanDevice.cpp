@@ -743,22 +743,9 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                              frameId );
         }
 
-        FramebufferImageIndex hudlessFbIndex =
-            ( accum == FB_IMAGE_INDEX_UPSCALED_PONG )
-                ? FB_IMAGE_INDEX_UPSCALED_PING
-                : FB_IMAGE_INDEX_UPSCALED_PONG;
-
-        if( isFgActive )
-        {
-            framebuffers->CopyImage( cmd, frameIndex, accum, hudlessFbIndex, renderResolution.GetResolutionState() );
-        }
-
-        auto [ hudlessImage, hudlessView, hudlessFormat, hudlessSz ] =
-            framebuffers->GetImageHandles( hudlessFbIndex, frameIndex, renderResolution.GetResolutionState() );
-
         amdFsr3->ConfigureFrameGeneration( swapchain->GetHandle(),
-                                           isFgActive ? hudlessImage : VK_NULL_HANDLE,
-                                           hudlessFormat,
+                                           VK_NULL_HANDLE,
+                                           VK_FORMAT_UNDEFINED,
                                            renderResolution.UpscaledWidth(),
                                            renderResolution.UpscaledHeight(),
                                            frameId,
