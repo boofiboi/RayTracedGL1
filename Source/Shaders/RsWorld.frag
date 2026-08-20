@@ -76,12 +76,12 @@ void main()
                 worldpos.xyz, globalUniform.volumeViewProj, globalUniform.cameraPosition.xyz );
             vec3 illum = textureLod( g_illuminationVolume_Sampler, sp, 0.0 ).rgb;
 
-            outColor.rgb *= illum;
+            outColor.rgb *= max( illum, max( vec3( 1.0 ), tonemapping.avgLuminance ) );
         }
         else
 #endif
         {
-            outColor.rgb *= max( vec3( 1 ), tonemapping.avgLuminance );
+            outColor.rgb *= max( vec3( 1.0 ), tonemapping.avgLuminance );
         }
     }
 
