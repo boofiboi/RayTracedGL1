@@ -62,6 +62,9 @@ void main()
 
     if( !classicShading( ivec2( gl_FragCoord ) ) )
     {
+        const float exposure = ev100ToLuminousExposure( getCurrentEV100() );
+        const float hdrExposureScale = exposure > 0.0 ? ( 1.0 / exposure ) : 1.0;
+
 #if !SHIPPING_HACK
         if( globalUniform.illumVolumeEnable != 0 )
         {
@@ -76,12 +79,12 @@ void main()
                 worldpos.xyz, globalUniform.volumeViewProj, globalUniform.cameraPosition.xyz );
             vec3 illum = textureLod( g_illuminationVolume_Sampler, sp, 0.0 ).rgb;
 
-            outColor.rgb *= max( illum, max( vec3( 1.0 ), tonemapping.avgLuminance ) );
+            outColor.rgb *= max( illum, vec3( hdrExposureScale ) );
         }
         else
 #endif
         {
-            outColor.rgb *= max( vec3( 1.0 ), tonemapping.avgLuminance );
+            outColor.rgb *= hdrExposureScale;
         }
     }
 
