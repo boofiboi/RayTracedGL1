@@ -125,7 +125,7 @@ uint encodeNormal(vec3 n)
 
 vec3 decodeNormal(uint _packed)
 {
-    const vec2 p = vec2(_packed >> 16, _packed & 0xFFFF) / NORMAL_QUANTIZATION * 2.0 - 1.0;
+    const vec2 p = vec2(_packed >> 16, _packed & 0xFFFF) * (2.0 / NORMAL_QUANTIZATION) - 1.0;
 
     vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
 
@@ -134,13 +134,13 @@ vec3 decodeNormal(uint _packed)
         n.xy = (1.0 - abs(n.yx)) * signNotZero(p);
     }
 
-    return normalize(n);
+    return n * inversesqrt(max(dot(n, n), 1e-8));
 }
 
 vec3 safeNormalize(const vec3 v)
 {
-    const float len = length(v);
-    return len > 0.001 ? v / len : vec3(0, 1, 0);
+    const float d2 = dot(v, v);
+    return d2 > 1e-6 ? v * inversesqrt(d2) : vec3(0, 1, 0);
 }
 
 
