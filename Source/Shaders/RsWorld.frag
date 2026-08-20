@@ -85,6 +85,11 @@ void main()
         }
     }
 
+    if( rasterizerFragInfo.emissiveMult > 0.0 )
+    {
+        outColor.rgb *= ( 1.0 + rasterizerFragInfo.emissiveMult );
+    }
+
     {
         vec3 ldrEmis;
         if( rasterizerFragInfo.emissiveTextureIndex != MATERIAL_NO_TEXTURE )
@@ -96,7 +101,7 @@ void main()
         {
             ldrEmis = ldrColor.rgb;
         }
-        ldrEmis *= rasterizerFragInfo.emissiveMult;
+        ldrEmis *= rasterizerFragInfo.emissiveMult * max( vec3( 1.0 ), tonemapping.avgLuminance );
 
         outScreenEmission = ldrEmis;
     }
