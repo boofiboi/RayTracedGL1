@@ -6,6 +6,24 @@
 
 layout(local_size_x = COMPUTE_COMPOSE_GROUP_SIZE_X, local_size_y = COMPUTE_COMPOSE_GROUP_SIZE_Y, local_size_z = 1) in;
 
+vec3 resolveCheckerboard( sampler2D src, const ivec2 pix, const vec3 center )
+{
+    const ivec2 maxCoord = ivec2( globalUniform.renderWidth - 1, globalUniform.renderHeight - 1 );
+    const ivec2 pL = clamp( pix + ivec2( -1,  0 ), ivec2( 0 ), maxCoord );
+    const ivec2 pR = clamp( pix + ivec2(  1,  0 ), ivec2( 0 ), maxCoord );
+    const ivec2 pU = clamp( pix + ivec2(  0, -1 ), ivec2( 0 ), maxCoord );
+    const ivec2 pD = clamp( pix + ivec2(  0,  1 ), ivec2( 0 ), maxCoord );
+
+    const vec3 crossColor = 0.25 * (
+        texelFetch( src, pL, 0 ).rgb +
+        texelFetch( src, pR, 0 ).rgb +
+        texelFetch( src, pU, 0 ).rgb +
+        texelFetch( src, pD, 0 ).rgb
+    );
+
+    return mix( center, crossColor, 0.5 );
+}
+
 void main()
 {
     const ivec2 pix = ivec2( gl_GlobalInvocationID.x, gl_GlobalInvocationID.y );
@@ -18,6 +36,16 @@ void main()
     vec3 hdr  = texelFetch( framebufPreFinal_Sampler, pix, 0 ).rgb;
     vec3 emis = texelFetch( framebufScreenEmisRT_Sampler, pix, 0 ).rgb;
     vec3 fog  = texelFetch( framebufAcidFogRT_Sampler, pix, 0 ).rgb;
+
+    const ivec2 checkerboardPix = getCheckerboardPix( pix );
+    const bool wasSplit = texelFetch( framebufThroughput_Sampler, checkerboardPix, 0 ).a > 0.5;
+
+    if( wasSplit )
+    {
+        hdr  = resolveCheckerboard( framebufPreFinal_Sampler, pix, hdr );
+        emis = resolveCheckerboard( framebufScreenEmisRT_Sampler, pix, emis );
+        fog  = resolveCheckerboard( framebufAcidFogRT_Sampler, pix, fog );
+    }
 
     imageStore( framebufFinal, pix, vec4( hdr, 0 ) );
     imageStore( framebufScreenEmission, pix, vec4( emis, 0 ) );
