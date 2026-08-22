@@ -329,10 +329,6 @@ void main()
             illuminated *= throughput;
             illuminated *= getMaterialAmbient(albedo);
 
-            // Add water volumetric fog inscattering: stored in acidFogRT by the refl/refr raygen.
-            // Modulate by ambient scene light so fog doesn't over-saturate unlit areas
-            const vec3 waterFog = texelFetch(framebufAcidFogRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
-            illuminated += waterFog * getMaterialAmbient(albedo);
         }
         else 
         {
