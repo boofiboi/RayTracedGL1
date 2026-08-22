@@ -503,8 +503,7 @@ void main()
         const float newIndexOfRefraction = getIndexOfRefraction(newRayMedia);
 
         const bool isWater =
-            !isPortal && ( newRayMedia == MEDIA_TYPE_WATER || currentRayMedia == MEDIA_TYPE_WATER ||
-                           newRayMedia == MEDIA_TYPE_ACID || currentRayMedia == MEDIA_TYPE_ACID );
+            !isPortal && ( newRayMedia == MEDIA_TYPE_WATER || currentRayMedia == MEDIA_TYPE_WATER );
 
         const vec3 normal =
             getNormal( h.hitPosition, h.normal, rayCone, rayDir, isWater, wasPortal );
@@ -643,14 +642,12 @@ void main()
         hitInfoWasOverwritten = true;
         vec3 trans = getMediaTransmittance(currentRayMedia, rayLen, currentWaterColor, currentWaterDensity);
         vec3 waterFogInscattering = getWaterVolumetricFog(currentRayMedia, rayLen, currentWaterColor, currentWaterDensity, trans);
+        vec3 acidFogInscattering = getGlowingMediaFog(currentRayMedia, rayLen);
         screenEmission += scrEmis * trans * throughput;
-        // Accumulate fog inscattering (scaled by current throughput so nested refractions work)
-        waterFogAccum += waterFogInscattering * throughput;
-        // Only apply absorption to throughput, NOT the fog color
+        waterFogAccum += (waterFogInscattering + acidFogInscattering) * throughput;
         throughput *= trans;
         propagateRayCone(rayCone, rayLen);
         fullPathLength += rayLen;
-        acidFog += getGlowingMediaFog(currentRayMedia, rayLen) * (doSplit ? 2.0 : 1.0);
     }
 
 
@@ -664,8 +661,7 @@ void main()
 
     imageStore(framebufIsSky,               pix, ivec4(0));
     imageStore(framebufAlbedo,              getRegularPixFromCheckerboardPix(pix), vec4(h.albedo, 0.0));
-    imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix(pix), vec4(screenEmission + ( globalUniform.cameraMediaType != MEDIA_TYPE_ACID ? acidFog * 0.05 : vec3( 0.0 ) ), 0.0));
-    // Store water fog (or acid fog) in acidFogRT (blended into illuminated in CmSVGFAtrous before tonemapping)
+    imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix(pix), vec4(screenEmission, 0.0));
     imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(waterFogAccum, 0));
     imageStoreNormal(                       pix, h.normal);
     imageStore(framebufMetallicRoughness,   pix, vec4(h.metallic, h.roughness, 0, 0));
