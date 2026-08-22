@@ -100,48 +100,9 @@ vec3 reinhard(const vec3 c)
 }
 
 
-vec3 agxDefaultContrastApprox( const vec3 x )
-{
-    const vec3 x2 = x * x;
-    const vec3 x4 = x2 * x2;
-    return + 15.5     * x4 * x2
-           - 40.14    * x4 * x
-           + 31.96    * x4
-           - 6.868    * x2 * x
-           + 0.4298   * x2
-           + 0.1191   * x
-           - 0.00232;
-}
-
-vec3 agxTonemap( const vec3 c )
-{
-    const mat3 agx_mat = mat3(
-        0.842479062253094,  0.078433599699346, 0.079223746505792,
-        0.042328242261012,  0.878468636494574, 0.079166127460516,
-        0.042375654905705,  0.078433600008742, 0.879142973793399
-    );
-
-    const mat3 agx_mat_inv = mat3(
-        1.196879024258305, -0.098020881170136, -0.099029754079520,
-        -0.052896851703658, 1.151903129904172, -0.098961834063167,
-        -0.053449745100085, -0.097411542526953, 1.151829789134181
-    );
-
-    const float min_ev = -10.0;
-    const float max_ev = 6.5;
-
-    vec3 val = agx_mat * c;
-    val = clamp( log2( max( val, vec3( 1e-6 ) ) ), min_ev, max_ev );
-    val = ( val - min_ev ) / ( max_ev - min_ev );
-    val = agxDefaultContrastApprox( val );
-    val = agx_mat_inv * val;
-
-    return clamp( val, 0.0, 1.0 );
-}
-
 vec3 tonemapRT( vec3 c )
 {
-    return agxTonemap( c );
+    return lpmTonemap( c );
 }
 
 
