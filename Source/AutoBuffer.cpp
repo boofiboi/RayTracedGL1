@@ -112,29 +112,6 @@ void RTGL1::AutoBuffer::CopyFromStaging( VkCommandBuffer cmd,
     };
 
     vkCmdCopyBuffer( cmd, staging[ frameIndex ].GetBuffer(), deviceLocal.GetBuffer(), 1, &info );
-
-    // TODO: remove a barrier kludge
-    VkBufferMemoryBarrier barrier = {
-        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-        .srcAccessMask       = VK_ACCESS_MEMORY_WRITE_BIT,
-        .dstAccessMask       = VK_ACCESS_MEMORY_READ_BIT,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .buffer              = deviceLocal.GetBuffer(),
-        .offset              = offset,
-        .size                = size,
-    };
-
-    vkCmdPipelineBarrier( cmd,
-                          VK_PIPELINE_STAGE_TRANSFER_BIT,
-                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                          0,
-                          0,
-                          nullptr,
-                          1,
-                          &barrier,
-                          0,
-                          nullptr );
 }
 
 void RTGL1::AutoBuffer::CopyFromStaging( VkCommandBuffer     cmd,
@@ -155,32 +132,6 @@ void RTGL1::AutoBuffer::CopyFromStaging( VkCommandBuffer     cmd,
                      deviceLocal.GetBuffer(),
                      copyInfosCount,
                      copyInfos );
-
-    // TODO: remove a barrier kludge
-    for( uint32_t i = 0; i < copyInfosCount; ++i )
-    {
-        VkBufferMemoryBarrier barrier = {
-            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-            .srcAccessMask       = VK_ACCESS_MEMORY_WRITE_BIT,
-            .dstAccessMask       = VK_ACCESS_MEMORY_READ_BIT,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .buffer              = deviceLocal.GetBuffer(),
-            .offset              = copyInfos[ i ].dstOffset,
-            .size                = copyInfos[ i ].size,
-        };
-
-        vkCmdPipelineBarrier( cmd,
-                              VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                              0,
-                              0,
-                              nullptr,
-                              1,
-                              &barrier,
-                              0,
-                              nullptr );
-    }
 }
 
 void* RTGL1::AutoBuffer::GetMapped( uint32_t frameIndex )

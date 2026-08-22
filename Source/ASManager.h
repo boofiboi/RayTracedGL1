@@ -159,6 +159,11 @@ private:
 
     VkDescriptorSetLayout asDescSetLayout;
     VkDescriptorSet       asDescSets[ MAX_FRAMES_IN_FLIGHT ];
+
+    // TLAS build sizes are a pure function of instance count, cache them
+    // per frame index to avoid driver queries every frame
+    VkAccelerationStructureBuildSizesInfoKHR tlasBuildSizes[ MAX_FRAMES_IN_FLIGHT ] = {};
+    uint32_t                                 tlasBuildSizesInstanceCount[ MAX_FRAMES_IN_FLIGHT ];
 };
 
 }

@@ -79,6 +79,12 @@ public:
 private:
     VkExtent2D     GetOptimalExtent() const;
 
+    // vkGetPhysicalDeviceSurfaceCapabilitiesKHR is an expensive synchronous
+    // query, its result must be cached between frames and refreshed only
+    // when the presentation engine reports that the surface has changed
+    const VkSurfaceCapabilitiesKHR& GetCapabilities() const;
+    void                            InvalidateCapabilities() const;
+
     bool           TryRecreate( const VkExtent2D& newExtent, bool vsync );
 
     void           Create( uint32_t       newWidth,
@@ -112,6 +118,9 @@ private:
     std::vector< VkImageView >                         swapchainViews;
 
     uint32_t                                           currentSwapchainIndex;
+
+    mutable VkSurfaceCapabilitiesKHR                   cachedCapabilities;
+    mutable bool                                       capabilitiesDirty;
 
     void*                                              fgSwapchainContext;
     void*                                              pfnCreateSwapchainFFX;

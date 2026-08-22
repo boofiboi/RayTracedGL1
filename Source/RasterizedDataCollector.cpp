@@ -21,6 +21,7 @@
 #include "RasterizedDataCollector.h"
 
 #include <algorithm>
+#include <array>
 
 #include "GeomInfoManager.h"
 #include "RgException.h"
@@ -296,6 +297,40 @@ void RTGL1::RasterizedDataCollector::CopyFromStaging( VkCommandBuffer cmd, uint3
 {
     vertexBuffer->CopyFromStaging( cmd, frameIndex, sizeof( ShVertex ) * curVertexCount );
     indexBuffer->CopyFromStaging( cmd, frameIndex, sizeof( uint32_t ) * curIndexCount );
+
+    std::array< VkBufferMemoryBarrier, 2 > barriers = {
+        VkBufferMemoryBarrier{
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = vertexBuffer->GetDeviceLocal(),
+            .offset              = 0,
+            .size                = sizeof( ShVertex ) * curVertexCount,
+        },
+        VkBufferMemoryBarrier{
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_INDEX_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = indexBuffer->GetDeviceLocal(),
+            .offset              = 0,
+            .size                = sizeof( uint32_t ) * curIndexCount,
+        },
+    };
+
+    vkCmdPipelineBarrier( cmd,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT,
+                          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                          0,
+                          0,
+                          nullptr,
+                          static_cast< uint32_t >( barriers.size() ),
+                          barriers.data(),
+                          0,
+                          nullptr );
 }
 
 VkBuffer RTGL1::RasterizedDataCollector::GetVertexBuffer() const

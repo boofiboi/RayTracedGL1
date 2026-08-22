@@ -145,12 +145,30 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
 
         switch( i )
         {
-            case 0: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_INPUT ); break;
-            case 1: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP1 ); break;
-            case 2: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP2 ); break;
-            case 3: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3 ); break;
-            case 4: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4 ); break;
-            case 5: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5 ); break;
+            case 0:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_INPUT, Framebuffers::BarrierType::Compute );
+                break;
+            case 1:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP1, Framebuffers::BarrierType::Compute );
+                break;
+            case 2:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP2, Framebuffers::BarrierType::Compute );
+                break;
+            case 3:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3, Framebuffers::BarrierType::Compute );
+                break;
+            case 4:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4, Framebuffers::BarrierType::Compute );
+                break;
+            case 5:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5, Framebuffers::BarrierType::Compute );
+                break;
             default: assert( 0 );
         }
 
@@ -173,12 +191,30 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
 
         switch( i )
         {
-            case 5: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP6 ); break;
-            case 4: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5 ); break;
-            case 3: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4 ); break;
-            case 2: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3 ); break;
-            case 1: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP2 ); break;
-            case 0: framebuffers->BarrierOne( cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP1 ); break;
+            case 5:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP6, Framebuffers::BarrierType::Compute );
+                break;
+            case 4:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5, Framebuffers::BarrierType::Compute );
+                break;
+            case 3:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4, Framebuffers::BarrierType::Compute );
+                break;
+            case 2:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3, Framebuffers::BarrierType::Compute );
+                break;
+            case 1:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP2, Framebuffers::BarrierType::Compute );
+                break;
+            case 0:
+                framebuffers->BarrierOne(
+                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP1, Framebuffers::BarrierType::Compute );
+                break;
             default: assert( 0 );
         }
 

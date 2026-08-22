@@ -85,13 +85,23 @@ public:
     bool                           IsEmpty() const;
     uint32_t                       GetGeomCount() const;
 
+    // Build sizes are fully determined by primitive counts and build flags,
+    // so they can be cached instead of querying the driver every time
+    bool GetCachedBuildSizes( const std::vector< uint32_t >&                  primCounts,
+                              VkAccelerationStructureBuildSizesInfoKHR*       outSizes ) const;
+    void CacheBuildSizes( const std::vector< uint32_t >&                    primCounts,
+                          const VkAccelerationStructureBuildSizesInfoKHR&   sizes );
+
 protected:
     void        CreateAS( VkDeviceSize size ) override;
     const char* GetBufferDebugName() const override;
 
 private:
-    VertexCollectorFilterTypeFlags filter;
-    uint32_t                       geomCount;
+    VertexCollectorFilterTypeFlags           filter;
+    uint32_t                                 geomCount;
+
+    std::vector< uint32_t >                  cachedPrimCounts;
+    VkAccelerationStructureBuildSizesInfoKHR cachedBuildSizes{};
 };
 
 

@@ -59,7 +59,10 @@ public:
         All,
         Storage,
         ColorAttachment,
-        Transfer
+        Transfer,
+        // compute-to-compute dependency for images that are
+        // exclusively used by compute shaders
+        Compute
     };
 
     void BarrierOne( VkCommandBuffer       cmd,
@@ -186,17 +189,29 @@ inline void Framebuffers::BarrierMultiple(
             srcAccess = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
             srcStage  = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT_KHR;
             break;
+        case BarrierType::Compute:
+            srcAccess = VK_ACCESS_2_SHADER_WRITE_BIT_KHR;
+            srcStage  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR;
+            break;
         default: assert( 0 );
     }
 
-    // TODO: add barrierTypeTo, now it just includes all
-    dstAccess = VK_ACCESS_2_SHADER_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT_KHR |
-                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR |
-                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT_KHR | VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR |
-                VK_ACCESS_2_TRANSFER_READ_BIT_KHR;
-    dstStage =
-        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR |
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR | VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT_KHR;
+    if( barrierTypeFrom == BarrierType::Compute )
+    {
+        dstAccess = VK_ACCESS_2_SHADER_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT_KHR;
+        dstStage  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR;
+    }
+    else
+    {
+        // TODO: add barrierTypeTo, now it just includes all
+        dstAccess = VK_ACCESS_2_SHADER_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT_KHR |
+                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR |
+                    VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT_KHR | VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR |
+                    VK_ACCESS_2_TRANSFER_READ_BIT_KHR;
+        dstStage =
+            VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR |
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT_KHR | VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT_KHR;
+    }
 
     
     std::array< VkImageMemoryBarrier2KHR, BARRIER_COUNT > tmpBarriers;

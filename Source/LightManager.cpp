@@ -449,17 +449,61 @@ void RTGL1::LightManager::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameInd
 {
     CmdLabel label( cmd, "Copying lights" );
 
-    lightsBuffer->CopyFromStaging( cmd,
-                                   frameIndex,
-                                   sizeof( ShLightEncoded ) *
-                                       GetLightArrayEnd( regLightCount, dirLightCount ) );
+    VkDeviceSize lightsSize = sizeof( ShLightEncoded ) *
+                              GetLightArrayEnd( regLightCount, dirLightCount );
+    VkDeviceSize prevToCurSize =
+        sizeof( uint32_t ) * GetLightArrayEnd( regLightCount_Prev, dirLightCount_Prev );
+    VkDeviceSize curToPrevSize =
+        sizeof( uint32_t ) * GetLightArrayEnd( regLightCount, dirLightCount );
 
-    prevToCurIndex->CopyFromStaging(
+    lightsBuffer->CopyFromStaging( cmd, frameIndex, lightsSize );
+    prevToCurIndex->CopyFromStaging( cmd, frameIndex, prevToCurSize );
+    curToPrevIndex->CopyFromStaging( cmd, frameIndex, curToPrevSize );
+
+    std::array< VkBufferMemoryBarrier, 3 > barriers = {
+        VkBufferMemoryBarrier{
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = lightsBuffer->GetDeviceLocal(),
+            .offset              = 0,
+            .size                = lightsSize,
+        },
+        VkBufferMemoryBarrier{
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = prevToCurIndex->GetDeviceLocal(),
+            .offset              = 0,
+            .size                = prevToCurSize,
+        },
+        VkBufferMemoryBarrier{
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = curToPrevIndex->GetDeviceLocal(),
+            .offset              = 0,
+            .size                = curToPrevSize,
+        },
+    };
+
+    vkCmdPipelineBarrier(
         cmd,
-        frameIndex,
-        sizeof( uint32_t ) * GetLightArrayEnd( regLightCount_Prev, dirLightCount_Prev ) );
-    curToPrevIndex->CopyFromStaging(
-        cmd, frameIndex, sizeof( uint32_t ) * GetLightArrayEnd( regLightCount, dirLightCount ) );
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        0,
+        0,
+        nullptr,
+        static_cast< uint32_t >( barriers.size() ),
+        barriers.data(),
+        0,
+        nullptr );
 
     // should be used when buffers changed
     if( needDescSetUpdate[ frameIndex ] )

@@ -158,6 +158,11 @@ RTGL1::ASManager::ASManager( VkDevice                                _device,
     VK_CHECKERROR( r );
 
     SET_DEBUG_NAME( device, staticCopyFence, VK_OBJECT_TYPE_FENCE, "Static BLAS fence" );
+
+    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    {
+        tlasBuildSizesInstanceCount[ i ] = UINT32_MAX;
+    }
 }
 
 namespace
@@ -634,8 +639,14 @@ bool RTGL1::ASManager::SetupBLAS( BLASComponent& blas, const VertexCollector& ve
 
     const bool fastTrace = !IsFastBuild( filter );
 
-    const auto buildSizes =
-        asBuilder->GetBottomBuildSizes( geoms.size(), geoms.data(), primCounts.data(), fastTrace, allowCompaction );
+    VkAccelerationStructureBuildSizesInfoKHR buildSizes = {};
+    if( !blas.GetCachedBuildSizes( primCounts, &buildSizes ) )
+    {
+        buildSizes =
+            asBuilder->GetBottomBuildSizes( geoms.size(), geoms.data(), primCounts.data(), fastTrace, allowCompaction );
+
+        blas.CacheBuildSizes( primCounts, buildSizes );
+    }
 
     blas.RecreateIfNotValid( buildSizes, allocator );
 
@@ -1108,6 +1119,28 @@ void RTGL1::ASManager::BuildTLAS( VkCommandBuffer          cmd,
             mapped, r.instances, r.instanceCount * sizeof( VkAccelerationStructureInstanceKHR ) );
 
         instanceBuffer->CopyFromStaging( cmd, frameIndex );
+
+        VkBufferMemoryBarrier instBr = {
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = instanceBuffer->GetDeviceLocal(),
+            .offset              = 0,
+            .size                = r.instanceCount * sizeof( VkAccelerationStructureInstanceKHR ),
+        };
+
+        vkCmdPipelineBarrier( cmd,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                              0,
+                              0,
+                              nullptr,
+                              1,
+                              &instBr,
+                              0,
+                              nullptr );
     }
 
 
@@ -1129,9 +1162,17 @@ void RTGL1::ASManager::BuildTLAS( VkCommandBuffer          cmd,
         .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
     };
 
-    // get AS size and create buffer for AS
-    VkAccelerationStructureBuildSizesInfoKHR buildSizes =
-        asBuilder->GetTopBuildSizes( &instGeom, r.instanceCount, true );
+    // get AS size and create buffer for AS;
+    // sizes only depend on the instance count, so cache them
+    if( tlasBuildSizesInstanceCount[ frameIndex ] != r.instanceCount )
+    {
+        tlasBuildSizes[ frameIndex ] =
+            asBuilder->GetTopBuildSizes( &instGeom, r.instanceCount, true );
+
+        tlasBuildSizesInstanceCount[ frameIndex ] = r.instanceCount;
+    }
+
+    const VkAccelerationStructureBuildSizesInfoKHR& buildSizes = tlasBuildSizes[ frameIndex ];
 
     // if previous buffer's size is not enough
     pCurrentTLAS->RecreateIfNotValid( buildSizes, allocator );

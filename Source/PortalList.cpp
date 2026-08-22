@@ -77,6 +77,30 @@ void RTGL1::PortalList::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameIndex
     CmdLabel label( cmd, "Copying portal infos" );
 
     buffer->CopyFromStaging( cmd, frameIndex );
+
+    VkBufferMemoryBarrier barrier = {
+        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask       = VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer              = buffer->GetDeviceLocal(),
+        .offset              = 0,
+        .size                = buffer->GetSize(),
+    };
+
+    vkCmdPipelineBarrier(
+        cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        0,
+        0,
+        nullptr,
+        1,
+        &barrier,
+        0,
+        nullptr );
+
     uploadedIndices.reset();
 }
 

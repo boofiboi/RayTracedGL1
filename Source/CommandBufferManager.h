@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "Common.h"
-#include "Containers.h"
 #include "Queues.h"
 
 namespace RTGL1
@@ -75,10 +74,12 @@ private:
         std::vector< VkCommandBuffer > cmds     = {};
         uint32_t                       curCount = 0;
         VkCommandPool                  pool     = VK_NULL_HANDLE;
+        VkQueue                        queue    = VK_NULL_HANDLE;
     };
 
 private:
-    VkCommandBuffer StartCmd( uint32_t frameIndex, AllocatedCmds& cmds, VkQueue queue );
+    VkCommandBuffer StartCmd( AllocatedCmds& cmds );
+    VkQueue         GetCmdOwnerQueue( VkCommandBuffer cmd ) const;
 
 private:
     VkDevice                                       device;
@@ -93,7 +94,6 @@ private:
     AllocatedCmds                                  transferCmds[ MAX_FRAMES_IN_FLIGHT ];
 
     std::shared_ptr< Queues >                      queues;
-    rgl::unordered_map< VkCommandBuffer, VkQueue > cmdQueues[ MAX_FRAMES_IN_FLIGHT ];
 };
 
 }

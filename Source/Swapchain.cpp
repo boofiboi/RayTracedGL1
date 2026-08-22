@@ -70,6 +70,8 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
     , isVsync( true )
     , swapchain( VK_NULL_HANDLE )
     , currentSwapchainIndex( UINT32_MAX )
+    , cachedCapabilities{}
+    , capabilitiesDirty( true )
     , fgSwapchainContext( nullptr )
     , pfnCreateSwapchainFFX( nullptr )
     , pfnDestroySwapchainFFX( nullptr )
@@ -142,29 +144,48 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
 
 bool RTGL1::Swapchain::IsExtentOptimal() const
 {
-    VkSurfaceCapabilitiesKHR surfCapabilities;
-
-    VkResult                 r =
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physDevice, surface, &surfCapabilities );
-
-    if( r == VK_ERROR_SURFACE_LOST_KHR )
+    if( capabilitiesDirty )
     {
-        return false;
+        VkResult r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+            physDevice, surface, &cachedCapabilities );
+
+        if( r == VK_ERROR_SURFACE_LOST_KHR )
+        {
+            return false;
+        }
+
+        VK_CHECKERROR( r );
+
+        capabilitiesDirty = false;
     }
 
-    VK_CHECKERROR( r );
+    return !IsNullExtent( cachedCapabilities.maxImageExtent ) &&
+           !IsNullExtent( cachedCapabilities.currentExtent );
+}
 
-    return !IsNullExtent( surfCapabilities.maxImageExtent ) &&
-           !IsNullExtent( surfCapabilities.currentExtent );
+const VkSurfaceCapabilitiesKHR& RTGL1::Swapchain::GetCapabilities() const
+{
+    assert( !capabilitiesDirty );
+    return cachedCapabilities;
+}
+
+void RTGL1::Swapchain::InvalidateCapabilities() const
+{
+    capabilitiesDirty = true;
 }
 
 VkExtent2D RTGL1::Swapchain::GetOptimalExtent() const
 {
-    VkSurfaceCapabilitiesKHR surfCapabilities;
+    if( capabilitiesDirty )
+    {
+        VkResult r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+            physDevice, surface, &cachedCapabilities );
+        VK_CHECKERROR( r );
 
-    VkResult                 r =
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physDevice, surface, &surfCapabilities );
-    VK_CHECKERROR( r );
+        capabilitiesDirty = false;
+    }
+
+    const VkSurfaceCapabilitiesKHR& surfCapabilities = cachedCapabilities;
 
     if( IsNullExtent( surfCapabilities.maxImageExtent ) ||
         IsNullExtent( surfCapabilities.currentExtent ) )
@@ -227,7 +248,8 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
         }
         else if( r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR )
         {
-            TryRecreate( requestedExtent, requestedVsync );
+            InvalidateCapabilities();
+            TryRecreate( GetOptimalExtent(), requestedVsync );
         }
         else
         {
@@ -452,6 +474,7 @@ void RTGL1::Swapchain::OnQueuePresent( VkResult queuePresentResult )
 {
     if( queuePresentResult == VK_ERROR_OUT_OF_DATE_KHR || queuePresentResult == VK_SUBOPTIMAL_KHR )
     {
+        InvalidateCapabilities();
         TryRecreate( GetOptimalExtent(), requestedVsync );
     }
 }
@@ -479,10 +502,9 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
     this->isVsync       = vsync;
     this->surfaceExtent = { newWidth, newHeight };
 
-    VkSurfaceCapabilitiesKHR surfCapabilities;
-    VkResult                 r =
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR( physDevice, surface, &surfCapabilities );
-    VK_CHECKERROR( r );
+    const VkSurfaceCapabilitiesKHR& surfCapabilities = GetCapabilities();
+
+    VkResult r;
 
     if( surfCapabilities.currentExtent.width != UINT32_MAX &&
         surfCapabilities.currentExtent.height != UINT32_MAX )

@@ -188,3 +188,24 @@ uint32_t RTGL1::BLASComponent::GetGeomCount() const
 {
     return geomCount;
 }
+
+bool RTGL1::BLASComponent::GetCachedBuildSizes(
+    const std::vector< uint32_t >&                  primCounts,
+    VkAccelerationStructureBuildSizesInfoKHR*       outSizes ) const
+{
+    if( cachedPrimCounts != primCounts )
+    {
+        return false;
+    }
+
+    *outSizes = cachedBuildSizes;
+    return true;
+}
+
+void RTGL1::BLASComponent::CacheBuildSizes(
+    const std::vector< uint32_t >&                    primCounts,
+    const VkAccelerationStructureBuildSizesInfoKHR&   sizes )
+{
+    cachedPrimCounts = primCounts;
+    cachedBuildSizes = sizes;
+}
