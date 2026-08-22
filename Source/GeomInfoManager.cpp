@@ -145,6 +145,7 @@ uint32_t RTGL1::GeomInfoManager::GetPrimitiveFlags( const RgMeshPrimitiveInfo& i
     {
         f |= GEOM_INST_FLAG_MEDIA_TYPE_ACID;
         f |= GEOM_INST_FLAG_REFLECT;
+        f |= GEOM_INST_FLAG_REFRACT;
     }
 
     if( info.flags & RG_MESH_PRIMITIVE_GLASS )

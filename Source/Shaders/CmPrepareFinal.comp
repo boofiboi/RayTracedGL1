@@ -141,6 +141,10 @@ void main()
 
     vec3 color = finalizeColor( hdr, screenEmis, pix );
 
+#if SHIPPING_HACK
+    color += texelFetch( framebufAcidFog_Sampler, pix, 0 ).rgb;
+#endif
+
 
     if( globalUniform.debugShowFlags != 0 )
     {
