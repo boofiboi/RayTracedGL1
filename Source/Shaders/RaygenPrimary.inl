@@ -654,7 +654,7 @@ void main()
 
     if (!hitInfoWasOverwritten)
     {
-        imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(waterFogAccum, 0));
+        imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(acidFog, 0));
         imageStore(framebufThroughput,          pix, vec4(throughput, 0.0));
         return;
     }

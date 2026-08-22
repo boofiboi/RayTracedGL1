@@ -76,8 +76,6 @@ void main()
         illuminated *= throughput;
         illuminated *= getMaterialAmbient(albedo);
 
-        vec3 waterFog = texelFetch(framebufAcidFogRT_Sampler, pix, 0).rgb;
-        illuminated += waterFog * getMaterialAmbient(albedo);
     }
     else
     {
