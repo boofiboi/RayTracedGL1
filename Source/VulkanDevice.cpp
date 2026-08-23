@@ -805,52 +805,70 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 void RTGL1::VulkanDevice::EndFrame( VkCommandBuffer cmd )
 {
     uint32_t frameIndex     = currentFrameState.GetFrameIndex();
-    uint32_t swapchainCount = debugWindows && !debugWindows->IsMinimized() ? 2 : 1;
+    bool     hasDebugWindow = debugWindows && !debugWindows->IsMinimized();
 
-    VkSwapchainKHR swapchains[] = {
-        swapchain->GetHandle(),
-        debugWindows ? debugWindows->GetSwapchainHandle() : VK_NULL_HANDLE,
-    };
-    uint32_t swapchainIndices[] = {
-        swapchain->GetCurrentImageIndex(),
-        debugWindows ? debugWindows->GetSwapchainCurrentImageIndex() : 0,
-    };
     VkSemaphore semaphoresToWait[] = {
         currentFrameState.GetSemaphoreForWaitAndRemove(),
-        debugWindows ? debugWindows->GetSwapchainImageAvailableSemaphore( frameIndex )
-                     : VK_NULL_HANDLE,
+        hasDebugWindow ? debugWindows->GetSwapchainImageAvailableSemaphore( frameIndex )
+                       : VK_NULL_HANDLE,
     };
     VkPipelineStageFlags stagesToWait[] = {
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
-    VkResult results[ 2 ] = {};
+    uint32_t waitCount = hasDebugWindow ? 2 : 1;
 
-    // submit command buffer, but wait until presentation engine has completed using image
+    VkSemaphore semaphoresToSignal[] = {
+        renderFinishedSemaphores[ frameIndex ],
+        renderFinishedDebugSemaphores[ frameIndex ],
+    };
+    uint32_t signalCount = hasDebugWindow ? 2 : 1;
+
     cmdManager->Submit( cmd,
                         semaphoresToWait,
                         stagesToWait,
-                        swapchainCount,
-                        renderFinishedSemaphores[ frameIndex ],
+                        waitCount,
+                        semaphoresToSignal,
+                        signalCount,
                         frameFences[ frameIndex ] );
 
-    // present to surfaces after finishing the rendering
+    VkSwapchainKHR mainSwapchainHandle = swapchain->GetHandle();
+    uint32_t       mainImageIndex      = swapchain->GetCurrentImageIndex();
+    VkResult       mainResult          = VK_SUCCESS;
+
     VkPresentInfoKHR presentInfo = {
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
         .pWaitSemaphores    = &renderFinishedSemaphores[ frameIndex ],
-        .swapchainCount     = swapchainCount,
-        .pSwapchains        = swapchains,
-        .pImageIndices      = swapchainIndices,
-        .pResults           = results,
+        .swapchainCount     = 1,
+        .pSwapchains        = &mainSwapchainHandle,
+        .pImageIndices      = &mainImageIndex,
+        .pResults           = &mainResult,
     };
 
     VkResult r = swapchain->Present( queues->GetGraphics(), &presentInfo );
 
-    swapchain->OnQueuePresent( results[ 0 ] );
-    if( debugWindows )
+    swapchain->OnQueuePresent( mainResult );
+
+    if( hasDebugWindow )
     {
-        debugWindows->OnQueuePresent( results[ 1 ] );
+        VkSwapchainKHR debugSwapchainHandle = debugWindows->GetSwapchainHandle();
+        uint32_t       debugImageIndex      = debugWindows->GetSwapchainCurrentImageIndex();
+        VkResult       debugResult          = VK_SUCCESS;
+
+        VkPresentInfoKHR debugPresentInfo = {
+            .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores    = &renderFinishedDebugSemaphores[ frameIndex ],
+            .swapchainCount     = 1,
+            .pSwapchains        = &debugSwapchainHandle,
+            .pImageIndices      = &debugImageIndex,
+            .pResults           = &debugResult,
+        };
+
+        vkQueuePresentKHR( queues->GetGraphics(), &debugPresentInfo );
+
+        debugWindows->OnQueuePresent( debugResult );
     }
 
     frameId++;

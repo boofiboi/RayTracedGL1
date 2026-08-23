@@ -168,7 +168,8 @@ void RTGL1::CommandBufferManager::Submit( VkCommandBuffer             cmd,
                                           const VkSemaphore*          waitSemaphores,
                                           const VkPipelineStageFlags* waitStages,
                                           uint32_t                    waitCount,
-                                          VkSemaphore                 signalSemaphore,
+                                          const VkSemaphore*          signalSemaphores,
+                                          uint32_t                    signalCount,
                                           VkFence                     fence )
 {
     VkResult r = vkEndCommandBuffer( cmd );
@@ -181,8 +182,8 @@ void RTGL1::CommandBufferManager::Submit( VkCommandBuffer             cmd,
         .pWaitDstStageMask    = waitStages,
         .commandBufferCount   = 1,
         .pCommandBuffers      = &cmd,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = &signalSemaphore,
+        .signalSemaphoreCount = signalCount,
+        .pSignalSemaphores    = signalSemaphores,
     };
 
     VkQueue q = GetCmdOwnerQueue( cmd );
@@ -190,6 +191,16 @@ void RTGL1::CommandBufferManager::Submit( VkCommandBuffer             cmd,
 
     r = vkQueueSubmit( q, 1, &submitInfo, fence );
     VK_CHECKERROR( r );
+}
+
+void RTGL1::CommandBufferManager::Submit( VkCommandBuffer             cmd,
+                                          const VkSemaphore*          waitSemaphores,
+                                          const VkPipelineStageFlags* waitStages,
+                                          uint32_t                    waitCount,
+                                          VkSemaphore                 signalSemaphore,
+                                          VkFence                     fence )
+{
+    Submit( cmd, waitSemaphores, waitStages, waitCount, &signalSemaphore, 1, fence );
 }
 
 void RTGL1::CommandBufferManager::Submit( VkCommandBuffer      cmd,

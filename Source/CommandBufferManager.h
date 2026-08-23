@@ -61,6 +61,13 @@ public:
                                   uint32_t                    waitCount,
                                   VkSemaphore                 signalSemaphore,
                                   VkFence                     fence );
+    void                  Submit( VkCommandBuffer             cmd,
+                                  const VkSemaphore*          waitSemaphores,
+                                  const VkPipelineStageFlags* waitStages,
+                                  uint32_t                    waitCount,
+                                  const VkSemaphore*          signalSemaphores,
+                                  uint32_t                    signalCount,
+                                  VkFence                     fence );
 
 
     void                  WaitGraphicsIdle();

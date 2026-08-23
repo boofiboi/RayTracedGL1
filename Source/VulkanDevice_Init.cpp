@@ -972,6 +972,20 @@ void RTGL1::VulkanDevice::CreateSyncPrimitives()
             VkSemaphoreCreateInfo semaphoreInfo = {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
             };
+            VkResult r = vkCreateSemaphore(
+                device, &semaphoreInfo, nullptr, &renderFinishedDebugSemaphores[ i ] );
+
+            VK_CHECKERROR( r );
+            SET_DEBUG_NAME( device,
+                            renderFinishedDebugSemaphores[ i ],
+                            VK_OBJECT_TYPE_SEMAPHORE,
+                            "Render finished debug semaphore" );
+        }
+
+        {
+            VkSemaphoreCreateInfo semaphoreInfo = {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            };
             VkResult r =
                 vkCreateSemaphore( device, &semaphoreInfo, nullptr, &inFrameSemaphores[ i ] );
 
@@ -1026,6 +1040,7 @@ void RTGL1::VulkanDevice::DestroySyncPrimitives()
     {
         vkDestroySemaphore( device, imageAvailableSemaphores[ i ], nullptr );
         vkDestroySemaphore( device, renderFinishedSemaphores[ i ], nullptr );
+        vkDestroySemaphore( device, renderFinishedDebugSemaphores[ i ], nullptr );
         vkDestroySemaphore( device, inFrameSemaphores[ i ], nullptr );
 
         vkDestroyFence( device, frameFences[ i ], nullptr );
