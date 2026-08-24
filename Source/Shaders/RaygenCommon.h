@@ -379,7 +379,7 @@ void shade(const Surface surf, const LightSample light, float oneOverPdf, out ve
         return;
     }
 
-    diffuse  = light.dw * nl * light.color * evalBRDFHammonDiffuse(surf.normal, surf.toViewerDir, l, surf.roughness);
+    diffuse  = light.dw * nl * light.color * evalBRDFLambertian(1.0);
     specular = light.dw * nl * light.color * evalBRDFSmithGGX(surf.normal, surf.toViewerDir, l, surf.roughness, surf.specularColor);
 
     diffuse  *= oneOverPdf;

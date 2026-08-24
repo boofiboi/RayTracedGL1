@@ -172,7 +172,7 @@ void shade(const Surface surf, const SampleIndirect indir, float oneOverPdf,
         return;
     }
 
-    diffuse  = nl * indir.radiance * evalBRDFHammonDiffuse(surf.normal, surf.toViewerDir, l, surf.roughness);
+    diffuse  = nl * indir.radiance * evalBRDFLambertian(1.0);
     specular = nl * indir.radiance * evalBRDFSmithGGX(surf.normal, surf.toViewerDir, l, surf.roughness, surf.specularColor);
 
     oneOverPdf = clamp(oneOverPdf, 0.0, 20.0);
@@ -191,7 +191,7 @@ bool testSurfaceForReuseIndirect(
     const vec3 curNormal, const vec3 otherNormal)
 {
     const float DepthThreshold = 0.05;
-    const float NormalThreshold = 0.5;
+    const float NormalThreshold = 0.0;
 
     return 
         testPixInRenderArea(otherPix, curChRenderArea) &&
@@ -284,12 +284,10 @@ void main()
 
     for( int pixIndex = 0; pixIndex < TEMPORAL_SAMPLES_INDIR; pixIndex++ )
     {
+        // TODO: need low discrepancy noise
         ivec2 pp;
         {
-            vec2 u = rnd8_4( seed, salt++ ).xy;
-            float r = sqrt( max( u.x, 1e-4 ) );
-            float phi = 2.0 * M_PI * u.y;
-            vec2 rndOffset = vec2( r * cos( phi ), r * sin( phi ) );
+            vec2 rndOffset = rnd8_4( seed, salt++ ).xy * 2.0 - 1.0;
             rndOffset *= square( getDiffuseWeight( surf.roughness ) );
 
             pp = ivec2( floor( posPrev + rndOffset * TEMPORAL_RADIUS_INDIR_MAX ) );
@@ -315,6 +313,7 @@ void main()
             const float antilagAlpha_Indir = texelFetch(
                 framebufDISGradientHistory_Sampler, pp / COMPUTE_ASVGF_STRATA_SIZE, 0 )[ 1 ];
 
+            // if there's too much difference, don't use a temporal sample
             if( antilagAlpha_Indir > 0.25 )
             {
                 spatialSamplesCount++;
@@ -323,6 +322,7 @@ void main()
         }
 
         ReservoirIndirect temporal = restirIndirect_LoadReservoir_Prev( pp );
+        // renormalize to prevent precision problems
         normalizeReservoirIndirect( temporal, 20 );
 
         float rnd = rnd16( seed, salt++ );
@@ -333,17 +333,14 @@ void main()
 
     {
         uint nobiasM = combined.M; 
-        float spatialRadius = SPATIAL_RADIUS_INDIR * mix( 0.3, 1.0, getDiffuseWeight( surf.roughness ) );
 
         for( int pixIndex = 0; pixIndex < spatialSamplesCount; pixIndex++ )
         {
+            // TODO: need low discrepancy noise
             ivec2 pp;
             {
-                vec2 u = rnd8_4( seed, salt++ ).xy;
-                float r = sqrt( max( u.x, 1e-4 ) );
-                float phi = 2.0 * M_PI * u.y;
-                vec2 diskOffset = vec2( r * cos( phi ), r * sin( phi ) );
-                pp = pix + ivec2( round( diskOffset * spatialRadius ) );
+                vec2 rndOffset = rnd8_4( seed, salt++ ).xy * 2.0 - 1.0;
+                pp = pix + ivec2( rndOffset * SPATIAL_RADIUS_INDIR );
             }
 
             {
@@ -379,7 +376,9 @@ void main()
                     safePositiveRcp( getGeometryFactorClamped( n2_q, phi_r.dir, phi_r.len ) ) *
                     getGeometryFactorClamped( n2_q, phi_q.dir, phi_q.len );
 
-                oneOverJacobian = clamp( oneOverJacobian, 0.0, 5.0 );
+    #if SHIPPING_HACK
+                oneOverJacobian = clamp( oneOverJacobian, 0.0, 1.0 );
+    #endif
             }
 
             float targetPdf_curSurf = 0.0;
@@ -417,12 +416,13 @@ void main()
 
     {
         const vec3 direct = texelFetchUnfilteredSpecular( pix );
-        float bounceDist = length( surfToHitPoint );
-        if( bounceDist > 0.001 )
+        // save indirect hit distance, if brighter than the direct light
+        if( getLuminance( direct ) < getLuminance( specular ) )
         {
             imageStore(
-                framebufViewDirection, pix, vec4( -surf.toViewerDir, bounceDist ) );
+                framebufViewDirection, pix, vec4( -surf.toViewerDir, length( surfToHitPoint ) ) );
         }
+
 
         // demodulate for denoising
         imageStoreUnfilteredSpecular( pix,
