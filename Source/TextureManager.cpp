@@ -733,14 +733,71 @@ MaterialTextures TextureManager::GetMaterialTextures( const char* materialName )
         return EmptyMaterialTextures;
     }
 
-    const auto it = materials.find( materialName );
-
-    if( it == materials.end() )
+    auto it = materials.find( materialName );
+    if( it != materials.end() )
     {
-        return EmptyMaterialTextures;
+        return it->second.textures;
     }
 
-    return it->second.textures;
+    std::string nameStr( materialName );
+    std::ranges::replace( nameStr, '\\', '/' );
+
+    it = materials.find( nameStr );
+    if( it != materials.end() )
+    {
+        return it->second.textures;
+    }
+
+    if( nameStr.starts_with( "#maps/" ) )
+    {
+        it = materials.find( nameStr.substr( 6 ) );
+        if( it != materials.end() )
+        {
+            return it->second.textures;
+        }
+    }
+    else
+    {
+        it = materials.find( "#maps/" + nameStr );
+        if( it != materials.end() )
+        {
+            return it->second.textures;
+        }
+    }
+
+    auto colonPos = nameStr.rfind( ':' );
+    if( colonPos != std::string::npos )
+    {
+        std::string sub = nameStr.substr( colonPos + 1 );
+        it = materials.find( sub );
+        if( it != materials.end() )
+        {
+            return it->second.textures;
+        }
+        it = materials.find( "#maps/" + sub );
+        if( it != materials.end() )
+        {
+            return it->second.textures;
+        }
+    }
+
+    auto isCaseInsensitiveEqual = []( std::string_view a, std::string_view b ) {
+        return std::ranges::equal( a, b, []( char c1, char c2 ) {
+            return std::tolower( static_cast< unsigned char >( c1 ) ) ==
+                   std::tolower( static_cast< unsigned char >( c2 ) );
+        } );
+    };
+
+    for( const auto& [ matName, mat ] : materials )
+    {
+        if( isCaseInsensitiveEqual( matName, materialName ) ||
+            isCaseInsensitiveEqual( matName, nameStr ) )
+        {
+            return mat.textures;
+        }
+    }
+
+    return EmptyMaterialTextures;
 }
 
 VkDescriptorSet TextureManager::GetDescSet( uint32_t frameIndex ) const

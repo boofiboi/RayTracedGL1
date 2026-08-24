@@ -702,34 +702,43 @@ struct GltfTextures
 
             auto tryMakeCgltfTexture =
                 [ this, &findSampler, &materialName ](
-                    RTGL1::TextureManager::ExportResult&& r ) -> cgltf_texture* {
-                if( !r.relativePath.empty() )
+                    RTGL1::TextureManager::ExportResult&& r,
+                    bool isAlbedoFallback = false ) -> cgltf_texture* {
+                std::string relPath = std::move( r.relativePath );
+                if( relPath.empty() )
                 {
-                    std::string&   str = strings.increment_and_get();
-                    cgltf_image&   img = images.increment_and_get();
-                    cgltf_texture& txd = textures.increment_and_get();
-
-                    // need to protect a string, to avoid dangling pointers
-                    str = std::string( RTGL1::TEXTURES_FOLDER_JUNCTION_PREFIX ) + r.relativePath;
-                    std::ranges::replace( str, '\\', '/' );
-
-                    img = cgltf_image{
-                        .name = const_cast< char* >( materialName.c_str() ),
-                        .uri  = const_cast< char* >( str.c_str() ),
-                    };
-
-                    txd = cgltf_texture{
-                        .image   = &img,
-                        .sampler = findSampler( r ),
-                    };
-
-                    return &txd;
+                    if( isAlbedoFallback )
+                    {
+                        relPath = RTGL1::TextureOverrides::GetTexturePath( "", materialName, "", ".tga" ).string();
+                    }
+                    else
+                    {
+                        return nullptr;
+                    }
                 }
-                return nullptr;
+
+                std::string&   str = strings.increment_and_get();
+                cgltf_image&   img = images.increment_and_get();
+                cgltf_texture& txd = textures.increment_and_get();
+
+                str = std::string( RTGL1::TEXTURES_FOLDER_JUNCTION_PREFIX ) + relPath;
+                std::ranges::replace( str, '\\', '/' );
+
+                img = cgltf_image{
+                    .name = const_cast< char* >( materialName.c_str() ),
+                    .uri  = const_cast< char* >( str.c_str() ),
+                };
+
+                txd = cgltf_texture{
+                    .image   = &img,
+                    .sampler = findSampler( r ),
+                };
+
+                return &txd;
             };
 
             materialAccess[ materialName ] = TextureSet{
-                .albedo   = tryMakeCgltfTexture( std::move( albedo ) ),
+                .albedo   = tryMakeCgltfTexture( std::move( albedo ), true ),
                 .orm      = tryMakeCgltfTexture( std::move( orm ) ),
                 .normal   = tryMakeCgltfTexture( std::move( normal ) ),
                 .emissive = tryMakeCgltfTexture( std::move( emissive ) ),
