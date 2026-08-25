@@ -54,20 +54,11 @@ vec3 getMediaTransmittance( uint media, float distance, vec3 perMatWaterColor, f
             return vec3( 1.0 );
         }
 
-        if( perMatWaterColor.r >= 0.0 )
-        {
-            float density = ( perMatWaterDensity >= 0.0 ) ? perMatWaterDensity : 1.0;
-            extinction = -0.0254 * log( clamp( perMatWaterColor, vec3( 0.001 ), vec3( 0.999 ) ) ) * density;
-        }
-        else
-        {
-            vec3 color = ( globalUniform.waterColorAndDensity.r >= 0.0 ) ? globalUniform.waterColorAndDensity.rgb : vec3( 0.99385, 0.99447, 0.99505 );
-            extinction = -log( clamp( color, vec3( 0.001 ), vec3( 0.99999 ) ) );
-            if( perMatWaterDensity > 0.0001f )
-            {
-                extinction *= perMatWaterDensity;
-            }
-        }
+        vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 ) );
+        color = max( vec3( 0.001 ), color );
+
+        float densityScale = ( perMatWaterDensity >= 0.0 ) ? ( perMatWaterDensity * 0.5 ) : 1.0;
+        extinction = -log( clamp( color, vec3( 0.01 ), vec3( 0.99 ) ) ) * densityScale;
     }
     else if( media == MEDIA_TYPE_ACID )
     {
@@ -90,12 +81,13 @@ vec3 getWaterVolumetricFog( uint media, float distance, vec3 perMatWaterColor, f
         return vec3( 0.0 );
     }
 
-    if( perMatWaterDensity >= 0.0 && perMatWaterDensity <= 0.0001f )
+    float density = ( perMatWaterDensity >= 0.0 ) ? perMatWaterDensity : ( globalUniform.waterColorAndDensity.a > 0.0001 ? globalUniform.waterColorAndDensity.a : 0.1 );
+    if( density <= 0.0001f )
     {
         return vec3( 0.0 );
     }
 
-    vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? pow( clamp( globalUniform.waterColorAndDensity.rgb, vec3( 0.001 ), vec3( 0.99999 ) ), vec3( 1.0 / 0.0254 ) ) : vec3( 0.78, 0.80, 0.82 ) );
+    vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 ) );
 
     vec3 inscattering = ( vec3( 1.0 ) - transmittance ) * color * 0.15;
     return inscattering;

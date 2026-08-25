@@ -339,7 +339,7 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
         gu->twirlPortalNormal = !!params.portalNormalTwirl;
     }
 
-    gu->rayCullBackFaces  = rayCullBackFacingTriangles ? 1 : 0;
+    gu->rayCullBackFaces  = 0;
     gu->rayLength         = clamp( drawInfo.rayLength, 0.1f, float( MAX_RAY_LENGTH ) );
     gu->primaryRayMinDist = clamp( drawInfo.cameraNear, 0.001f, gu->rayLength );
 

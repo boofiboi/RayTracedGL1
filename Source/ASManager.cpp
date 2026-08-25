@@ -917,38 +917,17 @@ bool RTGL1::ASManager::SetupTLASInstanceFromBLAS( const BLASComponent& blas,
     }
     else
     {
-        // also check rayCullMaskWorld, if world part is not included in the cull mask,
-        // then don't add it to BLAS at all, it helps culling PT_REFLECT if it was a world part
-
         if( filter & FT::PV_WORLD_0 )
         {
             instance.mask = INSTANCE_MASK_WORLD_0;
-
-            if( !( rayCullMaskWorld & INSTANCE_MASK_WORLD_0 ) )
-            {
-                instance = {};
-                return false;
-            }
         }
         else if( filter & FT::PV_WORLD_1 )
         {
             instance.mask = INSTANCE_MASK_WORLD_1;
-
-            if( !( rayCullMaskWorld & INSTANCE_MASK_WORLD_1 ) )
-            {
-                instance = {};
-                return false;
-            }
         }
         else if( filter & FT::PV_WORLD_2 )
         {
             instance.mask = INSTANCE_MASK_WORLD_2;
-
-            if( !( rayCullMaskWorld & INSTANCE_MASK_WORLD_2 ) )
-            {
-                instance = {};
-                return false;
-            }
 
 #if RAYCULLMASK_SKY_IS_WORLD2
             if( allowGeometryWithSkyFlag )
@@ -968,15 +947,11 @@ bool RTGL1::ASManager::SetupTLASInstanceFromBLAS( const BLASComponent& blas,
 
     if( filter & FT::PT_REFRACT )
     {
-        // don't touch first-person
         bool isworld =
             !( filter & FT::PV_FIRST_PERSON ) && !( filter & FT::PV_FIRST_PERSON_VIEWER );
 
         if( isworld )
         {
-            // completely rewrite mask, ignoring INSTANCE_MASK_WORLD_*,
-            // if mask contains those world bits, then (mask & (~INSTANCE_MASK_REFRACT))
-            // won't actually cull INSTANCE_MASK_REFRACT
             instance.mask = INSTANCE_MASK_REFRACT;
         }
     }
@@ -986,9 +961,7 @@ bool RTGL1::ASManager::SetupTLASInstanceFromBLAS( const BLASComponent& blas,
     {
         instance.instanceShaderBindingTableRecordOffset = SBT_INDEX_HITGROUP_ALPHA_TESTED;
         instance.flags = VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR |
-                         VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR /*|
-                         VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR*/
-            ;
+                         VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
     }
     else
     {
@@ -996,9 +969,7 @@ bool RTGL1::ASManager::SetupTLASInstanceFromBLAS( const BLASComponent& blas,
 
         instance.instanceShaderBindingTableRecordOffset = SBT_INDEX_HITGROUP_FULLY_OPAQUE;
         instance.flags = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR |
-                         VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR /*|
-                         VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR*/
-            ;
+                         VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
     }
 
 
