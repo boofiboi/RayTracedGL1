@@ -189,7 +189,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     , libconfig( ReadConfig( info->pConfigPath ) )
     , debugMessenger( VK_NULL_HANDLE )
     , userPrint{ std::make_unique< UserPrint >( info->pfnPrint, info->pUserPrintData ) }
-    , rayCullBackFacingTriangles( false )
+    , rayCullBackFacingTriangles( info->rayCullBackFacingTriangles )
     , allowGeometryWithSkyFlag( info->allowGeometryWithSkyFlag )
     , previousFrameTime( -1.0 / 60.0 )
     , currentFrameTime( 0 )
