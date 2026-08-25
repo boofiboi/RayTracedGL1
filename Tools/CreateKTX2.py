@@ -1,33 +1,14 @@
-# Copyright (c) 2021 Sultim Tsyrendashiev
-# 
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-# 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-# 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-
 import sys
 import os
 import subprocess
 import pathlib
+import tempfile
+from PIL import Image
 
 DEFAULT_INPUT_FOLDER_NAME = "mat_dev"
 DEFAULT_OUTPUT_FOLDER_NAME = "mat"
 
-INPUT_EXTENSIONS = [".tga",".png"]
+INPUT_EXTENSIONS = [".tga", ".png"]
 OUTPUT_EXTENSION = ".ktx2"
 
 CACHE_FILE_NAME = "CreateKTX2Cache.txt"
@@ -46,7 +27,7 @@ def main():
     if "--help" in sys.argv or "--h" in sys.argv or "-help" in sys.argv or "-h" in sys.argv:
         print("Usage: CreateKTX2.py")
         print("")
-        print("  CreateKTX2 compresses PNG files from input folder to KTX2 files with")
+        print("  CreateKTX2 compresses PNG and TGA files from input folder to KTX2 files with")
         print("  BC7/BC5 format to output folder. Folders of the files are preserved the")
         print("  same as in the input folder.")
         print("")
@@ -69,8 +50,6 @@ def main():
 
         try:
             name = None
-            # odd line  - filename
-            # even line - st_mtime
             for line in cacheFile.read().splitlines():
                 if name is None:
                     name = line
@@ -84,11 +63,10 @@ def main():
         for file in files:
             fullRelativeFilename = os.path.join(currentPath, file)
 
-            # remove DEFAULT_INPUT_FOLDER_NAME from filename
             filename = os.path.relpath(fullRelativeFilename, DEFAULT_INPUT_FOLDER_NAME)
 
             pathNoExt, ext = os.path.splitext(filename)
-            isImg = ext in INPUT_EXTENSIONS
+            isImg = ext.lower() in INPUT_EXTENSIONS
 
             if not isImg:
                 continue
@@ -100,12 +78,29 @@ def main():
 
             if isNew or isOutdated:
 
-                isNormalMap = pathNoExt[-2:] == "_n"
+                isNormalMap = pathNoExt.lower().endswith("_n")
 
                 sizeInBytes = os.stat(fullRelativeFilename).st_size
                 minKilobytesForCompression = 25
 
-                if sizeInBytes < minKilobytesForCompression * 1024:
+                rawSizeInBytes = sizeInBytes
+                tempFileToDelete = None
+                inputFile = os.path.join(DEFAULT_INPUT_FOLDER_NAME, filename)
+
+                try:
+                    with Image.open(fullRelativeFilename) as im:
+                        rawSizeInBytes = im.width * im.height * 4
+                        if im.mode in ("P", "1", "L", "LA", "PA", "I", "F") or (ext.lower() == ".tga" and im.mode not in ("RGB", "RGBA")):
+                            conv = im.convert("RGBA")
+                            fd, tempPath = tempfile.mkstemp(suffix=".png")
+                            os.close(fd)
+                            conv.save(tempPath, format="PNG")
+                            inputFile = tempPath
+                            tempFileToDelete = tempPath
+                except Exception:
+                    pass
+
+                if rawSizeInBytes < minKilobytesForCompression * 1024:
                     compressionFormat = "ARGB_8888"
                 elif isNormalMap:
                     compressionFormat = "BC5"
@@ -114,10 +109,8 @@ def main():
 
                 print("> Converting " + filename + " (" + compressionFormat + ")")
 
-                inputFile = os.path.join(DEFAULT_INPUT_FOLDER_NAME, filename)
                 outputFile = os.path.join(DEFAULT_OUTPUT_FOLDER_NAME, pathNoExt + OUTPUT_EXTENSION)
 
-                # create folder
                 pathlib.Path(os.path.dirname(outputFile)).mkdir(parents=True, exist_ok=True)
 
                 r = subprocess.run([
@@ -129,7 +122,12 @@ def main():
                     outputFile],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-                # if success, save to cache
+                if tempFileToDelete and os.path.exists(tempFileToDelete):
+                    try:
+                        os.remove(tempFileToDelete)
+                    except OSError:
+                        pass
+
                 if "Done Processing" in r.stdout:
                     cache[filename] = lastModifTime
                 else:
