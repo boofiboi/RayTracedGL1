@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <fmt/format.h>
+#include <format>
 #include <string_view>
 
 namespace RTGL1
@@ -61,7 +61,7 @@ namespace debug
             }
 
             auto str =
-                fmt::vformat( msg, fmt::make_format_args( args... ) );
+                std::vformat( msg, std::make_format_args( args... ) );
 
             Print( severity, std::string_view( str ) );
         }

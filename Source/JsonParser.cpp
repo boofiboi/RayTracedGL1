@@ -63,16 +63,18 @@ JSON_TYPE_END;
 
 namespace
 {
-template< typename T, bool NoException = false >
+template< typename T >
 T ReadJson( const std::string& buffer )
 {
     constexpr auto options = glz::opts{
         .error_on_unknown_keys = false,
-        .no_except             = NoException,
     };
 
     T value{};
-    glz::read< options >( value, buffer );
+    if( auto ec = glz::read< options >( value, buffer ) )
+    {
+        throw std::runtime_error( glz::format_error( ec, buffer ) );
+    }
 
     return value;
 };
@@ -107,7 +109,7 @@ std::optional< T > LoadFileAs( const std::filesystem::path& path )
 
     try
     {
-        auto [ version ] = ReadJson< Version, true >( buffer.str() );
+        auto [ version ] = ReadJson< Version >( buffer.str() );
 
         if( version < 0 )
         {
@@ -233,27 +235,22 @@ JSON_TYPE_END;
 auto RTGL1::json_parser::detail::ReadLightExtraInfo( const std::string_view& data )
     -> RgLightExtraInfo
 {
-    try
+    if( !data.empty() )
     {
-        if( !data.empty() )
+        auto value = RgLightExtraInfo{
+            .exists       = true,
+            .lightstyle   = 0,
+            .isVolumetric = 0,
+        };
+
+        if( auto ec = glz::read< glz::opts{ .error_on_unknown_keys = false } >( value, data ) )
         {
-            auto value = RgLightExtraInfo{
-                .exists       = true,
-                .lightstyle   = 0,
-                .isVolumetric = 0,
-            };
-
-            glz::read< glz::opts{
-                .error_on_unknown_keys = false,
-                .no_except             = false,
-            } >( value, data.data() );
-
+            debug::Warning( "Json read fail on RgLightExtraInfo:\n{}", glz::format_error( ec, data ) );
+        }
+        else
+        {
             return value;
         }
-    }
-    catch( std::exception& e )
-    {
-        debug::Warning( "Json read fail on RgLightExtraInfo:\n{}", e.what() );
     }
 
     return RgLightExtraInfo{
@@ -280,23 +277,18 @@ JSON_TYPE_END;
 auto RTGL1::json_parser::detail::ReadPrimitiveExtraInfo( const std::string_view& data )
     -> PrimitiveExtraInfo
 {
-    try
+    if( !data.empty() )
     {
-        if( !data.empty() )
+        auto value = PrimitiveExtraInfo{};
+
+        if( auto ec = glz::read< glz::opts{ .error_on_unknown_keys = false } >( value, data ) )
         {
-            auto value = PrimitiveExtraInfo{};
-
-            glz::read< glz::opts{
-                .error_on_unknown_keys = false,
-                .no_except             = false,
-            } >( value, data.data() );
-
+            debug::Warning( "Json read fail on PrimitiveExtraInfo:\n{}", glz::format_error( ec, data ) );
+        }
+        else
+        {
             return value;
         }
-    }
-    catch( std::exception& e )
-    {
-        debug::Warning( "Json read fail on PrimitiveExtraInfo:\n{}", e.what() );
     }
 
     return PrimitiveExtraInfo{};
@@ -304,25 +296,21 @@ auto RTGL1::json_parser::detail::ReadPrimitiveExtraInfo( const std::string_view&
 
 std::string RTGL1::json_parser::MakeJsonString( const RgLightExtraInfo& info )
 {
-    try
+    if( info.exists )
     {
-        if( info.exists )
+        std::string str;
+
+        if( auto ec = glz::write< glz::opts{
+            .error_on_unknown_keys = false,
+            .prettify              = true,
+        } >( info, str ) )
         {
-            std::string str;
-
-            glz::write< glz::opts{
-                .error_on_unknown_keys = false,
-                .no_except             = false,
-                .prettify              = true,
-                .indentation_width     = 4,
-            } >( info, str );
-
+            debug::Warning( "Json write fail on RgLightExtraInfo" );
+        }
+        else
+        {
             return str;
         }
-    }
-    catch( std::exception& e )
-    {
-        debug::Warning( "Json write fail on RgLightExtraInfo:\n{}", e.what() );
     }
 
     return {};

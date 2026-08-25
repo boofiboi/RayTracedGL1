@@ -593,7 +593,7 @@ void RTGL1::VulkanDevice::Dev_Draw() const
 
         if( ImGui::BeginChild( "##LogScrollingRegion",
                                ImVec2( 0, 0 ),
-                               false,
+                               ImGuiChildFlags_None,
                                ImGuiWindowFlags_HorizontalScrollbar ) )
         {
             for( const auto& msg : msgs )

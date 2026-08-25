@@ -67,19 +67,6 @@ bool IsSizeNull( GLFWwindow* wnd )
     glfwGetWindowSize( wnd, &w, &h );
     return w == 0 || h == 0;
 }
-
-void UploadFonts( RTGL1::CommandBufferManager& cmdManager )
-{
-    VkCommandBuffer cmd = cmdManager.StartGraphicsCmd();
-    {
-        ImGui_ImplVulkan_CreateFontsTexture( cmd );
-    }
-    cmdManager.Submit( cmd );
-    cmdManager.WaitGraphicsIdle();
-
-    ImGui_ImplVulkan_DestroyFontUploadObjects();
-}
-
 uint32_t QueryImageCount( VkPhysicalDevice physDevice, VkSurfaceKHR surface )
 {
     VkSurfaceCapabilitiesKHR surfCapabilities;
@@ -255,18 +242,19 @@ RTGL1::DebugWindows::DebugWindows( VkInstance                               _ins
         .Device          = _device,
         .QueueFamily     = _queueFamiy,
         .Queue           = _queue,
-        .PipelineCache   = nullptr,
         .DescriptorPool  = descPool,
-        .Subpass         = 0,
         .MinImageCount   = swapchainImageCount,
         .ImageCount      = swapchainImageCount,
-        .MSAASamples     = VK_SAMPLE_COUNT_1_BIT,
+        .PipelineCache   = nullptr,
+        .PipelineInfoMain = {
+            .RenderPass  = renderPass,
+            .Subpass     = 0,
+            .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
+        },
         .Allocator       = nullptr,
         .CheckVkResultFn = VK_CHECKERROR,
     };
-    ImGui_ImplVulkan_Init( &init_info, renderPass );
-
-    UploadFonts( *_cmdManager );
+    ImGui_ImplVulkan_Init( &init_info );
 }
 
 RTGL1::DebugWindows::~DebugWindows()
