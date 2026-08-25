@@ -126,18 +126,38 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
             physDevice, surface, &presentModeCount, presentModes.data() );
         VK_CHECKERROR( r );
 
-        // try to find mailbox / fifo-relaxed
+        bool hasMailbox   = false;
+        bool hasImmediate = false;
+
         for( auto p : presentModes )
         {
             if( p == VK_PRESENT_MODE_MAILBOX_KHR )
             {
-                presentModeImmediate = p;
+                hasMailbox = true;
+            }
+
+            if( p == VK_PRESENT_MODE_IMMEDIATE_KHR )
+            {
+                hasImmediate = true;
             }
 
             if( p == VK_PRESENT_MODE_FIFO_RELAXED_KHR )
             {
                 presentModeVsync = p;
             }
+        }
+
+        if( hasMailbox )
+        {
+            presentModeImmediate = VK_PRESENT_MODE_MAILBOX_KHR;
+        }
+        else if( hasImmediate )
+        {
+            presentModeImmediate = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        }
+        else
+        {
+            presentModeImmediate = VK_PRESENT_MODE_FIFO_KHR;
         }
     }
 }

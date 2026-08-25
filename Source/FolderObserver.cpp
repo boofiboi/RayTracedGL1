@@ -80,48 +80,66 @@ RTGL1::FolderObserver::FolderObserver( const fs::path &ovrdFolder )
     };
 }
 
+RTGL1::FolderObserver::~FolderObserver()
+{
+    if( pendingScan.valid() )
+    {
+        pendingScan.wait();
+    }
+}
+
 void RTGL1::FolderObserver::RecheckFiles()
 {
+    if( scanInProgress.load() )
+    {
+        if( pendingScan.valid() &&
+            pendingScan.wait_for( std::chrono::seconds( 0 ) ) == std::future_status::ready )
+        {
+            std::deque< DependentFile > curAllFiles = pendingScan.get();
+            scanInProgress                          = false;
+
+            for( const auto& cur : curAllFiles )
+            {
+                bool foundInPrev = false;
+
+                for( const auto& prev : prevAllFiles )
+                {
+                    if( cur.pathHash == prev.pathHash && cur.path == prev.path )
+                    {
+                        if( cur.lastWriteTime != prev.lastWriteTime )
+                        {
+                            CallSubsbribers( &IFileDependency::OnFileChanged, cur.type, cur.path );
+                        }
+
+                        foundInPrev = true;
+                        break;
+                    }
+                }
+
+                if( !foundInPrev )
+                {
+                    CallSubsbribers( &IFileDependency::OnFileChanged, cur.type, cur.path );
+                }
+            }
+
+            prevAllFiles = std::move( curAllFiles );
+            lastCheck    = Clock::now();
+        }
+        return;
+    }
+
     if( Clock::now() - lastCheck < CHECK_FREQUENCY )
     {
         return;
     }
 
-
-    std::deque< DependentFile > curAllFiles;
-    for( const fs::path &f : foldersToCheck )
-    {
-        InsertAllFolderFiles( curAllFiles, f );
-    }
-
-
-    for( const auto& cur : curAllFiles )
-    {
-        bool foundInPrev = false;
-
-        for( const auto& prev : prevAllFiles )
+    scanInProgress = true;
+    pendingScan    = std::async( std::launch::async, [ folders = foldersToCheck ]() {
+        std::deque< DependentFile > result;
+        for( const fs::path& f : folders )
         {
-            // if file previously existed
-            if( cur.pathHash == prev.pathHash && cur.path == prev.path )
-            {
-                // if was changed
-                if( cur.lastWriteTime != prev.lastWriteTime )
-                {
-                    CallSubsbribers( &IFileDependency::OnFileChanged, cur.type, cur.path );
-                }
-
-                foundInPrev = true;
-                break;
-            }
+            InsertAllFolderFiles( result, f );
         }
-
-        // if new file
-        if( !foundInPrev )
-        {
-            CallSubsbribers( &IFileDependency::OnFileChanged, cur.type, cur.path );
-        }
-    }
-
-    prevAllFiles = std::move( curAllFiles );
-    lastCheck    = Clock::now();
+        return result;
+    } );
 }

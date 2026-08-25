@@ -221,6 +221,7 @@ RTGL1::DebugWindows::DebugWindows( VkInstance                               _ins
 
     customSwapchain = std::make_unique< Swapchain >(
         device, customSurface, _physDevice, _cmdManager );
+    customSwapchain->RequestVsync( false );
 
     renderPass = CreateRenderPass( device, customSwapchain->GetSurfaceFormat() );
 
@@ -312,6 +313,7 @@ bool RTGL1::DebugWindows::PrepareForFrame( uint32_t frameIndex )
         return true;
     }
 
+    customSwapchain->RequestVsync( false );
     customSwapchain->AcquireImage( swapchainImageAvailable[ frameIndex ] );
 
     ImGui_ImplVulkan_NewFrame();

@@ -25,6 +25,8 @@
 
 #include <deque>
 #include <filesystem>
+#include <future>
+#include <atomic>
 
 namespace RTGL1
 {
@@ -33,7 +35,7 @@ class FolderObserver
 {
 public:
     explicit FolderObserver( const std::filesystem::path& ovrdFolder );
-    ~FolderObserver() = default;
+    ~FolderObserver();
 
     FolderObserver( const FolderObserver& other )                = delete;
     FolderObserver( FolderObserver&& other ) noexcept            = delete;
@@ -70,6 +72,8 @@ private:
 
     Clock::time_point           lastCheck;
     std::deque< DependentFile > prevAllFiles;
+    std::future< std::deque< DependentFile > > pendingScan;
+    std::atomic< bool > scanInProgress{ false };
 
     std::vector< std::weak_ptr< IFileDependency > > subscribers;
 
