@@ -41,6 +41,22 @@ void CheckError( FfxErrorCode r )
         throw RTGL1::RgException( RG_RESULT_GRAPHICS_API_ERROR, "Can't initialize FSR3" );
     }
 }
+
+static ffxReturnCode_t SafeCreateFgContext( ffxContext* context, ffxCreateContextDescHeader* header )
+{
+#if defined(_MSC_VER)
+    __try
+    {
+        return ffxCreateContext( context, header, nullptr );
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        return FFX_API_RETURN_ERROR;
+    }
+#else
+    return ffxCreateContext( context, header, nullptr );
+#endif
+}
 }
 
 RTGL1::FSR3::FSR3( VkDevice                                _device,
@@ -254,7 +270,7 @@ void RTGL1::FSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionSta
         createFg.backBufferFormat = ffxApiGetSurfaceFormatVK( hudlessFormat );
 
         remove( "fsr3_error.txt" );
-        ffxReturnCode_t ret = ffxCreateContext( (ffxContext*)&fgContext, &createFg.header, nullptr );
+        ffxReturnCode_t ret = SafeCreateFgContext( (ffxContext*)&fgContext, &createFg.header );
         if( ret != FFX_API_RETURN_OK )
         {
             char errBuf[512] = {};
