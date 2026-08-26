@@ -261,6 +261,10 @@ RTGL1::DebugWindows::~DebugWindows()
 {
     vkDeviceWaitIdle( device );
 
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     for( auto& sm : swapchainImageAvailable )
     {
         vkDestroySemaphore( device, sm, nullptr );
@@ -271,10 +275,6 @@ RTGL1::DebugWindows::~DebugWindows()
     {
         vkDestroyFramebuffer( device, f, nullptr );
     }
-
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 
     glfwDestroyWindow( customWindow );
     glfwTerminate();
