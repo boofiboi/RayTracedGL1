@@ -67,6 +67,7 @@ template< typename T >
 T ReadJson( const std::string& buffer )
 {
     constexpr auto options = glz::opts{
+        .comments              = true,
         .error_on_unknown_keys = false,
     };
 
