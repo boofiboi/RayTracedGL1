@@ -514,53 +514,60 @@ RTGL1::VulkanDevice::~VulkanDevice()
 {
     vkDeviceWaitIdle( device );
 
-    observer.reset();
-    physDevice.reset();
-    queues.reset();
-    swapchain.reset();
-    cmdManager.reset();
-    framebuffers.reset();
-    restirBuffers.reset();
-    volumetric.reset();
-    tonemapping.reset();
-    imageComposition.reset();
-    bloom.reset();
-    amdFsr3.reset();
-    nvDlss.reset();
-    sharpening.reset();
-    effectWipe.reset();
-    effectRadialBlur.reset();
-    effectChromaticAberration.reset();
-    effectInverseBW.reset();
-    effectHueShift.reset();
-    effectDistortedSides.reset();
-    effectWaves.reset();
-    effectColorTint.reset();
-    effectTeleport.reset();
-    effectCrtDemodulateEncode.reset();
     effectCrtDecode.reset();
+    effectCrtDemodulateEncode.reset();
+    effectTeleport.reset();
+    effectColorTint.reset();
+    effectWaves.reset();
+    effectDistortedSides.reset();
+    effectHueShift.reset();
+    effectInverseBW.reset();
+    effectChromaticAberration.reset();
+    effectRadialBlur.reset();
+    effectWipe.reset();
+
     denoiser.reset();
-    uniform.reset();
-    scene.reset();
-    sceneImportExport.reset();
-    shaderManager.reset();
-    rtPipeline.reset();
+    sharpening.reset();
+    nvDlss.reset();
+    amdFsr3.reset();
+    bloom.reset();
+    imageComposition.reset();
     pathTracer.reset();
+    rtPipeline.reset();
+
     rasterizer.reset();
     decalManager.reset();
     portalList.reset();
-    lightManager.reset();
+    volumetric.reset();
+    tonemapping.reset();
+    restirBuffers.reset();
+    uniform.reset();
+
+    sceneImportExport.reset();
+    scene.reset();
     lightGrid.reset();
+    lightManager.reset();
+
+    shaderManager.reset();
     worldSamplerManager.reset();
     genericSamplerManager.reset();
     blueNoise.reset();
+    cubemapManager.reset();
     textureManager.reset();
     textureMetaManager.reset();
     sceneMetaManager.reset();
-    cubemapManager.reset();
+
     debugWindows.reset();
     devmode.reset();
+    observer.reset();
+
+    framebuffers.reset();
+    swapchain.reset();
+    cmdManager.reset();
     memAllocator.reset();
+
+    queues.reset();
+    physDevice.reset();
 
     vkDestroySurfaceKHR( instance, surface, nullptr );
     DestroySyncPrimitives();
