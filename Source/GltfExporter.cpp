@@ -655,14 +655,10 @@ struct GltfTextures
         textures = rgl::span_counted( std::span( allocTextures ) );
 
         constexpr auto makeSampler = []( RgSamplerAddressMode addrU, RgSamplerAddressMode addrV ) {
-            // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_sampler_wraps
-            return cgltf_sampler{
-                .name       = nullptr,
-                .mag_filter = 0, // default
-                .min_filter = 0, // default
-                .wrap_s     = addrU == RG_SAMPLER_ADDRESS_MODE_CLAMP ? 33071 : 10497,
-                .wrap_t     = addrV == RG_SAMPLER_ADDRESS_MODE_CLAMP ? 33071 : 10497,
-            };
+            cgltf_sampler s{};
+            s.wrap_s = addrU == RG_SAMPLER_ADDRESS_MODE_CLAMP ? cgltf_wrap_mode_clamp_to_edge : cgltf_wrap_mode_repeat;
+            s.wrap_t = addrV == RG_SAMPLER_ADDRESS_MODE_CLAMP ? cgltf_wrap_mode_clamp_to_edge : cgltf_wrap_mode_repeat;
+            return s;
         };
         allocSamplers = {
             makeSampler( RG_SAMPLER_ADDRESS_MODE_REPEAT, RG_SAMPLER_ADDRESS_MODE_REPEAT ),
