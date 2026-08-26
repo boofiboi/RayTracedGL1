@@ -26,7 +26,7 @@
 
 using namespace RTGL1;
 
-constexpr VkDeviceSize SCRATCH_CHUNK_BUFFER_SIZE = (1 << 24);
+constexpr VkDeviceSize SCRATCH_CHUNK_BUFFER_SIZE = (1 << 26);
 
 ScratchBuffer::ScratchBuffer(std::shared_ptr<MemoryAllocator> _allocator, uint32_t _alignment)
 :
@@ -38,13 +38,11 @@ ScratchBuffer::ScratchBuffer(std::shared_ptr<MemoryAllocator> _allocator, uint32
 
 VkDeviceAddress ScratchBuffer::GetScratchAddress(VkDeviceSize scratchSize)
 {
-    // the fastest way to always return an aligned address is simply to align all allocation sizes
     const VkDeviceSize alignedSize = Utils::Align(scratchSize, (VkDeviceSize)alignment);
 
-    // find chunk with appropriate size
     for (auto &c : chunks)
     {
-        if (alignedSize < c.buffer.GetSize() - c.currentOffset)
+        if (alignedSize <= c.buffer.GetSize() - c.currentOffset)
         {
             VkDeviceAddress address = c.buffer.GetAddress() + c.currentOffset;
 
@@ -53,9 +51,12 @@ VkDeviceAddress ScratchBuffer::GetScratchAddress(VkDeviceSize scratchSize)
         }
     }
 
-    // couldn't find chunk, create new one
     AddChunk(std::max(SCRATCH_CHUNK_BUFFER_SIZE, alignedSize));
-    return chunks.back().buffer.GetAddress();
+
+    auto &c = chunks.back();
+    VkDeviceAddress address = c.buffer.GetAddress() + c.currentOffset;
+    c.currentOffset += alignedSize;
+    return address;
 }
 
 void ScratchBuffer::Reset()

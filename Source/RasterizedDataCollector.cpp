@@ -295,6 +295,11 @@ void RTGL1::RasterizedDataCollector::Clear( uint32_t frameIndex )
 
 void RTGL1::RasterizedDataCollector::CopyFromStaging( VkCommandBuffer cmd, uint32_t frameIndex )
 {
+    if( curVertexCount == 0 && curIndexCount == 0 )
+    {
+        return;
+    }
+
     vertexBuffer->CopyFromStaging( cmd, frameIndex, sizeof( ShVertex ) * curVertexCount );
     indexBuffer->CopyFromStaging( cmd, frameIndex, sizeof( uint32_t ) * curIndexCount );
 
