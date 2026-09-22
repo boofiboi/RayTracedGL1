@@ -308,15 +308,9 @@ if (RG_WITH_EXAMPLES)
     target_include_directories(RtglExample PUBLIC Tests/Libs/glm)
 endif()
 
-# VS hot-reload - disabled because of glaze
-if (false)
-if (MSVC AND WIN32 AND NOT MSVC_VERSION VERSION_LESS 142)
-    target_link_options(RayTracedGL1 PRIVATE $<$<CONFIG:Debug>:/INCREMENTAL>)
-    target_compile_options(RayTracedGL1 PRIVATE $<$<CONFIG:Debug>:/ZI>)
-
-    target_link_options(RtglExample PRIVATE $<$<CONFIG:Debug>:/INCREMENTAL>)
-    target_compile_options(RtglExample PRIVATE $<$<CONFIG:Debug>:/ZI>)
-endif()
+if (MSVC)
+    target_compile_options(RayTracedGL1 PRIVATE /Zi)
+    target_link_options(RayTracedGL1 PRIVATE /DEBUG /OPT:REF /OPT:ICF)
 endif()
 
 if (RG_WITH_SHADERS)
