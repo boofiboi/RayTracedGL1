@@ -334,7 +334,7 @@ auto MakeBufferViews( GltfBin& fbin, const RTGL1::DeepCopyOfPrimitive& prim )
             .buffer = fbin.Get(),
             .offset = fbin.Write( prim.Indices() ),
             .size   = prim.Indices().size_bytes(),
-            .stride = sizeof( decltype( prim.Indices() )::element_type ),
+            .stride = 0,
             .type   = cgltf_buffer_view_type_indices,
         },
     } );
@@ -359,6 +359,7 @@ auto MakeAccessors( size_t                         vertexCount,
             .type           = cgltf_type_vec3,
             .offset         = offsetof( RgPrimitiveVertex, position ),
             .count          = vertexCount,
+            .stride         = sizeof( RgPrimitiveVertex ),
             .buffer_view    = &correspondingViews[ BUFFER_VIEW_VERTICES ],
             .has_min        = false,
             .min            = {},
@@ -373,6 +374,7 @@ auto MakeAccessors( size_t                         vertexCount,
             .type           = cgltf_type_vec3,
             .offset         = offsetof( RgPrimitiveVertex, normal ),
             .count          = vertexCount,
+            .stride         = sizeof( RgPrimitiveVertex ),
             .buffer_view    = &correspondingViews[ BUFFER_VIEW_VERTICES ],
             .has_min        = true,
             .min            = { -1.f, -1.f, -1.f },
@@ -387,6 +389,7 @@ auto MakeAccessors( size_t                         vertexCount,
             .type           = cgltf_type_vec4,
             .offset         = offsetof( RgPrimitiveVertex, tangent ),
             .count          = vertexCount,
+            .stride         = sizeof( RgPrimitiveVertex ),
             .buffer_view    = &correspondingViews[ BUFFER_VIEW_VERTICES ],
             .has_min        = true,
             .min            = { -1.f, -1.f, -1.f, -1.f },
@@ -401,6 +404,7 @@ auto MakeAccessors( size_t                         vertexCount,
             .type           = cgltf_type_vec2,
             .offset         = offsetof( RgPrimitiveVertex, texCoord ),
             .count          = vertexCount,
+            .stride         = sizeof( RgPrimitiveVertex ),
             .buffer_view    = &correspondingViews[ BUFFER_VIEW_VERTICES ],
             .has_min        = false,
             .min            = {},
@@ -415,6 +419,7 @@ auto MakeAccessors( size_t                         vertexCount,
             .type           = cgltf_type_vec4,
             .offset         = offsetof( RgPrimitiveVertex, color ),
             .count          = vertexCount,
+            .stride         = sizeof( RgPrimitiveVertex ),
             .buffer_view    = &correspondingViews[ BUFFER_VIEW_VERTICES ],
             .has_min        = false,
             .min            = {},
@@ -429,6 +434,7 @@ auto MakeAccessors( size_t                         vertexCount,
             .type           = cgltf_type_scalar,
             .offset         = 0,
             .count          = indexCount,
+            .stride         = sizeof( uint32_t ),
             .buffer_view    = &correspondingViews[ BUFFER_VIEW_INDICES ],
             .has_min        = false,
             .min            = {},
@@ -598,7 +604,7 @@ struct GltfStorage
                 .accessors   = r.accessors.ToSpan( allAccessors ),
                 .attributes  = r.attributes.ToSpan( allAttributes ),
                 .primitives  = r.primitives.ToSpan( allPrimitives ),
-                .materials   = r.primitives.ToSpan( allMaterials ),
+                .materials   = r.materials.ToSpan( allMaterials ),
                 .mesh        = r.mesh.ToPointer( allMeshes ),
                 .source      = prims,
             };
@@ -1342,9 +1348,10 @@ void RTGL1::GltfExporter::AddPrimitive( const RgMeshInfo&          mesh,
         return;
     }
 
-    if( primitive.indexCount == 0 || primitive.pIndices == nullptr )
+    if( primitive.indexCount == 0 || primitive.pIndices == nullptr ||
+        primitive.vertexCount == 0 || primitive.pVertices == nullptr )
     {
-        debug::Warning( "Exporter doesn't support primitives without index buffer: "
+        debug::Warning( "Exporter doesn't support primitives without vertices or index buffer: "
                         "{} - {} (with ID: {} - {})",
                         mesh.pMeshName,
                         primitive.pPrimitiveNameInMesh,
@@ -1572,14 +1579,14 @@ void RTGL1::GltfExporter::ExportToFiles( const std::filesystem::path& gltfPath,
     r = cgltf_validate( &data );
     if( r != cgltf_result_success )
     {
-        debug::Warning( "cgltf_validate fail" );
+        debug::Warning( "cgltf_validate fail: {}", int( r ) );
         return;
     }
 
     r = cgltf_write_file( &options, gltfPath.string().c_str(), &data );
     if( r != cgltf_result_success )
     {
-        debug::Warning( "cgltf_write_file fail" );
+        debug::Warning( "cgltf_write_file fail: {}", int( r ) );
         return;
     }
 
