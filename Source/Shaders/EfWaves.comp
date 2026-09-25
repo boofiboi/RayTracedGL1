@@ -30,11 +30,20 @@ struct EffectWaves_PushConst
 #define EFFECT_PUSH_CONST_T EffectWaves_PushConst
 #include "EfSimple.inl"
 
-float getMult(const ivec2 pix, float speed, float mult)
+float getMultX(const ivec2 pix, float speed, float mult)
 {
     return sin(
-        globalUniform.time * mult * speed * 4  + 
-        pix.x / float(effect_getFramebufSize().x) * mult * 10);
+        globalUniform.time * mult * speed * 4.0 + 
+        (float(pix.x) / float(effect_getFramebufSize().x)) * mult * 10.0 +
+        (float(pix.y) / float(effect_getFramebufSize().y)) * mult * 3.0);
+}
+
+float getMultY(const ivec2 pix, float speed, float mult)
+{
+    return cos(
+        globalUniform.time * mult * speed * 4.0 + 
+        (float(pix.y) / float(effect_getFramebufSize().y)) * mult * 10.0 +
+        (float(pix.x) / float(effect_getFramebufSize().x)) * mult * 3.0);
 }
 
 void main()
@@ -46,10 +55,10 @@ void main()
         return;
     }
 
-    float tx = getMult(pix, push.custom.speed, push.custom.multX);
+    float tx = getMultX(pix, push.custom.speed, push.custom.multX);
     tx *= push.custom.amplitude * push.custom.multX * effect_getFramebufSize().x;
 
-    float ty = getMult(pix, push.custom.speed, 1.0);
+    float ty = getMultY(pix, push.custom.speed, 1.0);
     ty *= push.custom.amplitude * effect_getFramebufSize().y;
 
     vec3 c = effect_loadFromSource(ivec2(pix.x + getProgress() * tx, pix.y + getProgress() * ty));

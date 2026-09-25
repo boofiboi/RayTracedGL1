@@ -295,7 +295,7 @@ void main()
                 Avirt = 1.0 / a - 1.0;
                 float Ahitdist = min(Avirt, SPEC_MAX_HITDISTANCE_ACCUM_FRAMES);
 
-                vec3 specVirt = mix(specPrevOnSurf, unfilteredSpec, 1.0 / (1.0 + Avirt));
+                vec3 specVirt = mix(specPrevVirtual, unfilteredSpec, 1.0 / (1.0 + Avirt));
                 
                 float amount = getSpecularDominantFactor(nv, roughness);
                 a = mix(1.0 / (1.0 + AOnSurf), 1.0 / (1.0 + Avirt), amount);

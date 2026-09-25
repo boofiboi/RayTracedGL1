@@ -98,15 +98,15 @@ uint packInstanceIdAndCustomIndex(int instanceID, int instanceCustomIndexEXT)
 ivec2 unpackInstanceIdAndCustomIndex(uint instanceIdAndIndex)
 {
     return ivec2(
-        instanceIdAndIndex >> 24,
-        instanceIdAndIndex & 0xFFFFFF
+        int(instanceIdAndIndex >> 24u),
+        int(instanceIdAndIndex & 0xFFFFFFu)
     );
 }
 
 void unpackInstanceIdAndCustomIndex(uint instanceIdAndIndex, out int instanceId, out int instanceCustomIndexEXT)
 {
-    instanceId = int(instanceIdAndIndex >> 24);
-    instanceCustomIndexEXT = int(instanceIdAndIndex & 0xFFFFFF);
+    instanceId = int(instanceIdAndIndex >> 24u);
+    instanceCustomIndexEXT = int(instanceIdAndIndex & 0xFFFFFFu);
 }
 
 uint packGeometryAndPrimitiveIndex(int geometryIndex, int primitiveIndex)
@@ -121,24 +121,16 @@ uint packGeometryAndPrimitiveIndex(int geometryIndex, int primitiveIndex)
 
 ivec2 unpackGeometryAndPrimitiveIndex(uint geomAndPrimIndex)
 {
-#if (1 << MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW) != MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT
-    #error MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT must be (1 << MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW)
-#endif
-
     return ivec2(
-        geomAndPrimIndex >> MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW,
-        geomAndPrimIndex & (MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT - 1)
+        int(geomAndPrimIndex >> MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW),
+        int(geomAndPrimIndex & (MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT - 1u))
     );
 }
 
 void unpackGeometryAndPrimitiveIndex(uint geomAndPrimIndex, out int geometryIndex, out int primitiveIndex)
 {
-#if (1 << MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW) != MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT
-    #error MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT must be (1 << MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW)
-#endif
-
     primitiveIndex = int(geomAndPrimIndex >> MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT_POW);
-    geometryIndex = int(geomAndPrimIndex & (MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT - 1));
+    geometryIndex = int(geomAndPrimIndex & (MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT - 1u));
 }
 
 

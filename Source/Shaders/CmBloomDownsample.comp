@@ -33,12 +33,12 @@ layout(constant_id = 0) const uint stepIndex = 0;
 
 vec2 getInverseSrcSize()
 {
-    return vec2(float(1 << stepIndex) / globalUniform.renderWidth, float(1 << stepIndex) / globalUniform.renderHeight);
+    return vec2(float(1 << (stepIndex + 1)) / globalUniform.renderWidth, float(1 << (stepIndex + 1)) / globalUniform.renderHeight);
 }
 
 vec2 getInverseDownsampledSize()
 {
-    return vec2(float(1 << (stepIndex + 1)) / globalUniform.renderWidth, float(1 << (stepIndex + 1)) / globalUniform.renderHeight);
+    return vec2(float(1 << (stepIndex + 2)) / globalUniform.renderWidth, float(1 << (stepIndex + 2)) / globalUniform.renderHeight);
 }
 
 // get UV coords in [0..1] range
@@ -95,13 +95,12 @@ vec3 downsample13tap(sampler2D srcSampler, const vec2 centerUV)
             0.25 * (taps[6] + taps[7] + taps[11] + taps[12]), 
         };
 
-        // weight by partial Karis average to reduce fireflies
-        return 
-            0.5   * getKarisWeight(box[0]) * box[0] + 
-            0.125 * getKarisWeight(box[1]) * box[1] + 
-            0.125 * getKarisWeight(box[2]) * box[2] + 
-            0.125 * getKarisWeight(box[3]) * box[3] + 
-            0.125 * getKarisWeight(box[4]) * box[4];
+        float w0 = 0.5   * getKarisWeight(box[0]);
+        float w1 = 0.125 * getKarisWeight(box[1]);
+        float w2 = 0.125 * getKarisWeight(box[2]);
+        float w3 = 0.125 * getKarisWeight(box[3]);
+        float w4 = 0.125 * getKarisWeight(box[4]);
+        return (w0 * box[0] + w1 * box[1] + w2 * box[2] + w3 * box[3] + w4 * box[4]) / max(w0 + w1 + w2 + w3 + w4, 1e-4);
     }
     else
     {
@@ -133,11 +132,9 @@ void main()
         case 3: imageStore(framebufBloom_Mip4, downsampledPix, vec4(downsample13tap(framebufBloom_Mip3_Sampler, srcUV), 0.0)); break;
         case 4: imageStore(framebufBloom_Mip5, downsampledPix, vec4(downsample13tap(framebufBloom_Mip4_Sampler, srcUV), 0.0)); break;
         case 5: imageStore(framebufBloom_Mip6, downsampledPix, vec4(downsample13tap(framebufBloom_Mip5_Sampler, srcUV), 0.0)); break;
-        case 6: imageStore(framebufBloom_Mip7, downsampledPix, vec4(downsample13tap(framebufBloom_Mip6_Sampler, srcUV), 0.0)); break;
-        case 7: imageStore(framebufBloom_Mip8, downsampledPix, vec4(downsample13tap(framebufBloom_Mip7_Sampler, srcUV), 0.0)); break;
     }
 }
 
-#if COMPUTE_BLOOM_STEP_COUNT != 8
+#if COMPUTE_BLOOM_STEP_COUNT != 6
     #error Recheck COMPUTE_BLOOM_STEP_COUNT
 #endif

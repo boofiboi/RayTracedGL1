@@ -115,7 +115,10 @@ float getPolySpotFactor(const vec3 lightNormal, const vec3 lightToSurf)
 
 float getSpotFactor(float cosA, float cosAInner, float cosAOuter)
 {
-    return square(smoothstep(cosAOuter, cosAInner, cosA));
+    float baseFactor = smoothstep(cosAOuter, cosAInner, cosA);
+    float angleFrac = clamp((cosA - cosAOuter) / max(1e-4, cosAInner - cosAOuter), 0.0, 1.0);
+    float vignette = 1.0 - 0.15 * (1.0 - angleFrac * angleFrac);
+    return square(baseFactor) * vignette;
 }
 
 float isSphereInFront(const vec3 planeNormal, const vec3 planePos, const vec3 sphereCenter, float sphereRadius)
@@ -144,7 +147,6 @@ float safeSolidAngle(float a)
 
 float calcSolidAngleForSphere(float sphereRadius, float distanceToSphereCenter)
 {
-    // solid angle here is the spherical cap area on a unit sphere
     float sinTheta = sphereRadius / max(sphereRadius, distanceToSphereCenter);
     float cosTheta = sqrt(1.0 - sinTheta * sinTheta);
     return safeSolidAngle(2 * M_PI * (1.0 - cosTheta));
@@ -245,7 +247,6 @@ LightSample sampleSphereLight(const SphereLight l, const vec3 surfPosition, cons
 {
     const DirectionAndLength toLightCenter = calcDirectionAndLength(surfPosition, l.center);
 
-    // sample hemisphere visible to the surface point
     float ltHsOneOverPdf;
     const vec3 lightNormal = sampleOrientedHemisphere(-toLightCenter.dir, pointRnd.x, pointRnd.y, ltHsOneOverPdf);
 

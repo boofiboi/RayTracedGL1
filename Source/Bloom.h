@@ -72,7 +72,7 @@ private:
     void DestroyPipelines();
 
 private:
-    static constexpr uint32_t StepCount = 8;
+    static constexpr uint32_t StepCount = 6;
 
     VkDevice device;
 
@@ -80,6 +80,8 @@ private:
 
     VkPipelineLayout pipelineLayout;
     VkPipelineLayout applyPipelineLayout;
+
+    VkPipeline bloomInputPipeline;
 
     VkPipeline downsamplePipelines[ StepCount ];
     VkPipeline upsamplePipelines[ StepCount ];

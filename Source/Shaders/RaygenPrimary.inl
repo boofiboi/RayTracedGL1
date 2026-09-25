@@ -68,6 +68,11 @@ vec2 getMotionVectorForUpscaler(const vec2 motionCurToPrev)
 
 vec2 getMotionForInfinitePoint(const ivec2 pix)
 {
+    // treat as a point with .w=0, i.e. at infinite distance.
+    // IMPORTANT: use the unjittered pixel center UV, NOT getPixelUVWithJitter.
+    // Jitter shifts the ray direction, which would bake the sub-pixel jitter offset
+    // into screenSpaceCur. FSR3 would then interpret that per-frame jitter as real
+    // camera motion and smear sky pixels whenever the camera moves.
     const vec2 pixelCenterUV = (vec2(pix) + vec2(0.5)) / vec2(globalUniform.renderWidth, globalUniform.renderHeight);
     vec3 rayDir = getRayDir(pixelCenterUV);
 
@@ -322,6 +327,10 @@ void main()
     vec3 primaryWaterFog = vec3(0.0);
     if( currentRayMedia == MEDIA_TYPE_WATER )
     {
+        // while the camera is inside water, the first hit is usually the floor
+        // or walls, whose material carries no water properties. Probe the water
+        // surface above the camera to resolve the enclosing water's color and
+        // density (e.g. waterColor / waterDensity from the texture JSON).
         vec3 waterColor = h.waterColor;
         float waterDensity = h.waterDensity;
         if( waterDensity < 0.0 )

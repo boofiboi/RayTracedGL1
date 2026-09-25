@@ -32,10 +32,9 @@ void main()
     }
     
     vec2 c = effect_getCenteredFromPix(pix);
+    float r2 = dot(c, c);
+    float k = 0.35 * getProgress();
+    vec2 distorted = c * (1.0 + k * r2);
 
-    // more distortion toward the edges
-    float t = c.x * c.x * getProgress();
-    c.x = mix(c.x, c.x * c.x * sign(c.x), t);
-
-    effect_storeToTarget(effect_loadFromSource_Centered(c), pix);
+    effect_storeToTarget(effect_loadFromSource_Centered(distorted), pix);
 }
