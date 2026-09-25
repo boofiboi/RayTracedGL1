@@ -484,11 +484,6 @@ void main()
             break;
         }
 
-        if (max(throughput.r, max(throughput.g, throughput.b)) < 0.0001)
-        {
-            break;
-        }
-
 
         const float curIndexOfRefraction = getIndexOfRefraction(currentRayMedia);
         const float newIndexOfRefraction = getIndexOfRefraction(newRayMedia);
@@ -582,7 +577,7 @@ void main()
         }
         else
         {
-            rayDir = reflect( rayDir, normal );
+            rayDir = reflect( normalize( rayDir ), normal );
 
             if( !isWater )
             {

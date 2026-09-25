@@ -253,7 +253,7 @@ def main():
             print("> Building " + os.path.basename(filename))
 
             r = subprocess.run([
-                "glslc", "--target-env=vulkan1.2", "-O"
+                "glslc", "--target-env=vulkan1.2"
                 ] + getDependentFoldersProcArg() + [
                 filename, 
                 "-o", targetSpvFile], 
