@@ -36,7 +36,7 @@ layout( local_size_x = COMPUTE_VOLUMETRIC_GROUP_SIZE_X,
 const float g_temporalWeight = 0.0;
 
 // rgb - in−scattered light accumulated so far
-// a   - accumulated optical depth
+// a   - accumulated scattering coefficient
 vec4 accumulateScattering( const vec4 front, const vec4 back )
 {
     vec3 light = front.rgb + saturate( exp( -front.a ) ) * back.rgb;
@@ -65,9 +65,10 @@ void main()
     const int y = int( gl_GlobalInvocationID.y );
 
 
-    vec4 accum = vec4( 0.0 );
+    vec4 accum = texelFetch( g_volumetric_Sampler, ivec3( x, y, 0 ), 0 );
+    store( ivec3( x, y, 0 ), accum );
 
-    for( int z = 0; z < VOLUMETRIC_SIZE_Z; z++ )
+    for( int z = 1; z < VOLUMETRIC_SIZE_Z; z++ )
     {
         const ivec3 cell = ivec3( x, y, z );
         const vec4  v    = texelFetch( g_volumetric_Sampler, cell, 0 );

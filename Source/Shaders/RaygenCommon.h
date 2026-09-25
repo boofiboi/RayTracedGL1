@@ -317,10 +317,7 @@ vec3 getSky( vec3 direction )
 #if LIGHT_SAMPLE_METHOD != LIGHT_SAMPLE_METHOD_NONE
 
 #define SHADOW_RAY_EPS       0.01
-// Offset along the surface normal to prevent sunlight / shadow leaking through thin BSP walls.
-// GoldSrc wall brushes are typically 1-4 units thick; 1.0 is a safe minimum to keep the
-// shadow ray origin firmly on the lit side of any polygon.
-#define RAY_ORIGIN_LEAK_BIAS 1.0
+#define RAY_ORIGIN_LEAK_BIAS 0.01    // offset a bit towards a viewer to prevent light leaks from the other side of polygons
 
 bool traceShadowRay(uint surfInstCustomIndex, vec3 start, vec3 end, bool ignoreFirstPersonViewer /* = false */)
 {
@@ -340,7 +337,7 @@ bool traceShadowRay(uint surfInstCustomIndex, vec3 start, vec3 end, bool ignoreF
 
     traceRayEXT(
         topLevelAS, 
-        gl_RayFlagsSkipClosestHitShaderEXT | gl_RayFlagsTerminateOnFirstHitEXT, 
+        gl_RayFlagsSkipClosestHitShaderEXT | getAdditionalRayFlags(), 
         cullMask, 
         0, 0, 	// sbtRecordOffset, sbtRecordStride
         SBT_INDEX_MISS_SHADOW, 		// shadow missIndex
@@ -352,11 +349,7 @@ bool traceShadowRay(uint surfInstCustomIndex, vec3 start, vec3 end, bool ignoreF
 
 float traceVisibility(const Surface surf, const vec3 lightPosition, uint lightIndex)
 {
-    // Bias along the surface geometric normal (not toward the viewer).
-    // The viewer-direction bias was nearly zero at glancing angles, allowing rays to start
-    // on the shadowed side of the polygon and tunnel through thin walls toward the sun.
-    // Using the surface normal guarantees the origin is always on the correct (lit) side.
-    const vec3 start = surf.position + surf.normal * RAY_ORIGIN_LEAK_BIAS;
+    const vec3 start = surf.position + surf.toViewerDir * RAY_ORIGIN_LEAK_BIAS;
     const vec3 end = lightPosition;
 
     const bool ignoreFirstPersonViewer = (globalUniform.lightIndexIgnoreFPVShadows == lightIndex);
@@ -426,25 +419,23 @@ Reservoir calcInitialReservoir(uint seed, uint salt, const Surface surf, const v
             uint xi = r.selected;
             float oneOverSourcePdf_xi = r.weightSum * safePositiveRcp(r.selected_targetPdf);
 
-            vec2 pointRnd_xi = vec2(rnd16(seed, salt++), rnd16(seed, salt++));
-            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd_xi);
+            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd);
             float targetPdf_xi = targetPdfForLightSample(lightSample, surf);
 
             float rndRis = rnd16(seed, salt++);
             updateReservoir(regularReservoir, xi, targetPdf_xi, oneOverSourcePdf_xi, rndRis);
         }
     }
-    else if (globalUniform.lightCount > 0)
+    else
     {      
         for (int i = 0; i < INITIAL_SAMPLES; i++)
         {
             // uniform distribution as a coarse source pdf
             float rnd = rnd16(seed, salt++);
-            uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0u, globalUniform.lightCount - 1u);
+            uint xi = LIGHT_ARRAY_REGULAR_LIGHTS_OFFSET + clamp(uint(rnd * globalUniform.lightCount), 0, globalUniform.lightCount - 1);
             float oneOverSourcePdf_xi = globalUniform.lightCount;
 
-            vec2 pointRnd_xi = vec2(rnd16(seed, salt++), rnd16(seed, salt++));
-            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd_xi);
+            LightSample lightSample = sampleLight(lightSources[xi], surf.position, pointRnd);
             float targetPdf_xi = targetPdfForLightSample(lightSample, surf);
 
             float rndRis = rnd16(seed, salt++);
@@ -592,16 +583,10 @@ Reservoir selectLight_Direct(const ivec2 pix, uint seed, const Surface surf, con
 
         Reservoir spatial = imageLoadReservoirInitial(pp);
 
-        float spatialTargetPdf_curSurf = 0.0;
-        if (spatial.selected != LIGHT_INDEX_NONE)
-        {
-            spatialTargetPdf_curSurf = targetPdfForLightSample(spatial.selected, surf, pointRnd);
-        }
-
         float rnd = rnd16(seed, salt++);
-        updateCombinedReservoir_newSurf(
+        updateCombinedReservoir(
             combined, 
-            spatial, spatialTargetPdf_curSurf, rnd);
+            spatial, rnd);
     }
 
 
@@ -744,7 +729,10 @@ vec3 processDirectIllumination( uint          seed,
     );
 
     #if SHIPPING_HACK
-    out_diffuse = clamp( out_diffuse, vec3( 0 ), vec3( 20 ) );
+    if( reservoir.selected != LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET )
+    {
+        out_diffuse = clamp( out_diffuse, vec3( 0 ), vec3( 20 ) );
+    }
     #endif
 
     return out_diffuse;

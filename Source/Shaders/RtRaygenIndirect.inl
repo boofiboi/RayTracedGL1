@@ -23,7 +23,7 @@ layout (constant_id = 1) const uint lightmapLayerIndex = 3;
 #define MATERIAL_MAX_ALBEDO_LAYERS maxAlbedoLayerCount
 #define MATERIAL_LIGHTMAP_LAYER_INDEX lightmapLayerIndex
 
-//#define FORCE_EVALBRDF_GGX_LOOSE
+#define FORCE_EVALBRDF_GGX_LOOSE
 
 #define DESC_SET_TLAS 0
 #define DESC_SET_FRAMEBUFFERS 1
@@ -93,13 +93,13 @@ vec3 processSecondDiffuseBounce(const uint seed, const Surface surf, const vec3 
 
     if (hitSurf.isSky)
     {
-        return clamp( getSky(bounceDir) * min(oneOverPdf, 10.0), vec3(0), vec3(20) );
+        return getSky(bounceDir) * oneOverPdf;
     }
 
     // calculate direct illumination in a hit position
     const vec3 diffuse = processDirectIllumination(seed, hitSurf, 2);
 
-    return clamp( (emis + diffuse) * hitSurf.albedo * min(oneOverPdf, 10.0), vec3(0), vec3(20) );
+    return (emis + diffuse) * hitSurf.albedo * oneOverPdf;
 }
 
 SampleIndirect processIndirect( const uint seed, const Surface surf, out float oneOverSourcePdf )
@@ -117,7 +117,6 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
 #else
     bounceDir = getDiffuseBounce( seed, 1, surf.normal, oneOverSourcePdf );
 #endif
-    oneOverSourcePdf = clamp( oneOverSourcePdf, 0.0, 30.0 );
 
     vec3 emis;
     const Surface hitSurf = traceBounce(surf.position + surf.normal * 0.01, 
@@ -133,7 +132,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
         SampleIndirect s;
         s.position  = surf.position + bounceDir * MAX_RAY_LENGTH;
         s.normal    = -bounceDir;
-        s.radiance  = clamp( getSky(bounceDir), vec3(0), vec3(20) );
+        s.radiance  = getSky(bounceDir);
         
         return s;
     }
@@ -141,7 +140,8 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
     // calculate direct diffuse illumination in a hit position
     vec3 diffuse = processDirectIllumination(seed, hitSurf, 1);
 
-    if( globalUniform.indirSecondBounce != 0 )
+    // TODO: investigate why uncommenting this makes diffuse very red
+    // if( globalUniform.indirSecondBounce != 0 )
     {
         float oneOverPdf_Second;
         const vec3 bounceDir_Second = getDiffuseBounce(seed, 2, hitSurf.normal, oneOverPdf_Second);
@@ -155,7 +155,7 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
     SampleIndirect s;
     s.position  = hitSurf.position;
     s.normal    = hitSurf.normal;
-    s.radiance  = clamp( (emis + diffuse) * hitSurf.albedo, vec3(0), vec3(25) );
+    s.radiance  = (emis + diffuse) * hitSurf.albedo;
 
     return s;
 }
@@ -175,9 +175,8 @@ void shade(const Surface surf, const SampleIndirect indir, float oneOverPdf,
     diffuse  = nl * indir.radiance * evalBRDFLambertian(1.0);
     specular = nl * indir.radiance * evalBRDFSmithGGX(surf.normal, surf.toViewerDir, l, surf.roughness, surf.specularColor);
 
-    oneOverPdf = clamp(oneOverPdf, 0.0, 20.0);
-    diffuse  = clamp(diffuse * oneOverPdf, vec3(0.0), vec3(25.0));
-    specular = clamp(specular * oneOverPdf, vec3(0.0), vec3(25.0));
+    diffuse  *= oneOverPdf;
+    specular *= oneOverPdf;
 }
 
 float targetPdfForIndirectSample(const SampleIndirect s)
