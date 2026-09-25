@@ -46,8 +46,7 @@ bool isReservoirValid(const Reservoir r)
 
 float calcSelectedSampleWeight(const Reservoir r)
 {
-    float w = safePositiveRcp(r.selected_targetPdf) * (r.weightSum / float(max(1, r.M)));
-    return clamp(w, 0.0, 25.0);
+    return safePositiveRcp(r.selected_targetPdf) * (r.weightSum / float(max(1, r.M)));
 }
 
 void normalizeReservoir(inout Reservoir r, uint maxM)
@@ -101,9 +100,7 @@ void updateCombinedReservoir_newSurf(inout Reservoir combined, const Reservoir b
     // targetPdf_b is targetPdf(b.selected) for pixel q
     // but b.selected_targetPdf was calculated for pixel q'
     // so need to renormalize weight
-    float jacobian = targetPdf_b * safePositiveRcp(b.selected_targetPdf);
-    jacobian = clamp(jacobian, 0.0, 5.0);
-    float weight = jacobian * b.weightSum;
+    float weight = targetPdf_b * safePositiveRcp(b.selected_targetPdf) * b.weightSum;
 
     combined.weightSum += weight;
     combined.M += b.M;

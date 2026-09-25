@@ -31,7 +31,9 @@ struct RayCone
 
 void propagateRayCone(inout RayCone c, float rayLength)
 {
-    c.width += c.spreadAngle * rayLength;
+    // new cone width should increase by 2*RayLength*tan(SpreadAngle/2), but RayLength*SpreadAngle is a close approximation
+    c.width	+= c.spreadAngle * rayLength;
+    c.spreadAngle *= 2;
 }
 
 vec4 getUVDerivativesFromRayCone(
@@ -50,12 +52,12 @@ vec4 getUVDerivativesFromRayCone(
     const vec3 faceNormal = cross(edge10, edge20);
     float quadArea = length(faceNormal);
 
-    float normalTerm = max(abs(dot(rayDir, worldNormal)), 0.05);
+    float normalTerm = abs(dot(rayDir, worldNormal));
     float projectedConeWidth = rayCone.width / normalTerm;
-    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / max(quadArea, 1e-6);
+    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / quadArea;
 
     float visibleUVArea = quadUVArea * visibleAreaRatio;
-    float ULength = sqrt(max(visibleUVArea, 0.0));
+    float ULength = sqrt(visibleUVArea);
 
     return vec4(ULength, 0, 0, ULength);
 }
@@ -66,12 +68,12 @@ float getWaterDerivU(const RayCone rayCone, const vec3 rayDir, const vec3 worldN
     const float quadArea = 1.0;
     const float quadUVArea = 1.0;
 
-    float normalTerm = max(abs(dot(rayDir, worldNormal)), 0.05);
+    float normalTerm = abs(dot(rayDir, worldNormal));
     float projectedConeWidth = rayCone.width / normalTerm;
-    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / max(quadArea, 1e-6);
+    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / quadArea;
 
     float visibleUVArea = quadUVArea * visibleAreaRatio;
-    float ULength = sqrt(max(visibleUVArea, 0.0));
+    float ULength = sqrt(visibleUVArea);
 
     return ULength;
 }
@@ -92,9 +94,9 @@ DerivativeSet getTriangleUVDerivativesFromRayCone(
     const vec3 faceNormal = cross(edge10, edge20);
     float quadArea = length(faceNormal);
 
-    float normalTerm = max(abs(dot(rayDir, worldNormal)), 0.05);
+    float normalTerm = abs(dot(rayDir, worldNormal));
     float projectedConeWidth = rayCone.width / normalTerm;
-    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / max(quadArea, 1e-6);
+    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / quadArea;
 
 
     DerivativeSet derivSet;
@@ -108,7 +110,7 @@ DerivativeSet getTriangleUVDerivativesFromRayCone(
         float quadUVArea = abs(uv10.x * uv20.y - uv20.x * uv10.y);
 
         float visibleUVArea = quadUVArea * visibleAreaRatio;
-        float ULength = sqrt(max(visibleUVArea, 0.0));
+        float ULength = sqrt(visibleUVArea);
 
         derivSet.u[i] = ULength;
     }

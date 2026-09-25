@@ -160,7 +160,7 @@ vec3 getHitInfoAlbedoOnly( ShPayload pl )
 // "Ray Traced Reflections in 'Wolfenstein: Youngblood'", Jiho Choi, Jim Kjellin, Patrik Willbo, Dmitry Zhdan
 float getBounceLOD(float roughness, float viewDist, float hitDist, float screenWidth, float bounceMipBias)
 {    
-    const float range = 300.0 * square(square((1.0 - roughness) * 0.9 + 0.1));
+    const float range = 300.0 * pow((1.0 - roughness) * 0.9 + 0.1, 4.0);
 
     vec2 f = vec2(viewDist, hitDist);
     f = clamp(f / range, vec2(0.0), vec2(1.0));
@@ -299,14 +299,8 @@ ShHitInfo getHitInfoBounce(
 #if defined(HITINFO_INL_RFL)
     virtualPosForMotion += viewDir * rayLen;
 
-    // account for the hit geometry's own motion between frames; without it the motion
-    // vector only reflects camera movement, so the temporal accumulation rejects the
-    // reprojected history of moving geometry, and such models vanish when seen through
-    // reflecting/refracting surfaces (e.g. crushers and barnacle tongues below water)
-    const vec3 hitPosPrev = tr.prevPositions * baryCoords;
-
     const vec4 viewSpacePosCur   = globalUniform.view     * vec4(virtualPosForMotion, 1.0);
-    const vec4 viewSpacePosPrev  = globalUniform.viewPrev * vec4(virtualPosForMotion - (h.hitPosition - hitPosPrev), 1.0);
+    const vec4 viewSpacePosPrev  = globalUniform.viewPrev * vec4(virtualPosForMotion, 1.0);
     const vec4 clipSpacePosCur   = globalUniform.projection     * viewSpacePosCur;
     const vec4 clipSpacePosPrev  = globalUniform.projectionPrev * viewSpacePosPrev;
     const vec3 ndcCur            = clipSpacePosCur.xyz  / clipSpacePosCur.w;
@@ -314,6 +308,7 @@ ShHitInfo getHitInfoBounce(
     const vec2 screenSpaceCur    = ndcCur.xy  * 0.5 + 0.5;
     const vec2 screenSpacePrev   = ndcPrev.xy * 0.5 + 0.5;
 
+    const float clipSpaceDepth   = clipSpacePosCur[2];
 #endif // HITINFO_INL_RFL
 
 

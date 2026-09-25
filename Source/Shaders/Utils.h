@@ -102,45 +102,47 @@ DirectionAndLength calcDirectionAndLengthSafe(const vec3 start, const vec3 end)
 
 
 
-#define NORMAL_QUANTIZATION 65535.0
-
-vec2 signNotZero(vec2 v)
-{
-    return vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0);
-}
+#define ENCODE_NORMAL_N_PHI 1 << 16
+#define ENCODE_NORMAL_N_THETA 1 << 16
 
 uint encodeNormal(vec3 n)
 {
-    n /= max(abs(n.x) + abs(n.y) + abs(n.z), 0.0001);
+    const uint N_phi = ENCODE_NORMAL_N_PHI;
+    const uint N_theta = ENCODE_NORMAL_N_THETA;
 
-    if (n.z < 0.0)
-    {
-        n.xy = (1.0 - abs(n.yx)) * signNotZero(n.xy);
-    }
+    float phi = acos(n.z);
+    // atan -> [-pi, pi], need [0, 2pi]
+	float theta = atan(n.y, n.x);
+    theta = theta < 0 ? theta + 2 * M_PI : theta;
 
-    const vec2 p = n.xy * 0.5 + 0.5;
+    uint j = uint(round(phi * (N_phi - 1) / M_PI));
+    uint k = uint(round(theta * N_theta / (2 * M_PI))) % N_theta;
 
-    return (uint(round(p.x * NORMAL_QUANTIZATION)) << 16) | uint(round(p.y * NORMAL_QUANTIZATION));
+    return (j << 16) | k;
 }
 
 vec3 decodeNormal(uint _packed)
 {
-    const vec2 p = vec2(_packed >> 16, _packed & 0xFFFF) * (2.0 / NORMAL_QUANTIZATION) - 1.0;
+    const uint N_phi = ENCODE_NORMAL_N_PHI;
+    const uint N_theta = ENCODE_NORMAL_N_THETA;
 
-    vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
+    uint j = _packed >> 16;
+    uint k = _packed & 0xFFFF;
 
-    if (n.z < 0.0)
-    {
-        n.xy = (1.0 - abs(n.yx)) * signNotZero(p);
-    }
+    float phi = j * M_PI / (N_phi - 1);
+    float theta = k * 2 * M_PI / N_theta;
 
-    return n * inversesqrt(max(dot(n, n), 1e-8));
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
 }
 
 vec3 safeNormalize(const vec3 v)
 {
-    const float d2 = dot(v, v);
-    return d2 > 1e-6 ? v * inversesqrt(d2) : vec3(0, 1, 0);
+    const float len = length(v);
+    return len > 0.001 ? v / len : vec3(0, 1, 0);
 }
 
 

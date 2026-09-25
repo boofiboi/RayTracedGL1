@@ -59,8 +59,7 @@ ReservoirIndirect emptyReservoirIndirect()
 
 float calcSelectedSampleWeightIndirect(const ReservoirIndirect r)
 {
-    float w = safePositiveRcp(getLuminance(r.selected.radiance)) * (r.weightSum / float(max(1, r.M)));
-    return clamp(w, 0.0, 20.0);
+    return safePositiveRcp(getLuminance(r.selected.radiance)) * (r.weightSum / float(max(1, r.M)));
 }
 
 void normalizeReservoirIndirect(inout ReservoirIndirect r, uint maxM)
