@@ -1594,6 +1594,48 @@ void RTGL1::GltfExporter::ExportToFiles( const std::filesystem::path& gltfPath,
                  std::filesystem::absolute( GetGltfFolder( gltfPath ) ).string() );
 }
 
+void RTGL1::GltfExporter::ExportTexturesOnly( const std::filesystem::path& gltfPath,
+                                              const TextureManager&        textureManager,
+                                              bool                         overwriteExisting )
+{
+    if( sceneMaterials.empty() )
+    {
+        debug::Warning( "Nothing to export. Check uploaded primitives window" );
+        return;
+    }
+
+    if( gltfPath.empty() )
+    {
+        debug::Warning( "Can't export: Destination path is empty" );
+        return;
+    }
+
+    if( !PrepareFolder( gltfPath ) )
+    {
+        debug::Warning( "Denied to write to the folder {}",
+                        std::filesystem::absolute( GetGltfFolder( gltfPath ) ).string() );
+        return;
+    }
+
+    debug::Info( "Exporting textures..." );
+
+    const auto texturesFolder = GetOriginalTexturesFolder( gltfPath );
+
+    for( const auto& materialName : sceneMaterials )
+    {
+        if( materialName.empty() )
+        {
+            continue;
+        }
+
+        textureManager.ExportMaterialTextures(
+            materialName.c_str(), texturesFolder, overwriteExisting );
+    }
+
+    debug::Info( "Textures export successful: {}",
+                 std::filesystem::absolute( texturesFolder ).string() );
+}
+
 bool RTGL1::GltfMeshNode::operator==( const GltfMeshNode& other ) const
 {
     return this->name == other.name && TransformsAreEqual( this->transform, other.transform );

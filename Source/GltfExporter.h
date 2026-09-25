@@ -79,6 +79,10 @@ public:
     void ExportToFiles( const std::filesystem::path& gltfPath,
                         const TextureManager&        textureManager );
 
+    void ExportTexturesOnly( const std::filesystem::path& gltfPath,
+                             const TextureManager&        textureManager,
+                             bool                         overwriteExisting = true );
+
     // TODO: allocators, to not pass references
     static void MakeLightsForPrimitiveDynamic(
         const RgMeshInfo&                     mesh,

@@ -153,6 +153,7 @@ public:
     void OnFileChanged( FileType type, const std::filesystem::path& filepath ) override;
 
     void          RequestExport();
+    void          RequestExportTexturesOnly();
     GltfExporter* TryGetExporter();
 
     std::string_view GetImportMapName() const;
@@ -171,6 +172,8 @@ private:
     bool reimportRequested{ false };
 
     bool                            exportRequested{ false };
+    bool                            exportTexturesOnlyRequested{ false };
+    bool                            exportOnlyTextures{ false };
     std::unique_ptr< GltfExporter > exporter{};
 
     std::string currentMap{};

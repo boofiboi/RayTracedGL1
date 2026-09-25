@@ -400,10 +400,13 @@ RTGL1::SceneImportExport::SceneImportExport( std::filesystem::path _scenesFolder
 
 void RTGL1::SceneImportExport::PrepareForFrame()
 {
-    if( exportRequested )
+    if( exportRequested || exportTexturesOnlyRequested )
     {
-        exporter        = std::make_unique< GltfExporter >( MakeWorldTransform(), GetWorldScale() );
-        exportRequested = false;
+        exporter           = std::make_unique< GltfExporter >( MakeWorldTransform(), GetWorldScale() );
+        exportOnlyTextures = exportTexturesOnlyRequested;
+
+        exportRequested             = false;
+        exportTexturesOnlyRequested = false;
     }
 }
 
@@ -438,8 +441,17 @@ void RTGL1::SceneImportExport::TryExport( TextureManager& textureManager )
 {
     if( exporter )
     {
-        exporter->ExportToFiles( MakeGltfPath( GetExportMapName() ), textureManager );
+        if( exportOnlyTextures )
+        {
+            exporter->ExportTexturesOnly(
+                MakeGltfPath( GetExportMapName() ), textureManager, true );
+        }
+        else
+        {
+            exporter->ExportToFiles( MakeGltfPath( GetExportMapName() ), textureManager );
+        }
         exporter.reset();
+        exportOnlyTextures = false;
     }
 }
 
@@ -535,5 +547,12 @@ std::filesystem::path RTGL1::SceneImportExport::MakeGltfPath( std::string_view m
 
 void RTGL1::SceneImportExport::RequestExport()
 {
-    exportRequested = true;
+    exportRequested             = true;
+    exportTexturesOnlyRequested = false;
+}
+
+void RTGL1::SceneImportExport::RequestExportTexturesOnly()
+{
+    exportTexturesOnlyRequested = true;
+    exportRequested             = false;
 }

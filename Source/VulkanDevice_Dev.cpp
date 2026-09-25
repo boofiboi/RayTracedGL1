@@ -692,9 +692,14 @@ void RTGL1::VulkanDevice::Dev_Draw() const
             ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.98f, 0.59f, 0.26f, 0.40f ) );
             ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.98f, 0.59f, 0.26f, 1.00f ) );
             ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.98f, 0.53f, 0.06f, 1.00f ) );
-            if( ImGui::Button( "Export frame geometry", { -1, 80 } ) )
+            if( ImGui::Button( "Export frame geometry", { -1, 50 } ) )
             {
                 sceneImportExport->RequestExport();
+            }
+            ImGui::Dummy( ImVec2( 0, 4 ) );
+            if( ImGui::Button( "Export textures only", { -1, 50 } ) )
+            {
+                sceneImportExport->RequestExportTexturesOnly();
             }
             ImGui::PopStyleColor( 3 );
 
