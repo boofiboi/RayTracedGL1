@@ -179,7 +179,7 @@
 #define PORTAL_INDEX_NONE (63)
 #define PORTAL_MAX_COUNT (63)
 #define PACKED_INDIRECT_SAMPLE_SIZE_IN_WORDS (6)
-#define PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS (7)
+#define PACKED_INDIRECT_RESERVOIR_SIZE_IN_WORDS (8)
 #define VOLUMETRIC_SIZE_X (160)
 #define VOLUMETRIC_SIZE_Y (88)
 #define VOLUMETRIC_SIZE_Z (64)
@@ -573,9 +573,9 @@ layout(set = DESC_SET_FRAMEBUFFERS, binding = 64, r11f_g11f_b10f) uniform image2
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 65, r11f_g11f_b10f) uniform image2D framebufBloom_Mip8;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 66, r11f_g11f_b10f) uniform image2D framebufBloom_Result;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 67, r11f_g11f_b10f) uniform image2D framebufWipeEffectSource;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 68, rg32ui) uniform uimage2D framebufReservoirs;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 69, rg32ui) uniform uimage2D framebufReservoirs_Prev;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 70, rg32ui) uniform uimage2D framebufReservoirsInitial;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 68, rgba32ui) uniform uimage2D framebufReservoirs;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 69, rgba32ui) uniform uimage2D framebufReservoirs_Prev;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 70, rgba32ui) uniform uimage2D framebufReservoirsInitial;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 71, rgba16f) uniform image2D framebufNrdDiffuseHitDist;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 72, rgba16f) uniform image2D framebufNrdSpecularHitDist;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 73, rgba16f) uniform image2D framebufNrdNormalRoughness;
