@@ -52,7 +52,8 @@
 #include "EffectWipe.h"
 #include "EffectSimple_Instances.h"
 #include "LightGrid.h"
-#include "FSR3.h"
+#include "UpscalerFSR3.h"
+#include "FrameGeneratorFSR3.h"
 #include "FrameState.h"
 #include "PortalList.h"
 #include "RestirBuffers.h"
@@ -143,6 +144,8 @@ private:
 
     void FillUniform( ShGlobalUniform* gu, const RgDrawFrameInfo& drawInfo ) const;
 
+    IUpscaler*      GetActiveUpscaler() const;
+
     VkCommandBuffer BeginFrame( const RgStartFrameInfo& info );
     void            Render( VkCommandBuffer cmd, const RgDrawFrameInfo& drawInfo );
     void            EndFrame( VkCommandBuffer cmd );
@@ -159,8 +162,14 @@ private:
 
     FrameState currentFrameState;
 
-    // incremented every frame
+    // incremented every rendered frame
     uint32_t frameId;
+
+    // frame generation was requested for the previous frame (BeginFrame uses it for vsync)
+    bool frameGenerationActive;
+    // set when a stale frame was presented (level transitions); the next rendered
+    // frame starts with a clean upscaler / frame-generation history
+    bool forceUpscalerReset;
 
     VkFence     frameFences[ MAX_FRAMES_IN_FLIGHT ]              = {};
     VkSemaphore imageAvailableSemaphores[ MAX_FRAMES_IN_FLIGHT ] = {};
@@ -199,7 +208,8 @@ private:
     std::shared_ptr< Tonemapping >               tonemapping;
     std::shared_ptr< ImageComposition >          imageComposition;
     std::shared_ptr< Bloom >                     bloom;
-    std::shared_ptr< FSR3 > amdFsr3;
+    std::shared_ptr< IUpscaler >                 upscalerFsr3;
+    std::shared_ptr< IFrameGenerator >           frameGenerator;
     std::shared_ptr< DLSS >                      nvDlss;
     std::shared_ptr< Sharpening >                sharpening;
     std::shared_ptr< EffectWipe >                effectWipe;

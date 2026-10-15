@@ -30,7 +30,7 @@
 namespace RTGL1
 {
 
-class Queues;
+class IFrameGeneratorSwapchain;
 
 class Swapchain
 {
@@ -38,9 +38,7 @@ public:
     Swapchain( VkDevice                                device,
                VkSurfaceKHR                            surface,
                VkPhysicalDevice                        physDevice,
-               std::shared_ptr< CommandBufferManager > cmdManager,
-               std::shared_ptr< Queues >               queues                = nullptr,
-               bool                                    enableFrameGeneration = false );
+               std::shared_ptr< CommandBufferManager > cmdManager );
     ~Swapchain();
 
     Swapchain( const Swapchain& other )     = delete;
@@ -62,6 +60,9 @@ public:
     void       OnQueuePresent( VkResult queuePresentResult );
 
     void Subscribe( std::shared_ptr< ISwapchainDependency > subscriber );
+
+    // Frame-generator swapchain hijack (e.g. AMD FSR3). Must be set before the first AcquireImage.
+    void SetFrameGenerator( IFrameGeneratorSwapchain* hooks );
 
     VkFormat           GetSurfaceFormat() const;
     uint32_t           GetWidth() const;
@@ -102,8 +103,7 @@ private:
     VkSurfaceKHR                                       surface;
     VkPhysicalDevice                                   physDevice;
     std::shared_ptr< CommandBufferManager >            cmdManager;
-    std::shared_ptr< Queues >                          queues;
-    bool                                               enableFrameGeneration;
+    IFrameGeneratorSwapchain*                          fgHooks;
 
     VkSurfaceFormatKHR                                 surfaceFormat;
     VkPresentModeKHR                                   presentModeVsync;
@@ -121,13 +121,6 @@ private:
 
     mutable VkSurfaceCapabilitiesKHR                   cachedCapabilities;
     mutable bool                                       capabilitiesDirty;
-
-    void*                                              fgSwapchainContext;
-    void*                                              pfnCreateSwapchainFFX;
-    void*                                              pfnDestroySwapchainFFX;
-    void*                                              pfnGetSwapchainImagesKHR;
-    void*                                              pfnAcquireNextImageKHR;
-    void*                                              pfnQueuePresentKHR;
 
     std::list< std::weak_ptr< ISwapchainDependency > > subscribers;
 };

@@ -22,7 +22,7 @@
 
 #include <vector>
 
-#include "Framebuffers.h"
+#include "Upscaler.h"
 
 struct NVSDK_NGX_Parameter;
 struct NVSDK_NGX_Handle;
@@ -34,7 +34,7 @@ namespace RTGL1
 class RenderResolutionHelper;
 
 
-class DLSS
+class DLSS : public IUpscaler
 {
 public:
     DLSS( VkInstance       instance,
@@ -55,7 +55,17 @@ public:
                                  const RenderResolutionHelper&          renderResolution,
                                  RgFloat2D                              jitterOffset,
                                  double                                 timeDelta,
-                                 bool                                   resetAccumulation );
+                                 float                                  nearPlane,
+                                 float                                  farPlane,
+                                 float                                  fovVerticalRad,
+                                 bool                                   resetAccumulation ) override;
+
+    RgFloat2D GetJitter( const ResolutionState& resolutionState, uint32_t frameId ) const override;
+
+    bool      IsAvailable() const override;
+
+    // DLSS detects size changes internally in Apply (ValidateDlssFeature)
+    void      OnFramebuffersSizeChange( const ResolutionState& resolutionState ) override;
 
     void GetOptimalSettings( uint32_t               userWidth,
                              uint32_t               userHeight,

@@ -25,6 +25,7 @@
 
 #include "RTGL1/RTGL1.h"
 #include "CmdLabel.h"
+#include "HaltonSequence.h"
 #include "RenderResolutionHelper.h"
 
 
@@ -401,6 +402,9 @@ RTGL1::FramebufferImageIndex RTGL1::DLSS::Apply(
     const RenderResolutionHelper&          renderResolution,
     RgFloat2D                              jitterOffset,
     double                                 timeDelta,
+    float                                  nearPlane,
+    float                                  farPlane,
+    float                                  fovVerticalRad,
     bool                                   resetAccumulation )
 {
     if( !IsDlssAvailable() )
@@ -599,6 +603,9 @@ RTGL1::FramebufferImageIndex RTGL1::DLSS::Apply(
     const RenderResolutionHelper&          renderResolution,
     RgFloat2D                              jitterOffset,
     double                                 timeDelta,
+    float                                  nearPlane,
+    float                                  farPlane,
+    float                                  fovVerticalRad,
     bool                                   resetAccumulation )
 {
     throw RgException(
@@ -660,3 +667,15 @@ bool RTGL1::DLSS::ValidateDlssFeature( VkCommandBuffer               cmd,
 
 
 #endif // RG_USE_NVIDIA_DLSS
+
+RgFloat2D RTGL1::DLSS::GetJitter( const ResolutionState& resolutionState, uint32_t frameId ) const
+{
+    return HaltonSequence::GetJitter_Halton23( frameId );
+}
+
+bool RTGL1::DLSS::IsAvailable() const
+{
+    return IsDlssAvailable();
+}
+
+void RTGL1::DLSS::OnFramebuffersSizeChange( const ResolutionState& resolutionState ) {}

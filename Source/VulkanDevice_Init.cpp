@@ -184,6 +184,8 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     , device( VK_NULL_HANDLE )
     , surface( VK_NULL_HANDLE )
     , frameId( 1 )
+    , frameGenerationActive( false )
+    , forceUpscalerReset( false )
     , waitForOutOfFrameFence( false )
     , ovrdFolder( Utils::SafeCstr( info->pOverrideFolderPath ) )
     , libconfig( ReadConfig( info->pConfigPath ) )
@@ -239,12 +241,10 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     enableFrameGeneration = info->enableFrameGeneration;
 
     swapchain = std::make_shared< Swapchain >(
-        device, 
-        surface, 
-        physDevice->Get(), 
-        cmdManager,
-        queues,
-        enableFrameGeneration );
+        device,
+        surface,
+        physDevice->Get(),
+        cmdManager );
     
     if( libconfig.developerMode )
     {
@@ -417,11 +417,21 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         *textureManager,
         *tonemapping );
 
-    amdFsr3 = std::make_shared< FSR3 >( 
-        device, 
-        physDevice->Get(),
-        memAllocator,
-        enableFrameGeneration );
+    upscalerFsr3 = std::make_shared< UpscalerFSR3 >(
+        device,
+        physDevice->Get() );
+
+    if( enableFrameGeneration )
+    {
+        frameGenerator = std::make_shared< FrameGeneratorFSR3 >(
+            device,
+            physDevice->Get(),
+            memAllocator,
+            queues,
+            swapchain->GetSurfaceFormat() );
+
+        swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
+    }
 
     nvDlss = std::make_shared< DLSS >(
         instance, 
@@ -498,7 +508,11 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
-    framebuffers->Subscribe( amdFsr3 );
+    framebuffers->Subscribe( upscalerFsr3 );
+    if( frameGenerator )
+    {
+        framebuffers->Subscribe( frameGenerator );
+    }
     framebuffers->Subscribe( restirBuffers );
 
     if( observer )
@@ -529,7 +543,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
     denoiser.reset();
     sharpening.reset();
     nvDlss.reset();
-    amdFsr3.reset();
+    upscalerFsr3.reset();
     bloom.reset();
     imageComposition.reset();
     pathTracer.reset();
@@ -563,6 +577,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
 
     framebuffers.reset();
     swapchain.reset();
+    frameGenerator.reset();
     cmdManager.reset();
     memAllocator.reset();
 

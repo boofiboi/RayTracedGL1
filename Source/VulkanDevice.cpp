@@ -20,7 +20,6 @@
 
 #include "VulkanDevice.h"
 
-#include "HaltonSequence.h"
 #include "Matrix.h"
 #include "RenderResolutionHelper.h"
 #include "RgException.h"
@@ -46,7 +45,8 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
             device, frameFences[ frameIndex ], outOfFrameFences[ frameIndex ] );
     }
 
-    swapchain->RequestVsync( vsync );
+    // frame generation requires a vsync (FIFO) present mode for correct pacing
+    swapchain->RequestVsync( vsync || frameGenerationActive );
     swapchain->AcquireImage( imageAvailableSemaphores[ frameIndex ] );
 
     VkSemaphore semaphoreToWaitOnSubmit = imageAvailableSemaphores[ frameIndex ];
@@ -191,11 +191,11 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
         gu->upscaledRenderWidth  = static_cast< float >( renderResolution.UpscaledWidth() );
         gu->upscaledRenderHeight = static_cast< float >( renderResolution.UpscaledHeight() );
 
-        RgFloat2D jitter = renderResolution.IsNvDlssEnabled()
-                               ? HaltonSequence::GetJitter_Halton23( frameId )
-                           : renderResolution.IsAmdFsr3Enabled()
-                               ? FSR3::GetJitter( renderResolution.GetResolutionState(), frameId )
-                               : RgFloat2D{ 0, 0 };
+        RgFloat2D jitter = { 0, 0 };
+        if( const IUpscaler* activeUpscaler = GetActiveUpscaler() )
+        {
+            jitter = activeUpscaler->GetJitter( renderResolution.GetResolutionState(), frameId );
+        }
 
         gu->jitterX = jitter.data[ 0 ];
         gu->jitterY = jitter.data[ 1 ];
@@ -631,29 +631,24 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
         double      timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
 
+        // presenting a stale frame (level transition) breaks temporal continuity,
+        // so the next rendered frame starts with a clean upscaler history
+        const bool resetUpscaler = params.resetUpscalerHistory || forceUpscalerReset;
+        forceUpscalerReset       = drawInfo.presentPrevFrame;
+
         // upscale finalized image
-        if( renderResolution.IsNvDlssEnabled() )
+        if( IUpscaler* activeUpscaler = GetActiveUpscaler() )
         {
-            accum = nvDlss->Apply( cmd,
-                                   frameIndex,
-                                   framebuffers,
-                                   renderResolution,
-                                   jitter,
-                                   timeDelta,
-                                   params.resetUpscalerHistory );
-        }
-        else if( renderResolution.IsAmdFsr3Enabled() )
-        {
-            accum = amdFsr3->Apply( cmd,
-                                    frameIndex,
-                                    framebuffers,
-                                    renderResolution,
-                                    jitter,
-                                    timeDelta,
-                                    drawInfo.cameraNear,
-                                    drawInfo.cameraFar,
-                                    drawInfo.fovYRadians,
-                                    params.resetUpscalerHistory );
+            accum = activeUpscaler->Apply( cmd,
+                                           frameIndex,
+                                           framebuffers,
+                                           renderResolution,
+                                           jitter,
+                                           timeDelta,
+                                           drawInfo.cameraNear,
+                                           drawInfo.cameraFar,
+                                           drawInfo.fovYRadians,
+                                           resetUpscaler );
         }
 
         accum = framebuffers->BlitForEffects(
@@ -727,42 +722,49 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         }
     }
 
-    if( enableFrameGeneration )
+    if( frameGenerator )
     {
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
-        bool isFgActive = params.enableFrameGeneration;
+
+        frameGenerationActive = frameGenerator->IsAvailable() && params.enableFrameGeneration;
+
+        const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
+        double timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
 
         if( isFgActive )
         {
-            amdFsr3->PrepareFrameGeneration( cmd,
-                                             frameIndex,
-                                             framebuffers,
-                                             renderResolution,
-                                             jitter,
-                                             currentFrameTime - previousFrameTime,
-                                             drawInfo.cameraNear,
-                                             drawInfo.cameraFar,
-                                             drawInfo.fovYRadians,
-                                             params.resetUpscalerHistory,
-                                             uniform->GetData()->view,
-                                             frameId );
-
             auto [ accumImage, accumView, accumFormat, accumSz ] =
                 framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
 
-            amdFsr3->CaptureHudless( cmd,
-                                     frameIndex,
-                                     accumImage,
-                                     renderResolution.UpscaledWidth(),
-                                     renderResolution.UpscaledHeight() );
+            frameGenerator->CaptureHudless( cmd,
+                                            frameIndex,
+                                            accumImage,
+                                            renderResolution.UpscaledWidth(),
+                                            renderResolution.UpscaledHeight() );
         }
 
-        amdFsr3->ConfigureFrameGeneration( swapchain->GetHandle(),
-                                           frameIndex,
-                                           renderResolution.UpscaledWidth(),
-                                           renderResolution.UpscaledHeight(),
-                                           frameId,
-                                           isFgActive );
+        frameGenerator->ConfigureFrame( swapchain->GetHandle(),
+                                        frameIndex,
+                                        renderResolution.UpscaledWidth(),
+                                        renderResolution.UpscaledHeight(),
+                                        frameId,
+                                        isFgActive );
+
+        if( isFgActive )
+        {
+            frameGenerator->PrepareFrame( cmd,
+                                          frameIndex,
+                                          framebuffers,
+                                          renderResolution,
+                                          jitter,
+                                          timeDelta,
+                                          drawInfo.cameraNear,
+                                          drawInfo.cameraFar,
+                                          drawInfo.fovYRadians,
+                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame,
+                                          uniform->GetData()->view,
+                                          frameId );
+        }
     }
 
     if( !drawInfo.disableRasterization )
@@ -903,8 +905,6 @@ void RTGL1::VulkanDevice::EndFrame( VkCommandBuffer cmd )
             debugWindows->OnQueuePresent( debugResult );
         }
     }
-
-    frameId++;
 }
 
 
@@ -985,6 +985,10 @@ void RTGL1::VulkanDevice::DrawFrame( const RgDrawFrameInfo* pOriginalInfo )
         FillUniform( uniform->GetData(), info );
         Dev_Draw();
         Render( cmd, info );
+
+        // FSR3 frame generation requires the frame ID to increment by exactly one
+        // per rendered frame, so skipped frames must not advance it
+        frameId++;
     }
 
     EndFrame( cmd );
@@ -1386,6 +1390,19 @@ bool RTGL1::VulkanDevice::IsSuspended() const
     return false;
 }
 
+RTGL1::IUpscaler* RTGL1::VulkanDevice::GetActiveUpscaler() const
+{
+    if( renderResolution.IsNvDlssEnabled() )
+    {
+        return nvDlss.get();
+    }
+    if( renderResolution.IsAmdFsr3Enabled() )
+    {
+        return upscalerFsr3.get();
+    }
+    return nullptr;
+}
+
 bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique technique ) const
 {
     switch( technique )
@@ -1393,9 +1410,9 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
         case RG_RENDER_UPSCALE_TECHNIQUE_NEAREST:
         case RG_RENDER_UPSCALE_TECHNIQUE_LINEAR: return true;
 
-        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3: return amdFsr3->IsFsr3Available();
+        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3: return upscalerFsr3->IsAvailable();
 
-        case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: return nvDlss->IsDlssAvailable();
+        case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: return nvDlss->IsAvailable();
 
         default:
             throw RgException(
@@ -1406,7 +1423,7 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
 
 bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
 {
-    return amdFsr3->IsFrameGenerationAvailable();
+    return frameGenerator && frameGenerator->IsAvailable();
 }
 
 RgPrimitiveVertex* RTGL1::VulkanDevice::ScratchAllocForVertices( uint32_t vertexCount )

@@ -82,17 +82,18 @@ Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface, bool enableFr
     uint32_t dedicatedCompute = UINT32_MAX;
     uint32_t dedicatedTransfer = UINT32_MAX;
 
+    std::vector< VkBool32 > presentSupported( queueFamilyCount, VK_FALSE );
+
     for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
     {
         auto flags = queueFamilyProperties[ i ].queueFlags;
 
-        VkBool32 presentSupported = VK_FALSE;
-        VkResult r =
-            vkGetPhysicalDeviceSurfaceSupportKHR( physDevice, i, surface, &presentSupported );
+        VkResult r = vkGetPhysicalDeviceSurfaceSupportKHR(
+            physDevice, i, surface, &presentSupported[ i ] );
         VK_CHECKERROR( r );
 
         if( ( flags & VK_QUEUE_GRAPHICS_BIT ) != 0 && ( flags & VK_QUEUE_COMPUTE_BIT ) != 0 &&
-            ( flags & VK_QUEUE_TRANSFER_BIT ) != 0 && presentSupported )
+            ( flags & VK_QUEUE_TRANSFER_BIT ) != 0 && presentSupported[ i ] )
         {
             indexGraphics = i;
         }
@@ -136,66 +137,117 @@ Queues::Queues( VkPhysicalDevice physDevice, VkSurfaceKHR surface, bool enableFr
     }
     else
     {
+        // Frame generation: the FFX swapchain replacement takes over acquire/present and runs
+        // interpolation workloads. Its queues must be separate from the engine's queues:
+        // a present queue shared with rendering serializes (or deadlocks) frame pacing,
+        // and the async compute queue should be a dedicated compute queue.
+        // See ffxCreateContextDescFrameGenerationSwapChainVK in ffx_api_vk.h.
         uint32_t allocated[ 16 ] = {};
 
-        subIndexGraphics = 0;
-        allocated[ indexGraphics ] = std::max( allocated[ indexGraphics ], 1U );
+        auto takeQueue = [ & ]( uint32_t family ) -> uint32_t
+        {
+            if( allocated[ family ] < queueFamilyProperties[ family ].queueCount )
+            {
+                return allocated[ family ]++;
+            }
+            return 0;
+        };
 
-        if( dedicatedCompute != UINT32_MAX )
-        {
-            indexCompute = dedicatedCompute;
-            subIndexCompute = allocated[ dedicatedCompute ];
-            if( allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
-            {
-                allocated[ dedicatedCompute ]++;
-            }
-        }
-        else
-        {
-            indexCompute = indexGraphics;
-            if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
-            {
-                subIndexCompute = allocated[ indexGraphics ]++;
-            }
-            else
-            {
-                subIndexCompute = 0;
-            }
-        }
-
-        indexPresent = indexGraphics;
-        if( allocated[ indexGraphics ] < queueFamilyProperties[ indexGraphics ].queueCount )
-        {
-            subIndexPresent = allocated[ indexGraphics ]++;
-        }
-        else
-        {
-            subIndexPresent = 0;
-        }
+        subIndexGraphics = takeQueue( indexGraphics );
 
         if( dedicatedTransfer != UINT32_MAX )
         {
-            indexAcquire = dedicatedTransfer;
-            subIndexAcquire = 0;
-            allocated[ dedicatedTransfer ] = std::max( allocated[ dedicatedTransfer ], 1U );
-        }
-        else if( dedicatedCompute != UINT32_MAX && allocated[ dedicatedCompute ] < queueFamilyProperties[ dedicatedCompute ].queueCount )
-        {
-            indexAcquire = dedicatedCompute;
-            subIndexAcquire = allocated[ dedicatedCompute ]++;
+            indexTransfer    = dedicatedTransfer;
+            subIndexTransfer = takeQueue( dedicatedTransfer );
         }
         else
         {
-            indexAcquire = indexGraphics;
-            subIndexAcquire = 0;
+            indexTransfer    = indexGraphics;
+            subIndexTransfer = takeQueue( indexGraphics );
         }
 
-        indexTransfer = ( dedicatedTransfer != UINT32_MAX ) ? dedicatedTransfer : indexGraphics;
-        subIndexTransfer = ( indexTransfer == dedicatedTransfer ) ? 0 : subIndexGraphics;
+        if( dedicatedCompute != UINT32_MAX )
+        {
+            indexCompute    = dedicatedCompute;
+            subIndexCompute = takeQueue( dedicatedCompute );
+        }
+        else
+        {
+            indexCompute    = indexGraphics;
+            subIndexCompute = takeQueue( indexGraphics );
+        }
+
+        // present queue: needs transfer + present support; prefer a family
+        // that the engine doesn't use (engine: graphics + transfer)
+        indexPresent    = UINT32_MAX;
+        subIndexPresent = 0;
+        for( uint32_t i = 0; i < queueFamilyCount; i++ )
+        {
+            if( i == indexGraphics || i == indexTransfer )
+            {
+                continue;
+            }
+            if( !presentSupported[ i ] )
+            {
+                continue;
+            }
+            if( ( queueFamilyProperties[ i ].queueFlags & VK_QUEUE_TRANSFER_BIT ) == 0 )
+            {
+                continue;
+            }
+            if( allocated[ i ] >= queueFamilyProperties[ i ].queueCount )
+            {
+                continue;
+            }
+
+            indexPresent    = i;
+            subIndexPresent = takeQueue( i );
+            break;
+        }
+        if( indexPresent == UINT32_MAX )
+        {
+            // last resort: a separate queue in the graphics family
+            indexPresent    = indexGraphics;
+            subIndexPresent = takeQueue( indexGraphics );
+        }
+
+        // acquire queue: no capability requirements; prefer a family used by no one
+        indexAcquire    = UINT32_MAX;
+        subIndexAcquire = 0;
+        for( uint32_t i = 0; i < queueFamilyCount; i++ )
+        {
+            if( i == indexGraphics || i == indexTransfer || i == indexCompute ||
+                i == indexPresent )
+            {
+                continue;
+            }
+            if( allocated[ i ] >= queueFamilyProperties[ i ].queueCount )
+            {
+                continue;
+            }
+
+            indexAcquire    = i;
+            subIndexAcquire = takeQueue( i );
+            break;
+        }
+        if( indexAcquire == UINT32_MAX )
+        {
+            if( allocated[ indexCompute ] < queueFamilyProperties[ indexCompute ].queueCount )
+            {
+                indexAcquire    = indexCompute;
+                subIndexAcquire = takeQueue( indexCompute );
+            }
+            else
+            {
+                indexAcquire    = indexGraphics;
+                subIndexAcquire = takeQueue( indexGraphics );
+            }
+        }
 
         for( uint32_t i = 0; i < queueFamilyProperties.size(); i++ )
         {
-            requestedQueueCounts[ i ] = std::min( allocated[ i ], queueFamilyProperties[ i ].queueCount );
+            requestedQueueCounts[ i ] =
+                std::min( allocated[ i ], queueFamilyProperties[ i ].queueCount );
         }
     }
 
