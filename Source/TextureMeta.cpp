@@ -84,6 +84,7 @@ auto RTGL1::TextureMetaManager::Access( const char* pTextureName ) const
     };
 
     auto strTextureName = std::string( pTextureName );
+
     if( auto meta = Find( strTextureName ) )
     {
         return meta;
@@ -92,10 +93,15 @@ auto RTGL1::TextureMetaManager::Access( const char* pTextureName ) const
     // The engine may pass the texture name in a different form than the
     // textures.json key, e.g. "#maps/!watergreen.mip" vs "!watergreen".
     // Try a normalized form before giving up.
-    constexpr std::string_view MAPS_PREFIX = "#maps/";
-    constexpr std::string_view MIP_SUFFIX  = ".mip";
+    constexpr std::string_view MAPS_PREFIX    = "#maps/";
+    constexpr std::string_view MIP_SUFFIX     = ".mip";
+    constexpr std::string_view RIPPLE_PREFIX  = "*rippletex_";
 
     std::string normalized = strTextureName;
+    if( normalized.starts_with( RIPPLE_PREFIX ) )
+    {
+        normalized.erase( 0, RIPPLE_PREFIX.size() );
+    }
     if( normalized.starts_with( MAPS_PREFIX ) )
     {
         normalized.erase( 0, MAPS_PREFIX.size() );

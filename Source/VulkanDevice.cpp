@@ -132,7 +132,7 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
             *lightManager,
             // SHIPPING HACK
             uniform->GetData()->volumeAllowTintUnderwater &&
-                uniform->GetData()->cameraMediaType == RG_MEDIA_TYPE_WATER,
+                uniform->GetData()->cameraMediaType == MEDIA_TYPE_WATER,
             Utils::PackColorFromFloat( uniform->GetData()->volumeUnderwaterColor ) );
     }
 
@@ -323,8 +323,13 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
         gu->indexOfRefractionWater = std::max( 0.0f, params.indexOfRefractionWater );
         gu->thinMediaWidth         = std::max( 0.0f, params.thinMediaWidth );
 
-        memcpy( gu->waterColorAndDensity, params.waterColor.data, 3 * sizeof( float ) );
-        gu->waterColorAndDensity[ 3 ] = 0.0f;
+        gu->waterColorAndDensity[ 0 ] = std::clamp( params.waterColor.data[ 0 ], 0.0f, 1.0f );
+        gu->waterColorAndDensity[ 1 ] = std::clamp( params.waterColor.data[ 1 ], 0.0f, 1.0f );
+        gu->waterColorAndDensity[ 2 ] = std::clamp( params.waterColor.data[ 2 ], 0.0f, 1.0f );
+        gu->waterColorAndDensity[ 3 ] = std::max( 0.0f, params.waterDensity );
+
+        // to convert "color at 1 meter" into a per-world-unit extinction
+        gu->waterWorldScale = sceneImportExport->GetWorldScale();
 
         memcpy( gu->acidColorAndDensity, params.acidColor.data, 3 * sizeof( float ) );
         gu->acidColorAndDensity[ 3 ] = std::max( 0.0f, params.acidDensity );

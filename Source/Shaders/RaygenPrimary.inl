@@ -93,7 +93,7 @@ vec2 getMotionForInfinitePoint(const ivec2 pix)
 }
 
 void storeSky(
-    const ivec2 pix, const vec3 rayDir, bool calculateSkyAndStoreToAlbedo, const vec3 throughput,
+    const ivec2 pix, const vec3 rayDir, bool calculateSkyAndStoreToAlbedo, const vec3 throughput, const vec3 mediaFog,
 #ifdef RAYGEN_PRIMARY_SHADER
     float firstHitDepthNDC )
 #else
@@ -129,7 +129,7 @@ void storeSky(
     imageStore(framebufVisibilityBuffer,    pix, vec4(UINT32_MAX));
     imageStore(framebufViewDirection,       pix, vec4(rayDir, 0.0));
     imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix( pix ), vec4( 0.0 ) );
-    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix( pix ), vec4( 0.0 ) );
+    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix( pix ), vec4( mediaFog, 0.0 ) );
 #ifdef RAYGEN_PRIMARY_SHADER
     imageStore(framebufPrimaryToReflRefr,   pix, uvec4(0, 0, PORTAL_INDEX_NONE, 0));
     imageStore(framebufDepthGrad,           pix, vec4(0.0));
@@ -145,13 +145,17 @@ void storeSky(
 
 uint getNewRayMedia(int i, uint prevMedia, uint geometryInstanceFlags, float roughness)
 {
-    // if camera is not in vacuum, assume that new media is vacuum
-    if (i == 0 && globalUniform.cameraMediaType != MEDIA_TYPE_VACUUM)
+    const uint hitMedia = getMediaTypeFromFlags(geometryInstanceFlags, roughness);
+
+    // if camera is inside some media, and the first hit is the surface
+    // of the same media, then the ray exits it to vacuum
+    // (e.g. looking at the water surface from underwater)
+    if (i == 0 && prevMedia != MEDIA_TYPE_VACUUM && hitMedia == prevMedia)
     {
        return MEDIA_TYPE_VACUUM;
     }
 
-    return getMediaTypeFromFlags(geometryInstanceFlags, roughness);
+    return hitMedia;
 }
 
 vec3 getWaterNormal(const RayCone rayCone, const vec3 rayDir, const vec3 baseNormal, const vec3 position, bool wasPortal)
@@ -302,14 +306,39 @@ void main()
     const uint currentRayMedia = globalUniform.cameraMediaType;
 
 
+    // resolve properties of the water the camera is submerged in.
+    // Global params by default, but if the surface of the water body above the camera
+    // carries per-material params (e.g. waterColor / waterDensity from the texture JSON),
+    // they take precedence
+    vec3  cameraWaterColor   = globalUniform.waterColorAndDensity.rgb;
+    float cameraWaterDensity = globalUniform.waterColorAndDensity.a;
+    if( currentRayMedia == MEDIA_TYPE_WATER )
+    {
+        const ShPayload upProbe = tracePrimaryRay( cameraOrigin, globalUniform.worldUpVector.xyz );
+        if( doesPayloadContainHitInfo( upProbe ) )
+        {
+            int instId, instCustomIndex;
+            unpackInstanceIdAndCustomIndex( upProbe.instIdAndIndex, instId, instCustomIndex );
+            int geomIndex, primIndex;
+            unpackGeometryAndPrimitiveIndex( upProbe.geomAndPrimIndex, geomIndex, primIndex );
+            const ShTriangle tr = getTriangle( instId, instCustomIndex, geomIndex, primIndex );
+            if( ( tr.geometryInstanceFlags & GEOM_INST_FLAG_MEDIA_TYPE_WATER ) != 0 )
+            {
+                cameraWaterColor   = resolveWaterColor( tr.waterColor );
+                cameraWaterDensity = resolveWaterDensity( tr.waterDensity );
+            }
+        }
+    }
+
+
     // was no hit
     if (!doesPayloadContainHitInfo(primaryPayload))
     {
-        vec3 throughput = vec3(1.0);
-        // throughput *= getMediaTransmittance(currentRayMedia, pow(abs(dot(cameraRayDir, globalUniform.worldUpVector.xyz)), -3));
+        vec3 throughput = getMediaTransmittance( currentRayMedia, getMediaSkyDistance( cameraRayDir ), cameraWaterColor, cameraWaterDensity );
+        vec3 mediaFog = getWaterVolumetricFog( currentRayMedia, cameraWaterColor, throughput );
 
         // if sky is a rasterized geometry, it was already rendered to albedo framebuf 
-        storeSky(pix, cameraRayDir, globalUniform.skyType != SKY_TYPE_RASTERIZED_GEOMETRY, throughput, MAX_RAY_LENGTH * 2.0);
+        storeSky(pix, cameraRayDir, globalUniform.skyType != SKY_TYPE_RASTERIZED_GEOMETRY, throughput, mediaFog, MAX_RAY_LENGTH * 2.0);
         return;
     }
 
@@ -324,54 +353,23 @@ void main()
 
 
     vec3 throughput = vec3(1.0);
-    vec3 primaryWaterFog = vec3(0.0);
+    vec3 mediaFog = vec3(0.0);
     if( currentRayMedia == MEDIA_TYPE_WATER )
     {
-        // while the camera is inside water, the first hit is usually the floor
-        // or walls, whose material carries no water properties. Probe the water
-        // surface above the camera to resolve the enclosing water's color and
-        // density (e.g. waterColor / waterDensity from the texture JSON).
-        vec3 waterColor = h.waterColor;
-        float waterDensity = h.waterDensity;
-        if( waterDensity < 0.0 )
-        {
-            const ShPayload upProbe = tracePrimaryRay( cameraOrigin, globalUniform.worldUpVector.xyz );
-            if( doesPayloadContainHitInfo( upProbe ) )
-            {
-                int instId, instCustomIndex;
-                unpackInstanceIdAndCustomIndex( upProbe.instIdAndIndex, instId, instCustomIndex );
-                int geomIndex, primIndex;
-                unpackGeometryAndPrimitiveIndex( upProbe.geomAndPrimIndex, geomIndex, primIndex );
-                const ShTriangle tr = getTriangle( instId, instCustomIndex, geomIndex, primIndex );
-                if( tr.waterDensity >= 0.0 )
-                {
-                    waterDensity = tr.waterDensity;
-                    if( tr.waterColor.r >= 0.0 )
-                    {
-                        waterColor = tr.waterColor;
-                    }
-                }
-            }
-        }
-        if( waterDensity < 0.0 )
-        {
-            waterDensity = ( globalUniform.waterColorAndDensity.a > 0.0001 ) ? globalUniform.waterColorAndDensity.a : 0.1;
-            waterColor = ( globalUniform.waterColorAndDensity.r >= 0.0 ) ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 );
-        }
-        vec3 trans = getMediaTransmittance( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity );
+        const vec3 trans = getMediaTransmittance( currentRayMedia, firstHitDepthLinear, cameraWaterColor, cameraWaterDensity );
         throughput *= trans;
-        primaryWaterFog = getWaterVolumetricFog( currentRayMedia, firstHitDepthLinear, waterColor, waterDensity, trans );
+        mediaFog += getWaterVolumetricFog( currentRayMedia, cameraWaterColor, trans );
     }
     else
     {
-        throughput *= getMediaTransmittance( currentRayMedia, firstHitDepthLinear, h.waterColor, h.waterDensity );
+        throughput *= getMediaTransmittance( currentRayMedia, firstHitDepthLinear );
     }
 
 
     imageStore(framebufIsSky,               pix, ivec4(0));
     imageStore(framebufAlbedo,              getRegularPixFromCheckerboardPix(pix), vec4(h.albedo, 0.0));
     imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix(pix), vec4(screenEmission * throughput , 0.0));
-    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(getGlowingMediaFog(currentRayMedia, firstHitDepthLinear) + primaryWaterFog, 0));
+    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(getGlowingMediaFog(currentRayMedia, firstHitDepthLinear) + mediaFog, 0));
     imageStoreNormal(                       pix, h.normal);
     imageStore(framebufMetallicRoughness,   pix, vec4(h.metallic, h.roughness, 0, 0));
     imageStore(framebufDepthWorld,          pix, vec4(firstHitDepthLinear));
@@ -383,9 +381,11 @@ void main()
     imageStore(framebufViewDirection,       pix, vec4(cameraRayDir, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, 0.0));
 
-    // save some info for refl/refr shader
-    imageStore(framebufPrimaryToReflRefr,   pix, uvec4(h.geometryInstanceFlags, primaryPayload.instIdAndIndex, h.portalIndex, floatBitsToUint(( h.waterReflectivity >= 0.0 ) ? h.waterReflectivity : 1.0)));
-    imageStore(framebufWaterParams,         getRegularPixFromCheckerboardPix(pix), vec4(( h.waterColor.r >= 0.0 ) ? h.waterColor.rgb : globalUniform.waterColorAndDensity.rgb, ( h.waterDensity >= 0.0 ) ? h.waterDensity : globalUniform.waterColorAndDensity.a));
+    // save some info for refl/refr shader:
+    // water params of the media the camera is in (already resolved),
+    // per-material water params of the primary hit are re-fetched there from the visibility buffer
+    imageStore(framebufPrimaryToReflRefr,   pix, uvec4(h.geometryInstanceFlags, primaryPayload.instIdAndIndex, h.portalIndex, 0));
+    imageStore(framebufWaterParams,         getRegularPixFromCheckerboardPix(pix), vec4(cameraWaterColor, cameraWaterDensity));
 
     // save info for rasterization and upscalers (FSR/DLSS), but only about primary surface,
     // as reflections/refraction only may be losely represented via rasterization
@@ -432,19 +432,23 @@ void main()
         h.roughness                         = mr.g;
     }
     {
-        const vec4 waterParams              = texelFetch(framebufWaterParams_Sampler, getRegularPixFromCheckerboardPix(pix), 0);
-        h.waterColor                        = waterParams.rgb;
-        h.waterDensity                      = waterParams.a;
-        h.waterReflectivity                 = uintBitsToFloat(primaryToReflRefrBuf.a);
+        // per-material water params of the primary hit, straight from the geometry instance
+        int instId, instCustomIndex, geomIndex, primIndex;
+        vec2 bary;
+        unpackVisibilityBuffer( texelFetch( framebufVisibilityBuffer_Sampler, pix, 0 ),
+                                instId, instCustomIndex, geomIndex, primIndex, bary );
+        const ShTriangle primaryTriangle = getTriangle( instId, instCustomIndex, geomIndex, primIndex );
+        h.waterColor                    = primaryTriangle.waterColor;
+        h.waterDensity                  = primaryTriangle.waterDensity;
+        h.waterReflectivity             = primaryTriangle.waterReflectivity;
     }
     const vec3  motionBuf                   = texelFetch(framebufMotion_Sampler, pix, 0).rgb;
     vec2        motionCurToPrev             = motionBuf.rg;
     float       motionDepthLinearCurToPrev  = motionBuf.b;
     float       firstHitDepthLinear         = texelFetch(framebufDepthWorld_Sampler, pix, 0).r;
     vec3        screenEmission              = texelFetch(framebufScreenEmisRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
-    vec3        acidFog                     = texelFetch(framebufAcidFogRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
+    vec3        fogAccum                    = texelFetch(framebufAcidFogRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
     vec3        throughput                  = texelFetch(framebufThroughput_Sampler, pix, 0).rgb;
-    vec3        waterFogAccum               = acidFog;
     ShPayload currentPayload;
     currentPayload.instIdAndIndex           = primaryToReflRefrBuf.g;
 
@@ -468,8 +472,14 @@ void main()
 
 
 
-    vec3 currentWaterColor = ( h.waterColor.r >= 0.0 ) ? h.waterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 ) );
-    float currentWaterDensity = ( h.waterDensity >= 0.0 ) ? h.waterDensity : ( globalUniform.waterColorAndDensity.a > 0.0001 ? globalUniform.waterColorAndDensity.a : 0.1 );
+    // water params of the media the camera is in, resolved by the primary pass
+    vec3 currentWaterColor;
+    float currentWaterDensity;
+    {
+        const vec4 cameraWaterParams = texelFetch(framebufWaterParams_Sampler, getRegularPixFromCheckerboardPix(pix), 0);
+        currentWaterColor   = cameraWaterParams.rgb;
+        currentWaterDensity = cameraWaterParams.a;
+    }
 
     for (int i = 0; i < globalUniform.reflectRefractMaxDepth; i++)
     {
@@ -516,6 +526,11 @@ void main()
             float cosI = abs(dot(normal, rayDir));
             float cosT = abs(dot(normal, refractionDir));
             F = getFresnelDielectric(curIndexOfRefraction, newIndexOfRefraction, cosI, cosT);
+
+            if( isWater )
+            {
+                F *= resolveWaterReflectivity( h.waterReflectivity );
+            }
         }
         else
         {
@@ -525,11 +540,6 @@ void main()
             F = 1.0;
         }
 
-        if( isWater )
-        {
-            F *= ( h.waterReflectivity >= 0.0 ) ? clamp( h.waterReflectivity, 0.0, 1.0 ) : 1.0;
-        }
-        
         if (doRefraction)
         {
             rayDir = refractionDir;
@@ -556,10 +566,13 @@ void main()
                 newRayMedia = currentRayMedia;
             }
 
-            // change media
-            currentRayMedia = newRayMedia;
-            currentWaterColor = h.waterColor;
-            currentWaterDensity = h.waterDensity;
+            // change media (for thin media, newRayMedia was reverted above - no change)
+            if( newRayMedia != currentRayMedia )
+            {
+                currentRayMedia = newRayMedia;
+                currentWaterColor = resolveWaterColor( h.waterColor );
+                currentWaterDensity = resolveWaterDensity( h.waterDensity );
+            }
         }
         else if (isPortal)
         {
@@ -615,10 +628,11 @@ void main()
         
         if (!doesPayloadContainHitInfo(currentPayload))
         {
-            const float updot = abs(dot(rayDir, globalUniform.worldUpVector.xyz));
-            throughput *= getMediaTransmittance(currentRayMedia, 1.0 / (updot * updot * updot), currentWaterColor, currentWaterDensity);
+            const vec3 trans = getMediaTransmittance(currentRayMedia, getMediaSkyDistance( rayDir ), currentWaterColor, currentWaterDensity);
+            fogAccum += getWaterVolumetricFog(currentRayMedia, currentWaterColor, trans) * throughput;
+            throughput *= trans;
 
-            storeSky(pix, rayDir, true, throughput, wasSplit);
+            storeSky(pix, rayDir, true, throughput, fogAccum, wasSplit);
             return;  
         }
 
@@ -637,13 +651,12 @@ void main()
 
         hitInfoWasOverwritten = true;
         vec3 trans = getMediaTransmittance(currentRayMedia, rayLen, currentWaterColor, currentWaterDensity);
-        vec3 waterFogInscattering = getWaterVolumetricFog(currentRayMedia, rayLen, currentWaterColor, currentWaterDensity, trans);
+        fogAccum += getWaterVolumetricFog(currentRayMedia, currentWaterColor, trans) * throughput;
         screenEmission += scrEmis * trans * throughput;
-        waterFogAccum += waterFogInscattering * throughput;
         throughput *= trans;
         propagateRayCone(rayCone, rayLen);
         fullPathLength += rayLen;
-        acidFog += getGlowingMediaFog(currentRayMedia, rayLen) * (doSplit ? 2.0 : 1.0);
+        fogAccum += getGlowingMediaFog(currentRayMedia, rayLen) * (doSplit ? 2.0 : 1.0);
     }
 
 
@@ -656,7 +669,7 @@ void main()
     imageStore(framebufIsSky,               pix, ivec4(0));
     imageStore(framebufAlbedo,              getRegularPixFromCheckerboardPix(pix), vec4(h.albedo, 0.0));
     imageStore(framebufScreenEmisRT,        getRegularPixFromCheckerboardPix(pix), vec4(screenEmission, 0.0));
-    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(acidFog, 0));
+    imageStore(framebufAcidFogRT,           getRegularPixFromCheckerboardPix(pix), vec4(fogAccum, 0));
     imageStoreNormal(                       pix, h.normal);
     imageStore(framebufMetallicRoughness,   pix, vec4(h.metallic, h.roughness, 0, 0));
     imageStore(framebufDepthWorld,          pix, vec4(fullPathLength));

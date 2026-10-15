@@ -274,7 +274,7 @@ struct ShGlobalUniform
     float primaryRayMinDist;
     uint rayCullMaskWorld_Shadow;
     uint volumeAllowTintUnderwater;
-    uint _unused2;
+    float waterWorldScale;
     uint twirlPortalNormal;
     uint lightIndexIgnoreFPVShadows;
     float gradientMultDiffuse;

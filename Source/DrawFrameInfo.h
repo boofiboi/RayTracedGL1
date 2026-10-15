@@ -138,6 +138,7 @@ namespace detail
             .waterWaveSpeed                             = 1.0f,
             .waterWaveNormalStrength                    = 1.0f,
             .waterColor                                 = { 0.3f, 0.73f, 0.63f },
+            .waterDensity                               = 1.0f,
             .acidColor                                  = { 0.0f, 0.66f, 0.55f },
             .acidDensity                                = 10.0f,
             .waterWaveTextureDerivativesMultiplier      = 1.0f,

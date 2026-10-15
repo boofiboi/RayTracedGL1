@@ -25,6 +25,8 @@ FSR3 Framegen support
 
 Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
 
+Water semantics: "waterColor" is the color that white light becomes after passing through 1 meter of that water, "waterDensity" is an absorption multiplier (1.0 - exactly as the color implies, 0.0 - crystal clear), "waterReflectivity" is a [0,1] multiplier for the Fresnel reflection strength of the water surface. Global fallback for all water without per-texture params is set by the engine (rt_me_water_* cvars).
+
 Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning etc.
 
 nVidia NRD denoiser replacing SVGF Atrous.

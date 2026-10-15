@@ -43,22 +43,39 @@ float getIndexOfRefraction(uint media)
     }
 }
 
+vec3 resolveWaterColor( const vec3 perMatWaterColor )
+{
+    // perMatWaterColor: linear transmittance at 1 meter depth, or vec3( -1.0 ) if unspecified
+    return ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : globalUniform.waterColorAndDensity.rgb;
+}
+
+float resolveWaterDensity( const float perMatWaterDensity )
+{
+    // perMatWaterDensity: extinction multiplier, or < 0 if unspecified
+    return ( perMatWaterDensity >= 0.0 ) ? perMatWaterDensity : globalUniform.waterColorAndDensity.a;
+}
+
+float resolveWaterReflectivity( const float perMatWaterReflectivity )
+{
+    // multiplier for dielectric Fresnel on water interfaces, 1.0 if unspecified
+    return ( perMatWaterReflectivity >= 0.0 ) ? clamp( perMatWaterReflectivity, 0.0, 1.0 ) : 1.0;
+}
+
+vec3 getWaterExtinction( const vec3 waterColor, const float waterDensity )
+{
+    // waterColor is a transmittance at 1 meter, waterWorldScale converts meters to world units
+    return -log( clamp( waterColor, vec3( 0.0001 ), vec3( 1.0 ) ) ) *
+           ( globalUniform.waterWorldScale * max( waterDensity, 0.0 ) );
+}
+
 vec3 getMediaTransmittance( uint media, float distance, vec3 perMatWaterColor, float perMatWaterDensity )
 {
     vec3 extinction = vec3( 0.0 );
 
     if( media == MEDIA_TYPE_WATER )
     {
-        if( perMatWaterDensity >= 0.0 && perMatWaterDensity <= 0.0001f )
-        {
-            return vec3( 1.0 );
-        }
-
-        vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 ) );
-        color = max( vec3( 0.001 ), color );
-
-        float densityScale = ( perMatWaterDensity >= 0.0 ) ? ( perMatWaterDensity * 0.5 ) : 1.0;
-        extinction = -log( clamp( color, vec3( 0.01 ), vec3( 0.99 ) ) ) * densityScale;
+        extinction = getWaterExtinction( resolveWaterColor( perMatWaterColor ),
+                                         resolveWaterDensity( perMatWaterDensity ) );
     }
     else if( media == MEDIA_TYPE_ACID )
     {
@@ -74,23 +91,26 @@ vec3 getMediaTransmittance( uint media, float distance )
     return getMediaTransmittance( media, distance, vec3( -1.0 ), -1.0 );
 }
 
-vec3 getWaterVolumetricFog( uint media, float distance, vec3 perMatWaterColor, float perMatWaterDensity, vec3 transmittance )
+#define WATER_FOG_INTENSITY 0.15
+
+vec3 getWaterVolumetricFog( uint media, vec3 perMatWaterColor, vec3 transmittance )
 {
     if( media != MEDIA_TYPE_WATER )
     {
         return vec3( 0.0 );
     }
 
-    float density = ( perMatWaterDensity >= 0.0 ) ? perMatWaterDensity : ( globalUniform.waterColorAndDensity.a > 0.0001 ? globalUniform.waterColorAndDensity.a : 0.1 );
-    if( density <= 0.0001f )
-    {
-        return vec3( 0.0 );
-    }
-
-    vec3 color = ( perMatWaterColor.r >= 0.0 ) ? perMatWaterColor : ( globalUniform.waterColorAndDensity.r >= 0.0 ? globalUniform.waterColorAndDensity.rgb : vec3( 0.78, 0.80, 0.82 ) );
-
-    vec3 inscattering = ( vec3( 1.0 ) - transmittance ) * color * 0.15;
+    // fake inscattering: the more light is absorbed, the more the water body color shows
+    vec3 inscattering = ( vec3( 1.0 ) - transmittance ) * resolveWaterColor( perMatWaterColor ) * WATER_FOG_INTENSITY;
     return inscattering;
+}
+
+float getMediaSkyDistance( const vec3 rayDir )
+{
+    // pseudo-infinite distance for rays that miss all geometry while inside a media:
+    // the more horizontal the ray, the longer the path to escape
+    const float updot = abs( dot( rayDir, globalUniform.worldUpVector.xyz ) );
+    return 1.0 / max( updot * updot * updot, 0.001 );
 }
 
 #if SHIPPING_HACK

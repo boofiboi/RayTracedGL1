@@ -860,6 +860,10 @@ typedef struct RgDrawFrameReflectRefractParams
     float           waterWaveNormalStrength;
     // Color at 1 meter depth.
     RgFloat3D       waterColor;
+    // Multiplier for water absorption strength, 1.0 - exactly as waterColor implies,
+    // 0.0 - crystal clear.
+    // Default: 1.0
+    float           waterDensity;
     // Color at 1 meter depth.
     RgFloat3D       acidColor;
     float           acidDensity;
