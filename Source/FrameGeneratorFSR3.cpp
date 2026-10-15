@@ -259,8 +259,10 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
         VkSwapchainCreateInfoKHR ci = createInfo;
         ci.oldSwapchain            = VK_NULL_HANDLE;
 
-        return pfnCreateSwapchainFFX(
+        VkResult r = pfnCreateSwapchainFFX(
             device, &ci, nullptr, outSwapchain, static_cast< void* >( swapchainContext ) );
+        swapchainHandleAlive = ( r == VK_SUCCESS );
+        return r;
     }
 
     ffxCreateContextDescFrameGenerationSwapChainModeVK modeDesc = {};
@@ -311,6 +313,7 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
     pfnAcquireNextImage    = replacementFunctions.pOutAcquireNextImageKHR;
     pfnQueuePresent        = replacementFunctions.pOutQueuePresentKHR;
 
+    swapchainHandleAlive = true;
     debug::Info( "FSR3 FG: swapchain context created" );
     return VK_SUCCESS;
 }
@@ -323,6 +326,7 @@ void RTGL1::FrameGeneratorFSR3::DestroySwapchain( VkSwapchainKHR swapchain )
         WaitForPresents();
         pfnDestroySwapchainFFX(
             device, swapchain, nullptr, static_cast< void* >( swapchainContext ) );
+        swapchainHandleAlive = false;
     }
 }
 
@@ -351,7 +355,7 @@ VkResult RTGL1::FrameGeneratorFSR3::GetSwapchainImages( VkDevice       device_,
 
 void RTGL1::FrameGeneratorFSR3::WaitForPresents()
 {
-    if( swapchainContext == nullptr )
+    if( swapchainContext == nullptr || !swapchainHandleAlive )
     {
         return;
     }

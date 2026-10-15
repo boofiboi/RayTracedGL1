@@ -121,6 +121,7 @@ private:
 
     bool                               fgContextFailed{ false };
     bool                               swapchainContextFailed{ false };
+    bool                               swapchainHandleAlive{ false };
 
     std::atomic< bool >                pendingReset{ false };
 
