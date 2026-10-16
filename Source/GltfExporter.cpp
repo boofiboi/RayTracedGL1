@@ -285,6 +285,11 @@ struct GltfBin
         assert( file );
     }
 
+    bool IsOpen() const
+    {
+        return file.is_open();
+    }
+
     cgltf_buffer* Get()
     {
         storage = cgltf_buffer{
@@ -1445,7 +1450,15 @@ void RTGL1::GltfExporter::ExportToFiles( const std::filesystem::path& gltfPath,
 
 
     // lock pointers
-    GltfBin      fbin( gltfPath );
+    GltfBin fbin( gltfPath );
+
+    if( !fbin.IsOpen() )
+    {
+        debug::Warning( "Can't export: failed to open file {}",
+                        std::filesystem::absolute( GetGltfBinPath( gltfPath ) ).string() );
+        return;
+    }
+
     GltfStorage  storage( scene, sceneLights.size() );
     GltfTextures textureStorage(
         sceneMaterials, GetOriginalTexturesFolder( gltfPath ), textureManager );

@@ -472,5 +472,5 @@ uint32_t Utils::GetWorkGroupCount( uint32_t size, uint32_t groupSize )
         return 0;
     }
 
-    return 1 + ( size + ( groupSize - 1 ) ) / groupSize;
+    return ( size + ( groupSize - 1 ) ) / groupSize;
 }

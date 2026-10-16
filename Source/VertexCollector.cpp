@@ -146,11 +146,16 @@ bool RTGL1::VertexCollector::AddPrimitive( uint32_t                          fra
         if( GetGeometryCount( geomFlags ) + 1 >=
             VertexCollectorFilterTypeFlags_GetAmountInGlobalArray( geomFlags ) )
         {
-            debug::Error( "Too many geometries in a group ({}-{}-{}). Limit is {}",
-                          uint32_t( geomFlags & FT::MASK_CHANGE_FREQUENCY_GROUP ),
-                          uint32_t( geomFlags & FT::MASK_PASS_THROUGH_GROUP ),
-                          uint32_t( geomFlags & FT::MASK_PRIMARY_VISIBILITY_GROUP ),
-                          VertexCollectorFilterTypeFlags_GetAmountInGlobalArray( geomFlags ) );
+            static bool warnedOnce = false;
+            if( !warnedOnce )
+            {
+                warnedOnce = true;
+                debug::Warning( "Too many geometries in a group ({}-{}-{}). Limit is {}",
+                                uint32_t( geomFlags & FT::MASK_CHANGE_FREQUENCY_GROUP ),
+                                uint32_t( geomFlags & FT::MASK_PASS_THROUGH_GROUP ),
+                                uint32_t( geomFlags & FT::MASK_PRIMARY_VISIBILITY_GROUP ),
+                                VertexCollectorFilterTypeFlags_GetAmountInGlobalArray( geomFlags ) );
+            }
             return false;
         }
     }
@@ -167,47 +172,72 @@ bool RTGL1::VertexCollector::AddPrimitive( uint32_t                          fra
     const bool     useIndices    = info.indexCount != 0 && info.pIndices != nullptr;
     const uint32_t triangleCount = useIndices ? info.indexCount / 3 : info.vertexCount / 3;
 
-    curVertexCount = vertIndex + info.vertexCount;
-    curIndexCount  = indIndex + ( useIndices ? info.indexCount : 0 );
-    curPrimitiveCount += triangleCount;
-    curTransformCount += 1;
-    curTexCoordCount_Layer1 += GeomInfoManager::LayerExists( info, 1 ) ? info.vertexCount : 0;
-    curTexCoordCount_Layer2 += GeomInfoManager::LayerExists( info, 2 ) ? info.vertexCount : 0;
-    curTexCoordCount_Layer3 += GeomInfoManager::LayerExists( info, 3 ) ? info.vertexCount : 0;
-
+    const uint32_t newVertexCount = vertIndex + info.vertexCount;
+    const uint32_t newIndexCount  = indIndex + ( useIndices ? info.indexCount : 0 );
 
 
     if( isStatic )
     {
-        if( curVertexCount >= MAX_STATIC_VERTEX_COUNT )
+        if( newVertexCount >= MAX_STATIC_VERTEX_COUNT )
         {
-            debug::Error( "Too many static vertices: the limit is {}", MAX_STATIC_VERTEX_COUNT );
+            static bool warnedOnce = false;
+            if( !warnedOnce )
+            {
+                warnedOnce = true;
+                debug::Warning( "Too many static vertices: the limit is {}",
+                                MAX_STATIC_VERTEX_COUNT );
+            }
             return false;
         }
         assert( geomFlags & FT::CF_STATIC_NON_MOVABLE );
     }
     else
     {
-        if( curVertexCount >= MAX_DYNAMIC_VERTEX_COUNT )
+        if( newVertexCount >= MAX_DYNAMIC_VERTEX_COUNT )
         {
-            debug::Error( "Too many dynamic vertices: the limit is {}", MAX_DYNAMIC_VERTEX_COUNT );
+            static bool warnedOnce = false;
+            if( !warnedOnce )
+            {
+                warnedOnce = true;
+                debug::Warning( "Too many dynamic vertices: the limit is {}",
+                                MAX_DYNAMIC_VERTEX_COUNT );
+            }
             return false;
         }
         assert( geomFlags & FT::CF_DYNAMIC );
     }
 
-    if( curIndexCount >= MAX_INDEXED_PRIMITIVE_COUNT * 3 )
+    if( newIndexCount >= MAX_INDEXED_PRIMITIVE_COUNT * 3 )
     {
-        debug::Error( "Too many indices: the limit is {}", MAX_INDEXED_PRIMITIVE_COUNT * 3 );
+        static bool warnedOnce = false;
+        if( !warnedOnce )
+        {
+            warnedOnce = true;
+            debug::Warning( "Too many indices: the limit is {}", MAX_INDEXED_PRIMITIVE_COUNT * 3 );
+        }
         return false;
     }
 
     if( geomInfoManager.GetCount( frameIndex ) + 1 >= MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT )
     {
-        debug::Error( "Too many geometry infos: the limit is {}",
-                      MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT );
+        static bool warnedOnce = false;
+        if( !warnedOnce )
+        {
+            warnedOnce = true;
+            debug::Warning( "Too many geometry infos: the limit is {}",
+                            MAX_BOTTOM_LEVEL_GEOMETRIES_COUNT );
+        }
         return false;
     }
+
+
+    curVertexCount = newVertexCount;
+    curIndexCount  = newIndexCount;
+    curPrimitiveCount += triangleCount;
+    curTransformCount += 1;
+    curTexCoordCount_Layer1 += GeomInfoManager::LayerExists( info, 1 ) ? info.vertexCount : 0;
+    curTexCoordCount_Layer2 += GeomInfoManager::LayerExists( info, 2 ) ? info.vertexCount : 0;
+    curTexCoordCount_Layer3 += GeomInfoManager::LayerExists( info, 3 ) ? info.vertexCount : 0;
 
 
 
@@ -395,14 +425,19 @@ void RTGL1::VertexCollector::CopyTexCoordsToStaging( uint32_t                   
         }
         else
         {
-            debug::Error(
-                "Found Layer{} texture coords on a primitive, but buffer was not allocated. "
-                "Recheck RgInstanceCreateInfo::{}",
-                layerIndex,
-                layerIndex == 1   ? "allowTexCoordLayer1"
-                : layerIndex == 2 ? "allowTexCoordLayer2"
-                : layerIndex == 3 ? "allowTexCoordLayer3"
-                                  : "<unknown>" );
+            static bool warnedOnce = false;
+            if( !warnedOnce )
+            {
+                warnedOnce = true;
+                debug::Warning(
+                    "Found Layer{} texture coords on a primitive, but buffer was not allocated. "
+                    "Recheck RgInstanceCreateInfo::{}",
+                    layerIndex,
+                    layerIndex == 1   ? "allowTexCoordLayer1"
+                    : layerIndex == 2 ? "allowTexCoordLayer2"
+                    : layerIndex == 3 ? "allowTexCoordLayer3"
+                                      : "<unknown>" );
+            }
         }
     }
 }

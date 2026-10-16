@@ -75,12 +75,25 @@ static std::wstring GetFolderPath()
     #elif defined( __linux__ )
     wchar_t appPath[ PATH_MAX ];
     char    appPath_c[ PATH_MAX ];
-    ssize_t count = readlink( "/proc/self/exe", appPath_c, PATH_MAX );
+    ssize_t count = readlink( "/proc/self/exe", appPath_c, PATH_MAX - 1 );
+
+    if( count <= 0 )
+    {
+        return {};
+    }
+
+    appPath_c[ count ] = '\0';
     std::mbstowcs( appPath, appPath_c, PATH_MAX );
     #endif
 
     std::wstring curFolderPath = appPath;
     auto         p             = curFolderPath.find_last_of( L"\\/" );
+
+    if( p == std::wstring::npos )
+    {
+        return {};
+    }
+
     return curFolderPath.substr( 0, p );
 }
 

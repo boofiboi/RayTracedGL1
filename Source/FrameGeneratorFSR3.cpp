@@ -198,23 +198,6 @@ void RTGL1::FrameGeneratorFSR3::CreateHudlessImages( uint32_t width, uint32_t he
 
         r = vkBindImageMemory( device, hudlessImages[ i ], hudlessMemories[ i ], 0 );
         VK_CHECKERROR( r );
-
-        VkImageViewCreateInfo viewInfo = {
-            .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image    = hudlessImages[ i ],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format   = backBufferFormat,
-            .subresourceRange = {
-                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = 0,
-                .layerCount     = 1,
-            },
-        };
-
-        r = vkCreateImageView( device, &viewInfo, nullptr, &hudlessViews[ i ] );
-        VK_CHECKERROR( r );
     }
 }
 
@@ -222,11 +205,6 @@ void RTGL1::FrameGeneratorFSR3::DestroyHudlessImages()
 {
     for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
     {
-        if( hudlessViews[ i ] != VK_NULL_HANDLE )
-        {
-            vkDestroyImageView( device, hudlessViews[ i ], nullptr );
-            hudlessViews[ i ] = VK_NULL_HANDLE;
-        }
         if( hudlessImages[ i ] != VK_NULL_HANDLE )
         {
             vkDestroyImage( device, hudlessImages[ i ], nullptr );
@@ -305,13 +283,28 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
 
     ffxQueryDescSwapchainReplacementFunctionsVK replacementFunctions = {};
     replacementFunctions.header.type = FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
-    ffxQuery( &swapchainContext, &replacementFunctions.header );
+
+    ffxReturnCode_t queryRet = ffxQuery( &swapchainContext, &replacementFunctions.header );
 
     pfnCreateSwapchainFFX  = replacementFunctions.pOutCreateSwapchainFFXAPI;
     pfnDestroySwapchainFFX = replacementFunctions.pOutDestroySwapchainFFXAPI;
     pfnGetSwapchainImages  = replacementFunctions.pOutGetSwapchainImagesKHR;
     pfnAcquireNextImage    = replacementFunctions.pOutAcquireNextImageKHR;
     pfnQueuePresent        = replacementFunctions.pOutQueuePresentKHR;
+
+    if( queryRet != FFX_API_RETURN_OK || pfnCreateSwapchainFFX == nullptr ||
+        pfnDestroySwapchainFFX == nullptr || pfnGetSwapchainImages == nullptr ||
+        pfnAcquireNextImage == nullptr || pfnQueuePresent == nullptr )
+    {
+        debug::Warning( "FSR3 FG: failed to query swapchain replacement functions, code {}",
+                        static_cast< int >( queryRet ) );
+
+        ffxDestroyContext( &swapchainContext, nullptr );
+        swapchainContext = nullptr;
+
+        swapchainContextFailed = true;
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
 
     swapchainHandleAlive = true;
     debug::Info( "FSR3 FG: swapchain context created" );

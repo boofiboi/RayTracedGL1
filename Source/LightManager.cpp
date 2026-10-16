@@ -52,7 +52,6 @@ RTGL1::LightManager::LightManager( VkDevice                            _device,
     , descSetLayout( VK_NULL_HANDLE )
     , descPool( VK_NULL_HANDLE )
     , descSets{}
-    , needDescSetUpdate{}
 {
     lightsBuffer = std::make_shared< AutoBuffer >( _allocator );
     lightsBuffer->Create( sizeof( ShLightEncoded ) * LIGHT_ARRAY_MAX_SIZE,
@@ -431,7 +430,12 @@ void RTGL1::LightManager::Add( uint32_t frameIndex, const RgDirectionalLightUplo
 {
     if( dirLightCount > 0 )
     {
-        debug::Error( "Only one directional light is allowed" );
+        static bool warnedOnce = false;
+        if( !warnedOnce )
+        {
+            warnedOnce = true;
+            debug::Warning( "Only one directional light is allowed" );
+        }
         return;
     }
 
@@ -504,13 +508,6 @@ void RTGL1::LightManager::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameInd
         barriers.data(),
         0,
         nullptr );
-
-    // should be used when buffers changed
-    if( needDescSetUpdate[ frameIndex ] )
-    {
-        UpdateDescriptors( frameIndex );
-        needDescSetUpdate[ frameIndex ] = false;
-    }
 }
 
 void RTGL1::LightManager::BarrierLightGrid( VkCommandBuffer cmd, uint32_t frameIndex )

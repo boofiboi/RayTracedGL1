@@ -127,7 +127,6 @@ private:
 
     VkImage                            hudlessImages[ MAX_FRAMES_IN_FLIGHT ]{};
     VkDeviceMemory                     hudlessMemories[ MAX_FRAMES_IN_FLIGHT ]{};
-    VkImageView                        hudlessViews[ MAX_FRAMES_IN_FLIGHT ]{};
 #endif
 };
 

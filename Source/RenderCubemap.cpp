@@ -24,6 +24,7 @@
 
 #include "Matrix.h"
 #include "RasterizedDataCollector.h"
+#include "RgException.h"
 #include "Generated/ShaderCommonC.h"
 
 namespace RTGL1
@@ -403,7 +404,8 @@ RTGL1::RenderCubemap::Attachment RTGL1::RenderCubemap::CreateAttch( MemoryAlloca
         if( memory == VK_NULL_HANDLE )
         {
             vkDestroyImage( device, image, nullptr );
-            return {};
+            throw RgException( RG_RESULT_GRAPHICS_API_ERROR,
+                               "Failed to allocate memory for a render cubemap attachment" );
         }
 
         VkResult r = vkBindImageMemory( device, image, memory, 0 );

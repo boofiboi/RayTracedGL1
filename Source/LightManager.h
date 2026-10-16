@@ -110,8 +110,6 @@ private:
     VkDescriptorPool      descPool;
     VkDescriptorSet       descSets[ MAX_FRAMES_IN_FLIGHT ];
 
-    bool needDescSetUpdate[ MAX_FRAMES_IN_FLIGHT ];
-
     std::vector< float > lightstyles;
 };
 

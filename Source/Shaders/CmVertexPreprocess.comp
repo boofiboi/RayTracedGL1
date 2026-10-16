@@ -37,7 +37,7 @@ layout(push_constant) uniform Push_BT
 void main()
 {    
     uint tlasInstanceIndex = gl_WorkGroupID.x;
-    bool isDynamic = (push.tlasInstanceIsDynamicBits[tlasInstanceIndex / 32] & (1 << tlasInstanceIndex)) != 0;
+    bool isDynamic = (push.tlasInstanceIsDynamicBits[tlasInstanceIndex / 32] & (1u << (tlasInstanceIndex % 32))) != 0;
 
 
     // always process dynamic

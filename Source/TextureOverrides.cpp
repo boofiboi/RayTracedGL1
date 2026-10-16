@@ -25,6 +25,7 @@
 #include <span>
 
 #include "Const.h"
+#include "DebugPrint.h"
 #include "ImageLoader.h"
 #include "Utils.h"
 
@@ -60,6 +61,9 @@ namespace loader
                 {
                     return r;
                 }
+
+                debug::Warning( "Failed to load texture override file: {}",
+                                filepath.generic_string() );
             }
 
             return std::optional< ImageLoader::ResultInfo >{};

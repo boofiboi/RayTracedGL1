@@ -414,7 +414,12 @@ uint32_t RTGL1::CubemapManager::TryGetDescriptorIndex( const char* pTextureName 
         iter++;
     }
 
-    debug::Error( "Can't find cubemap with name: {}", Utils::SafeCstr( pTextureName ) );
+    static bool warnedOnce = false;
+    if( !warnedOnce )
+    {
+        warnedOnce = true;
+        debug::Warning( "Can't find cubemap with name: {}", Utils::SafeCstr( pTextureName ) );
+    }
     return 0;
 }
 

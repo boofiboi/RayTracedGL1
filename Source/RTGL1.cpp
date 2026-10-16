@@ -65,6 +65,11 @@ RgResult rgCreateInstance( const RgInstanceCreateInfo* pInfo, RgInstance* pResul
 {
     *pResult = nullptr;
 
+    if( pInfo == nullptr )
+    {
+        return RG_RESULT_WRONG_FUNCTION_ARGUMENT;
+    }
+
     if( TryGetDevice( g_deviceRgInstance ) )
     {
         return RG_RESULT_ALREADY_INITIALIZED;

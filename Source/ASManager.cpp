@@ -1044,6 +1044,9 @@ std::pair< RTGL1::ASManager::TLASPrepareResult, RTGL1::ShVertPreprocessing > RTG
     // write geometry counts of each BLAS for iterating in vertex preprocessing
     int32_t* instanceGeomCount = uniformData.instanceGeomCount;
 
+    memset( instanceGeomInfoOffset, 0, sizeof( uniformData.instanceGeomInfoOffset ) );
+    memset( instanceGeomCount, 0, sizeof( uniformData.instanceGeomCount ) );
+
     const std::vector< std::unique_ptr< BLASComponent > >* blasArrays[] = {
         &allStaticBlas,
         &allDynamicBlas[ frameIndex ],
@@ -1064,6 +1067,11 @@ std::pair< RTGL1::ASManager::TLASPrepareResult, RTGL1::ShVertPreprocessing > RTG
             }
 
             // add to TLAS instances array
+            if( r.instanceCount >= std::size( r.instances ) )
+            {
+                break;
+            }
+
             bool isAdded = SetupTLASInstanceFromBLAS( *blas,
                                                       uniformData_rayCullMaskWorld,
                                                       allowGeometryWithSkyFlag,
@@ -1074,9 +1082,8 @@ std::pair< RTGL1::ASManager::TLASPrepareResult, RTGL1::ShVertPreprocessing > RTG
                 // mark bit if dynamic
                 if( isDynamic )
                 {
-                    push.tlasInstanceIsDynamicBits[ r.instanceCount /
-                                                    MAX_TOP_LEVEL_INSTANCE_COUNT ] |=
-                        1 << ( r.instanceCount % MAX_TOP_LEVEL_INSTANCE_COUNT );
+                    push.tlasInstanceIsDynamicBits[ r.instanceCount / 32 ] |=
+                        1u << ( r.instanceCount % 32 );
                 }
 
                 WriteInstanceGeomInfo(

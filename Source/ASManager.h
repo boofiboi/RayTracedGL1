@@ -29,6 +29,8 @@
 #include "ASComponent.h"
 #include "Token.h"
 
+#include "Generated/ShaderCommonC.h"
+
 namespace RTGL1
 {
 
@@ -39,7 +41,7 @@ class ASManager
 public:
     struct TLASPrepareResult
     {
-        VkAccelerationStructureInstanceKHR instances[ 45 ];
+        VkAccelerationStructureInstanceKHR instances[ MAX_TOP_LEVEL_INSTANCE_COUNT ];
         uint32_t                           instanceCount;
     };
 

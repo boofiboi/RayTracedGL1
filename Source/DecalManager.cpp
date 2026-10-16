@@ -21,6 +21,7 @@
 #include "DecalManager.h"
 
 #include "CmdLabel.h"
+#include "DebugPrint.h"
 #include "Matrix.h"
 #include "Utils.h"
 
@@ -115,7 +116,13 @@ void RTGL1::DecalManager::Upload( uint32_t                                 frame
 {
     if( decalCount >= DECAL_MAX_COUNT )
     {
-        assert( 0 );
+        static bool warnedOnce = false;
+        if( !warnedOnce )
+        {
+            warnedOnce = true;
+            debug::Warning( "Decal count limit ({}) reached, decal was not uploaded",
+                            DECAL_MAX_COUNT );
+        }
         return;
     }
 

@@ -814,7 +814,6 @@ void RTGL1::GltfImporter::UploadToScene( VkCommandBuffer           cmd,
                         NodeName( srcNode->parent ),
                         NodeName( srcNode ) );
                     continue;
-                    dstFlags |= RG_MESH_PRIMITIVE_TRANSLUCENT;
                 }
             }
 

@@ -77,6 +77,7 @@ private:
     FfxResource                               dilatedMotionVectorsRes{};
     FfxResource                               reconstructedPrevNearestDepthRes{};
     bool                                      isContextCreated{ false };
+    bool                                      contextFailed{ false };
 #endif
 };
 

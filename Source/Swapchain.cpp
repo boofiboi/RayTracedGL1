@@ -90,6 +90,7 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
                 if( sf.format == f )
                 {
                     surfaceFormat = sf;
+                    break;
                 }
             }
 
@@ -97,6 +98,12 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
             {
                 break;
             }
+        }
+
+        if( surfaceFormat.format == VK_FORMAT_UNDEFINED )
+        {
+            throw RgException( RG_RESULT_GRAPHICS_API_ERROR,
+                               "Failed to find a supported swapchain surface format" );
         }
     }
 
@@ -225,6 +232,8 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
         TryRecreate( requestedExtent, requestedVsync );
     }
 
+    uint32_t recreateAttempts = 0;
+
     while( true )
     {
         VkResult r;
@@ -254,10 +263,18 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
         {
             InvalidateCapabilities();
             TryRecreate( GetOptimalExtent(), requestedVsync );
+
+            if( ++recreateAttempts > 16 )
+            {
+                throw RgException(
+                    RG_RESULT_GRAPHICS_API_ERROR,
+                    "Failed to acquire swapchain image: swapchain recreation did not help" );
+            }
         }
         else
         {
-            assert( 0 );
+            throw RgException( RG_RESULT_GRAPHICS_API_ERROR,
+                               "Failed to acquire swapchain image" );
         }
     }
 }

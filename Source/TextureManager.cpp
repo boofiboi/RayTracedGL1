@@ -235,7 +235,7 @@ uint32_t TextureManager::CreateDirtMaskTexture( VkCommandBuffer              cmd
             .format         = VK_FORMAT_R8G8B8A8_SRGB,
         };
         ovrd.path = filepath;
-        Utils::SafeCstrCopy( ovrd.debugname, "WaterNormal" );
+        Utils::SafeCstrCopy( ovrd.debugname, "DirtMask" );
     }
 
     return PrepareTexture( cmd,

@@ -538,6 +538,13 @@ TextureUploader::UploadResult TextureUploader::UploadImage( const UploadInfo& in
     if( !info.isUpdateable )
     {
         assert( data != nullptr );
+
+        if( data == nullptr && dataSize > 0 )
+        {
+            debug::Warning( "UploadImage: null data with non-zero size for {}",
+                            Utils::SafeCstr( info.pDebugName ) );
+            return {};
+        }
     }
 
 

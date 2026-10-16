@@ -112,6 +112,30 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
                              0,
                              nullptr );
 
+    constexpr FramebufferImageIndex downsampleBarrierTargets[] = {
+        FB_IMAGE_INDEX_BLOOM_INPUT,
+        FB_IMAGE_INDEX_BLOOM_MIP1,
+        FB_IMAGE_INDEX_BLOOM_MIP2,
+        FB_IMAGE_INDEX_BLOOM_MIP3,
+        FB_IMAGE_INDEX_BLOOM_MIP4,
+        FB_IMAGE_INDEX_BLOOM_MIP5,
+        FB_IMAGE_INDEX_BLOOM_MIP6,
+        FB_IMAGE_INDEX_BLOOM_MIP7,
+    };
+    static_assert( std::size( downsampleBarrierTargets ) == COMPUTE_BLOOM_STEP_COUNT );
+
+    constexpr FramebufferImageIndex upsampleBarrierTargets[] = {
+        FB_IMAGE_INDEX_BLOOM_MIP1,
+        FB_IMAGE_INDEX_BLOOM_MIP2,
+        FB_IMAGE_INDEX_BLOOM_MIP3,
+        FB_IMAGE_INDEX_BLOOM_MIP4,
+        FB_IMAGE_INDEX_BLOOM_MIP5,
+        FB_IMAGE_INDEX_BLOOM_MIP6,
+        FB_IMAGE_INDEX_BLOOM_MIP7,
+        FB_IMAGE_INDEX_BLOOM_MIP8,
+    };
+    static_assert( std::size( upsampleBarrierTargets ) == COMPUTE_BLOOM_STEP_COUNT );
+
     for( int i = 0; i < COMPUTE_BLOOM_STEP_COUNT; i++ )
     {
         CmdLabel label( cmd, "Bloom downsample iteration" );
@@ -121,42 +145,10 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
 
         vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, downsamplePipelines[ i ] );
 
-        switch( i )
-        {
-            case 0:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_INPUT, Framebuffers::BarrierType::Compute );
-                break;
-            case 1:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP1, Framebuffers::BarrierType::Compute );
-                break;
-            case 2:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP2, Framebuffers::BarrierType::Compute );
-                break;
-            case 3:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3, Framebuffers::BarrierType::Compute );
-                break;
-            case 4:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4, Framebuffers::BarrierType::Compute );
-                break;
-            case 5:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5, Framebuffers::BarrierType::Compute );
-                break;
-            case 6:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP6, Framebuffers::BarrierType::Compute );
-                break;
-            case 7:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP7, Framebuffers::BarrierType::Compute );
-                break;
-            default: assert( 0 );
-        }
+        framebuffers->BarrierOne( cmd,
+                                  frameIndex,
+                                  downsampleBarrierTargets[ i ],
+                                  Framebuffers::BarrierType::Compute );
 
         vkCmdDispatch( cmd,
                        Utils::GetWorkGroupCount( w, COMPUTE_BLOOM_DOWNSAMPLE_GROUP_SIZE_X ),
@@ -173,42 +165,10 @@ void RTGL1::Bloom::Prepare( VkCommandBuffer      cmd,
 
         vkCmdBindPipeline( cmd, VK_PIPELINE_BIND_POINT_COMPUTE, upsamplePipelines[ i ] );
 
-        switch( i )
-        {
-            case 7:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP8, Framebuffers::BarrierType::Compute );
-                break;
-            case 6:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP7, Framebuffers::BarrierType::Compute );
-                break;
-            case 5:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP6, Framebuffers::BarrierType::Compute );
-                break;
-            case 4:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP5, Framebuffers::BarrierType::Compute );
-                break;
-            case 3:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP4, Framebuffers::BarrierType::Compute );
-                break;
-            case 2:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP3, Framebuffers::BarrierType::Compute );
-                break;
-            case 1:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP2, Framebuffers::BarrierType::Compute );
-                break;
-            case 0:
-                framebuffers->BarrierOne(
-                    cmd, frameIndex, FB_IMAGE_INDEX_BLOOM_MIP1, Framebuffers::BarrierType::Compute );
-                break;
-            default: assert( 0 );
-        }
+        framebuffers->BarrierOne( cmd,
+                                  frameIndex,
+                                  upsampleBarrierTargets[ i ],
+                                  Framebuffers::BarrierType::Compute );
 
         vkCmdDispatch( cmd,
                        Utils::GetWorkGroupCount( w, COMPUTE_BLOOM_UPSAMPLE_GROUP_SIZE_X ),

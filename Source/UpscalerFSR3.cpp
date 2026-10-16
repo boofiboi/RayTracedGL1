@@ -260,9 +260,23 @@ RTGL1::FramebufferImageIndex RTGL1::UpscalerFSR3::Apply(
 {
     assert( nearPlane > 0.0f && nearPlane < farPlane );
 
-    if( !isContextCreated )
+    if( !isContextCreated && !contextFailed )
     {
-        OnFramebuffersSizeChange( renderResolution.GetResolutionState() );
+        try
+        {
+            OnFramebuffersSizeChange( renderResolution.GetResolutionState() );
+        }
+        catch( const RgException& e )
+        {
+            debug::Warning( "FSR3: context creation failed ({}), disabling FSR3 upscaling",
+                            e.what() );
+            contextFailed = true;
+        }
+    }
+
+    if( contextFailed )
+    {
+        return FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;
     }
 
     using FI = FramebufferImageIndex;
@@ -304,7 +318,14 @@ RTGL1::FramebufferImageIndex RTGL1::UpscalerFSR3::Apply(
     // clang-format on
 
     FfxErrorCode r = ffxFsr3UpscalerContextDispatch( context.get(), &info );
-    CheckError( r );
+    if( r != FFX_OK )
+    {
+        debug::Warning( "FSR3: dispatch failed (FfxErrorCode={}), disabling FSR3 upscaling", r );
+        contextFailed = true;
+
+        InsertBarriers( cmd, frameIndex, *framebuffers, rs, true );
+        return FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;
+    }
 
     InsertBarriers( cmd, frameIndex, *framebuffers, rs, true );
 
