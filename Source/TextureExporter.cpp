@@ -406,68 +406,36 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
         VkSubresourceLayout subresLayout = {};
         vkGetImageSubresourceLayout( device, dstImage_Linear, &subres, &subresLayout );
 
-        if( subresLayout.rowPitch == DstBytesPerPixel * srcImageSize.width )
+        const VkDeviceSize rowSize   = DstBytesPerPixel * srcImageSize.width;
+        const VkDeviceSize tightSize = rowSize * srcImageSize.height;
+
+        assert( subresLayout.rowPitch >= rowSize );
+        assert( subresLayout.size >= subresLayout.rowPitch * ( srcImageSize.height - 1 ) + rowSize );
+
+        auto pixels = std::make_unique< uint8_t[] >( tightSize );
+
+        uint8_t* rawData{ nullptr };
+        VkResult r = vkMapMemory( device,
+                                  dstMemory_Linear,
+                                  0,
+                                  VK_WHOLE_SIZE,
+                                  0,
+                                  reinterpret_cast< void** >( &rawData ) );
+        VK_CHECKERROR( r );
+
+        const uint8_t* srcPtr = &rawData[ subresLayout.offset ];
+        uint8_t*       dstPtr = pixels.get();
+
+        for( uint32_t row = 0; row < srcImageSize.height; row++ )
         {
-            assert( subresLayout.size ==
-                    DstBytesPerPixel * srcImageSize.width * srcImageSize.height );
-
-            uint8_t* data{ nullptr };
-            VkResult r = vkMapMemory( device,
-                                      dstMemory_Linear,
-                                      0,
-                                      VK_WHOLE_SIZE,
-                                      0,
-                                      reinterpret_cast< void** >( &data ) );
-            VK_CHECKERROR( r );
-
-            success = WriteTGA( filepath, &data[ subresLayout.offset ], srcImageSize );
-
-            vkUnmapMemory( device, dstMemory_Linear );
+            memcpy( dstPtr, srcPtr, rowSize );
+            srcPtr += subresLayout.rowPitch;
+            dstPtr += rowSize;
         }
-        else
-        {
-            // manually, if small enough
-            if( srcImageSize.width <= 64 && srcImageSize.height <= 64 )
-            {
-                auto pixels = std::make_unique< uint8_t[] >( DstBytesPerPixel * srcImageSize.width *
-                                                             srcImageSize.height );
-                {
-                    uint8_t* rawData{ nullptr };
-                    VkResult r = vkMapMemory( device,
-                                              dstMemory_Linear,
-                                              0,
-                                              VK_WHOLE_SIZE,
-                                              0,
-                                              reinterpret_cast< void** >( &rawData ) );
-                    VK_CHECKERROR( r );
 
-                    uint8_t* beginData = &rawData[ subresLayout.offset ];
-                    uint8_t* endData   = &rawData[ subresLayout.offset + subresLayout.size ];
+        vkUnmapMemory( device, dstMemory_Linear );
 
-                    uint8_t* dstPtr = pixels.get();
-
-                    for( uint8_t* ptr = beginData; ptr < endData; ptr += subresLayout.rowPitch )
-                    {
-                        memcpy( dstPtr, ptr, DstBytesPerPixel * srcImageSize.width );
-                        dstPtr += DstBytesPerPixel * srcImageSize.width;
-                    }
-
-                    vkUnmapMemory( device, dstMemory_Linear );
-                }
-                success = WriteTGA( filepath, pixels.get(), srcImageSize );
-            }
-            else
-            {
-                debug::Warning(
-                    "Can't export to image file, as mapped data is not tightly packed: {}. "
-                    "VkSubresourceLayout::rowPitch is {}; expected "
-                    "( {} bytes per pixel * {} pixels in a row )",
-                    filepath.string(),
-                    subresLayout.rowPitch,
-                    DstBytesPerPixel,
-                    srcImageSize.width );
-            }
-        }
+        success = WriteTGA( filepath, pixels.get(), srcImageSize );
     }
     {
         vkFreeMemory( device, dstMemory_Linear, nullptr );
