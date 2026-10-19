@@ -108,6 +108,7 @@ public:
     bool IsSuspended() const;
     bool IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique technique ) const;
     bool IsFrameGenerationAvailable() const;
+    bool IsExportActive() const;
 
     RgPrimitiveVertex* ScratchAllocForVertices( uint32_t count );
     void               ScratchFree( const RgPrimitiveVertex* pPointer );
@@ -126,6 +127,13 @@ public:
     inline void ImScratchTexCoord_Layer2( const float& u, const float& v );
     inline void ImScratchTexCoord_Layer3( const float& u, const float& v );
     inline void ImScratchColor( const RgColor4DPacked32& color );
+    inline void ImScratchPushVertices( uint32_t     vertexCount,
+                                       const float* pPositions,
+                                       uint32_t     strideVerts,
+                                       const float* pTexCoords,
+                                       uint32_t     strideTexCoords,
+                                       const float* pTexCoordsLayer1,
+                                       uint32_t     strideTexCoordsLayer1 );
     inline void ImScratchSetToPrimitive( RgMeshPrimitiveInfo* pTarget );
 
 
@@ -325,6 +333,23 @@ inline void RTGL1::VulkanDevice::ImScratchTexCoord_Layer3( const float& u, const
 inline void RTGL1::VulkanDevice::ImScratchColor( const RgColor4DPacked32& color )
 {
     scratchImmediate.Color( color );
+}
+
+inline void RTGL1::VulkanDevice::ImScratchPushVertices( uint32_t     vertexCount,
+                                                        const float* pPositions,
+                                                        uint32_t     strideVerts,
+                                                        const float* pTexCoords,
+                                                        uint32_t     strideTexCoords,
+                                                        const float* pTexCoordsLayer1,
+                                                        uint32_t     strideTexCoordsLayer1 )
+{
+    scratchImmediate.PushVertices( vertexCount,
+                                   pPositions,
+                                   strideVerts,
+                                   pTexCoords,
+                                   strideTexCoords,
+                                   pTexCoordsLayer1,
+                                   strideTexCoordsLayer1 );
 }
 
 inline void RTGL1::VulkanDevice::ImScratchSetToPrimitive( RgMeshPrimitiveInfo* pTarget )

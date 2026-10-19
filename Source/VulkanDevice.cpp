@@ -1426,6 +1426,11 @@ bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
     return frameGenerator && frameGenerator->IsAvailable();
 }
 
+bool RTGL1::VulkanDevice::IsExportActive() const
+{
+    return sceneImportExport->TryGetExporter() != nullptr;
+}
+
 RgPrimitiveVertex* RTGL1::VulkanDevice::ScratchAllocForVertices( uint32_t vertexCount )
 {
     // TODO: scratch allocator

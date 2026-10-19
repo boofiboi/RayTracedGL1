@@ -342,6 +342,26 @@ void rgUtilImScratchSetToPrimitive( RgInstance instance, RgMeshPrimitiveInfo* pT
     Call( instance, &RTGL1::VulkanDevice::ImScratchSetToPrimitive, pTarget );
 }
 
+void rgUtilImScratchPushVertices( RgInstance   instance,
+                                  uint32_t     vertexCount,
+                                  const float* pPositions,
+                                  uint32_t     strideVerts,
+                                  const float* pTexCoords,
+                                  uint32_t     strideTexCoords,
+                                  const float* pTexCoordsLayer1,
+                                  uint32_t     strideTexCoordsLayer1 )
+{
+    Call( instance,
+          &RTGL1::VulkanDevice::ImScratchPushVertices,
+          vertexCount,
+          pPositions,
+          strideVerts,
+          pTexCoords,
+          strideTexCoords,
+          pTexCoordsLayer1,
+          strideTexCoordsLayer1 );
+}
+
 RgBool32 rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscaleTechnique technique )
 {
     return Call( instance, &RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable, technique );
@@ -350,6 +370,11 @@ RgBool32 rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscale
 RgBool32 rgUtilIsFrameGenerationAvailable( RgInstance instance )
 {
     return Call( instance, &RTGL1::VulkanDevice::IsFrameGenerationAvailable );
+}
+
+RgBool32 rgUtilIsExportActive( RgInstance instance )
+{
+    return Call( instance, &RTGL1::VulkanDevice::IsExportActive );
 }
 
 const char* rgUtilGetResultDescription( RgResult result )

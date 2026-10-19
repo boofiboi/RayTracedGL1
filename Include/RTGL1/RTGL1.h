@@ -995,8 +995,14 @@ RGAPI void RGCONV               rgUtilImScratchColor( RgInstance instance, RgCol
 RGAPI void RGCONV               rgUtilImScratchEnd( RgInstance instance );
 RGAPI void RGCONV               rgUtilImScratchSetToPrimitive( RgInstance instance, RgMeshPrimitiveInfo* pTarget ); // Set accumulated vertices to pTarget
 
+// Appends vertexCount vertices to the current primitive (must be between ImScratchStart/End).
+// Positions are packed XYZ strided by strideVerts bytes, texcoords are packed UV strided by
+// strideTexCoords / strideTexCoordsLayer1 bytes. pTexCoordsLayer1 may be NULL.
+RGAPI void RGCONV               rgUtilImScratchPushVertices( RgInstance instance, uint32_t vertexCount, const float* pPositions, uint32_t strideVerts, const float* pTexCoords, uint32_t strideTexCoords, const float* pTexCoordsLayer1, uint32_t strideTexCoordsLayer1 );
+
 RGAPI RgBool32 RGCONV           rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscaleTechnique technique );
 RGAPI RgBool32 RGCONV           rgUtilIsFrameGenerationAvailable( RgInstance instance );
+RGAPI RgBool32 RGCONV           rgUtilIsExportActive( RgInstance instance );
 RGAPI const char* RGCONV        rgUtilGetResultDescription( RgResult result );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorByte4D( uint8_t r, uint8_t g, uint8_t b, uint8_t a );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorFloat4D( float r, float g, float b, float a );

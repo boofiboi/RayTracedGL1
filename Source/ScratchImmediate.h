@@ -90,6 +90,45 @@ public:
 
     void Color( RgColor4DPacked32 color ) { accumVertex.color = color; }
 
+    void PushVertices( uint32_t     vertexCount,
+                       const float* pPositions,
+                       uint32_t     strideVerts,
+                       const float* pTexCoords,
+                       uint32_t     strideTexCoords,
+                       const float* pTexCoordsLayer1,
+                       uint32_t     strideTexCoordsLayer1 )
+    {
+        const bool withLayer1 = pTexCoordsLayer1 != nullptr;
+        if( withLayer1 )
+        {
+            texLayer1.reserve( texLayer1.size() + vertexCount );
+        }
+        verts.reserve( verts.size() + vertexCount );
+
+        for( uint32_t i = 0; i < vertexCount; i++ )
+        {
+            accumVertex.position[ 0 ] = pPositions[ 0 ];
+            accumVertex.position[ 1 ] = pPositions[ 1 ];
+            accumVertex.position[ 2 ] = pPositions[ 2 ];
+            accumVertex.texCoord[ 0 ] = pTexCoords[ 0 ];
+            accumVertex.texCoord[ 1 ] = pTexCoords[ 1 ];
+
+            if( withLayer1 )
+            {
+                texLayer1.push_back( RgFloat2D{ pTexCoordsLayer1[ 0 ], pTexCoordsLayer1[ 1 ] } );
+            }
+
+            verts.push_back( accumVertex );
+
+            pPositions = reinterpret_cast< const float* >( reinterpret_cast< const uint8_t* >( pPositions ) + strideVerts );
+            pTexCoords = reinterpret_cast< const float* >( reinterpret_cast< const uint8_t* >( pTexCoords ) + strideTexCoords );
+            if( withLayer1 )
+            {
+                pTexCoordsLayer1 = reinterpret_cast< const float* >( reinterpret_cast< const uint8_t* >( pTexCoordsLayer1 ) + strideTexCoordsLayer1 );
+            }
+        }
+    }
+
     void SetToPrimitive( RgMeshPrimitiveInfo* pTarget );
 
     std::span< const uint32_t > GetIndices( RgUtilImScratchTopology topology,
