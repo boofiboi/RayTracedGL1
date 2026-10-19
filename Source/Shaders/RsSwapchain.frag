@@ -49,6 +49,7 @@ void main()
 
     outColor = unpackUintColor( rasterizerFragInfo.packedColor ) * vertColor * albedoAlpha;
 
+    outColor.rgb = pow(outColor.rgb, vec3(1.0 / 2.2));
 
     if (alphaTest != 0)
     {

@@ -35,11 +35,13 @@ layout( location = 2 ) out float out_reactivity;
 
 layout( constant_id = 0 ) const uint alphaTest = 0;
 
-#define ALPHA_THRESHOLD 0.5
+#define ALPHA_THRESHOLD ( 1.0 / 255.0 )
 
 void main()
 {
     vec4 ldrColor = in_color * getTextureSample( in_textureIndex, in_texCoord );
+
+    ldrColor.rgb = pow(ldrColor.rgb, vec3(1.0 / 2.2));
 
     out_reactivity = 0.9 * ldrColor.a;
     out_color      = ldrColor;
@@ -48,7 +50,8 @@ void main()
         vec3 ldrEmis;
         if( in_emissiveTextureIndex != MATERIAL_NO_TEXTURE )
         {
-            ldrEmis = in_color.rgb * getTextureSample( in_emissiveTextureIndex, in_texCoord ).rgb;
+            ldrEmis = pow( in_color.rgb * getTextureSample( in_emissiveTextureIndex, in_texCoord ).rgb,
+                           vec3( 1.0 / 2.2 ) );
         }
         else
         {
