@@ -120,6 +120,7 @@ RTGL1::Rasterizer::Rasterizer( VkDevice                                _device,
                                                  _uniform,
                                                  *storageFramebuffers,
                                                  *_textureManager,
+                                                 _tonemapping,
                                                  _instanceInfo );
 }
 
@@ -210,6 +211,7 @@ namespace RTGL1
 struct RasterLensFlares
 {
     const TextureManager* textureManager;
+    const Tonemapping*    tonemapping;
 };
 
 struct RasterDrawParams
@@ -336,7 +338,8 @@ void RTGL1::Rasterizer::DrawToFinalImage( VkCommandBuffer               cmd,
         .indexBuffer     = collector->GetIndexBuffer(),
         .descSets        = sets,
         .defaultViewProj = defaultViewProj,
-        .flaresParams    = RasterLensFlares{ .textureManager = &textureManager },
+        .flaresParams    = RasterLensFlares{ .textureManager = &textureManager,
+                                              .tonemapping    = &tonemapping },
     };
 
     Draw( cmd, frameIndex, params );
@@ -493,8 +496,11 @@ void RTGL1::Rasterizer::Draw( VkCommandBuffer         cmd,
         vkCmdSetScissor( cmd, 0, 1, &defaultRenderArea );
         vkCmdSetViewport( cmd, 0, 1, &defaultViewport );
 
-        lensFlares->Draw(
-            cmd, frameIndex, *drawParams.flaresParams->textureManager, drawParams.defaultViewProj );
+        lensFlares->Draw( cmd,
+                          frameIndex,
+                          *drawParams.flaresParams->textureManager,
+                          *drawParams.flaresParams->tonemapping,
+                          drawParams.defaultViewProj );
     }
 
 

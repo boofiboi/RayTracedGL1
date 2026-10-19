@@ -30,6 +30,8 @@
 namespace RTGL1
 {
 
+class Tonemapping;
+
 class LensFlares : public IShaderDependency
 {
 public:
@@ -40,6 +42,7 @@ public:
                 const GlobalUniform&                uniform,
                 const Framebuffers&                 framebuffers,
                 const TextureManager&               textureManager,
+                const Tonemapping&                  tonemapping,
                 const RgInstanceCreateInfo&         instanceInfo );
     ~LensFlares() override;
 
@@ -62,6 +65,7 @@ public:
     void Draw( VkCommandBuffer       cmd,
                uint32_t              frameIndex,
                const TextureManager& textureManager,
+               const Tonemapping&    tonemapping,
                const float*          defaultViewProj );
 
     uint32_t GetCullingInputCount() const;
@@ -75,7 +79,8 @@ private:
                                 VkDescriptorSetLayout textures,
                                 VkDescriptorSetLayout raster,
                                 VkDescriptorSetLayout lensFlaresCull,
-                                VkDescriptorSetLayout framebufs );
+                                VkDescriptorSetLayout framebufs,
+                                VkDescriptorSetLayout tonemapping );
     void CreatePipelines( const ShaderManager* shaderManager );
     void DestroyPipelines();
 

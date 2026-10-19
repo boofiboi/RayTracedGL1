@@ -30,8 +30,10 @@ layout( location = 0 ) out vec4 out_color;
 layout( location = 1 ) out vec3 out_screenEmission;
 layout( location = 2 ) out float out_reactivity;
 
-#define DESC_SET_TEXTURES 0
+#define DESC_SET_TEXTURES   0
+#define DESC_SET_TONEMAPPING 2
 #include "ShaderCommonGLSLFunc.h"
+#include "Exposure.h"
 
 layout( constant_id = 0 ) const uint alphaTest = 0;
 
@@ -41,17 +43,21 @@ void main()
 {
     vec4 ldrColor = in_color * getTextureSample( in_textureIndex, in_texCoord );
 
-    ldrColor.rgb = pow(ldrColor.rgb, vec3(1.0 / 2.2));
-
     out_reactivity = 0.9 * ldrColor.a;
     out_color      = ldrColor;
+
+    {
+        const float exposure         = ev100ToLuminousExposure( getCurrentEV100() );
+        const float hdrExposureScale = exposure > 0.0 ? ( 1.0 / exposure ) : 1.0;
+
+        out_color.rgb *= hdrExposureScale;
+    }
 
     {
         vec3 ldrEmis;
         if( in_emissiveTextureIndex != MATERIAL_NO_TEXTURE )
         {
-            ldrEmis = pow( in_color.rgb * getTextureSample( in_emissiveTextureIndex, in_texCoord ).rgb,
-                           vec3( 1.0 / 2.2 ) );
+            ldrEmis = in_color.rgb * getTextureSample( in_emissiveTextureIndex, in_texCoord ).rgb;
         }
         else
         {

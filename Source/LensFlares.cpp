@@ -20,6 +20,7 @@
 
 #include "LensFlares.h"
 
+#include "Tonemapping.h"
 #include "Utils.h"
 
 #include "Generated/ShaderCommonC.h"
@@ -76,6 +77,7 @@ RTGL1::LensFlares::LensFlares( VkDevice                            _device,
                                const GlobalUniform&                _uniform,
                                const Framebuffers&                 _framebuffers,
                                const TextureManager&               _textureManager,
+                               const Tonemapping&                  _tonemapping,
                                const RgInstanceCreateInfo&         _instanceInfo )
     : device( _device )
     , cullingInputCount( 0 )
@@ -130,7 +132,8 @@ RTGL1::LensFlares::LensFlares( VkDevice                            _device,
                            _textureManager.GetDescSetLayout(),
                            rasterDescSetLayout,
                            cullDescSetLayout,
-                           _framebuffers.GetDescSetLayout() );
+                           _framebuffers.GetDescSetLayout(),
+                           _tonemapping.GetDescSetLayout() );
 
 
     rasterPipelines =
@@ -409,6 +412,7 @@ void RTGL1::LensFlares::SyncForDraw( VkCommandBuffer cmd, uint32_t frameIndex )
 void RTGL1::LensFlares::Draw( VkCommandBuffer       cmd,
                               uint32_t              frameIndex,
                               const TextureManager& textureManager,
+                              const Tonemapping&    tonemapping,
                               const float*          defaultViewProj )
 {
     if( cullingInputCount == 0 )
@@ -422,6 +426,7 @@ void RTGL1::LensFlares::Draw( VkCommandBuffer       cmd,
     VkDescriptorSet sets[] = {
         textureManager.GetDescSet( frameIndex ),
         rasterDescSet,
+        tonemapping.GetDescSet(),
     };
     vkCmdBindDescriptorSets( cmd,
                              VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -470,12 +475,14 @@ void RTGL1::LensFlares::CreatePipelineLayouts( VkDescriptorSetLayout uniform,
                                                VkDescriptorSetLayout textures,
                                                VkDescriptorSetLayout raster,
                                                VkDescriptorSetLayout lensFlaresCull,
-                                               VkDescriptorSetLayout framebufs )
+                                               VkDescriptorSetLayout framebufs,
+                                               VkDescriptorSetLayout tonemapping )
 {
     {
         VkDescriptorSetLayout s[] = {
             textures,
             raster,
+            tonemapping,
         };
 
         VkPushConstantRange push = {
