@@ -39,7 +39,7 @@ layout(push_constant) uniform RasterizerFrag_BT
 
 layout (constant_id = 0) const uint alphaTest = 0;
 
-#define ALPHA_THRESHOLD 0.5
+#define ALPHA_THRESHOLD ( 1.0 / 255.0 )
 
 
 void main()
