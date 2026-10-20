@@ -20,12 +20,12 @@ float hash13(vec3 p3)
 
 vec3 applyPhosphorGrade(float luma)
 {
-    const vec3 shadowColor    = vec3(0.02, 0.10, 0.03);
-    const vec3 midColor       = vec3(0.25, 1.0, 0.35);
-    const vec3 highlightColor = vec3(0.9, 1.0, 0.85);
+    const vec3 shadowColor    = vec3(0.015, 0.07, 0.02);
+    const vec3 midColor       = vec3(0.12, 0.85, 0.22);
+    const vec3 highlightColor = vec3(0.75, 0.98, 0.70);
 
     vec3 c = mix(shadowColor, midColor, clamp(luma, 0.0, 1.0));
-    c = mix(c, highlightColor, clamp(pow(luma, 2.5), 0.0, 1.0));
+    c = mix(c, highlightColor, clamp(pow(luma, 4.0), 0.0, 1.0));
     return c;
 }
 
@@ -46,33 +46,33 @@ void main()
 
     vec2 centered = effect_getCenteredFromPix(pix);
     float r2 = dot(centered, centered);
-    vec2 distorted = centered * (1.0 + 0.04 * r2 * push.custom.vignetteIntensity);
+    vec2 distorted = centered * (1.0 + 0.05 * r2 * push.custom.vignetteIntensity);
     ivec2 samplePix = effect_getPixFromCentered(distorted);
 
     vec3 srcColor = effect_loadFromSource(samplePix);
     float luma = dot(srcColor, vec3(0.2126, 0.7152, 0.0722));
-    float amplified = 1.0 - exp(-pow(max(luma, 0.0), 0.45) * push.custom.gain);
+    float amplified = 1.0 - exp(-pow(max(luma, 0.0), 0.7) * push.custom.gain);
 
     if (push.transitionType == 0 && progress < 0.25)
     {
-        amplified += (1.0 - progress / 0.25) * 0.5;
+        amplified += (1.0 - progress / 0.25) * 0.35;
     }
 
     vec3 outColor = applyPhosphorGrade(amplified);
 
     float timeAnim = fract(globalUniform.time * 29.97);
     float noise = hash13(vec3(vec2(pix), timeAnim));
-    float noiseFactor = mix(push.custom.noiseIntensity * 1.2, push.custom.noiseIntensity * 0.2, clamp(amplified, 0.0, 1.0));
+    float noiseFactor = mix(push.custom.noiseIntensity * 1.0, push.custom.noiseIntensity * 0.2, clamp(amplified, 0.0, 1.0));
     outColor += (noise - 0.5) * noiseFactor;
 
-    float scanline = 0.95 + 0.05 * sin(float(pix.y) * 3.14159265);
+    float scanline = 0.94 + 0.06 * sin(float(pix.y) * 3.14159265);
     outColor *= scanline;
 
     ivec2 sz = effect_getFramebufSize();
     float aspect = float(sz.x) / float(sz.y);
-    vec2 tubeCoord = centered * vec2(mix(1.0, aspect, 0.35), 1.0);
+    vec2 tubeCoord = centered * vec2(aspect, 1.0);
     float distFromCenter = length(tubeCoord);
-    float vignette = smoothstep(1.55, 0.95, distFromCenter * push.custom.vignetteIntensity);
+    float vignette = smoothstep(1.35, 0.85, distFromCenter * push.custom.vignetteIntensity);
     outColor *= vignette;
 
     vec3 finalRgb = mix(effect_loadFromSource(pix), outColor, progress);
