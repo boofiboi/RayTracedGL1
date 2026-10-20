@@ -54,10 +54,13 @@ void main()
         float alpha = albedoAlpha.a < 0.999 ? albedoAlpha.a : mask;
         float brightness = rasterizerFragInfo.emissiveMult > 0.0 ? rasterizerFragInfo.emissiveMult : 1.5;
 
-        outColor.rgb = baseColor.rgb * albedoAlpha.rgb * brightness;
         if (albedoAlpha.a < 0.999)
         {
-            outColor.rgb *= albedoAlpha.a;
+            outColor.rgb = baseColor.rgb * brightness * alpha;
+        }
+        else
+        {
+            outColor.rgb = baseColor.rgb * albedoAlpha.rgb * brightness;
         }
         outColor.a = baseColor.a * alpha * 0.8;
     }
