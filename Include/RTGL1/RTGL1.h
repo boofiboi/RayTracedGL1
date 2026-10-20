@@ -819,6 +819,16 @@ typedef struct RgPostEffectTeleport
     float       transitionDurationOut;
 } RgPostEffectTeleport;
 
+typedef struct RgPostEffectNightVision
+{
+    RgBool32    isActive;
+    float       transitionDurationIn;
+    float       transitionDurationOut;
+    float       gain;
+    float       noiseIntensity;
+    float       vignetteIntensity;
+} RgPostEffectNightVision;
+
 typedef struct RgDrawFramePostEffectsParams
 {
     RgStructureType                         sType;
@@ -834,6 +844,7 @@ typedef struct RgDrawFramePostEffectsParams
     const RgPostEffectColorTint*            pColorTint;
     const RgPostEffectTeleport*             pTeleport;
     const RgPostEffectCRT*                  pCRT;
+    const RgPostEffectNightVision*          pNightVision;
 } RgDrawFramePostEffectsParams;
 
 typedef enum RgMediaType

@@ -211,6 +211,7 @@ namespace detail
             .pColorTint            = nullptr,
             .pTeleport             = nullptr,
             .pCRT                  = nullptr,
+            .pNightVision          = nullptr,
         };
     };
 

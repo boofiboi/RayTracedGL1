@@ -229,6 +229,7 @@ private:
     std::shared_ptr< EffectWaves >               effectWaves;
     std::shared_ptr< EffectColorTint >           effectColorTint;
     std::shared_ptr< EffectTeleport >            effectTeleport;
+    std::shared_ptr< EffectNightVision >         effectNightVision;
     std::shared_ptr< EffectCrtDemodulateEncode > effectCrtDemodulateEncode;
     std::shared_ptr< EffectCrtDecode >           effectCrtDecode;
 

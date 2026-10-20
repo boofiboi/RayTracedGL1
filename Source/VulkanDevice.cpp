@@ -696,6 +696,10 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         {
             accum = effectColorTint->Apply( args, accum );
         }
+        if( effectNightVision->Setup( args, postef.pNightVision ) )
+        {
+            accum = effectNightVision->Apply( args, accum );
+        }
         if( effectInverseBW->Setup( args, postef.pInverseBlackAndWhite ) )
         {
             accum = effectInverseBW->Apply( args, accum );

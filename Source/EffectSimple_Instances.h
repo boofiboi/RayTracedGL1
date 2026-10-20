@@ -164,6 +164,34 @@ struct EffectTeleport final : public EffectSimple< EffectTeleport_PushConst >
     }
 };
 
+struct EffectNightVision_PushConst
+{
+    float gain;
+    float noiseIntensity;
+    float vignetteIntensity;
+    float pad;
+};
+
+struct EffectNightVision final : public EffectSimple< EffectNightVision_PushConst >
+{
+    RTGL1_EFFECT_SIMPLE_INHERIT_CONSTRUCTOR(EffectNightVision, "EffectNightVision")
+
+    bool Setup(const CommonnlyUsedEffectArguments &args, const RgPostEffectNightVision *params)
+    {
+        if (params == nullptr)
+        {
+            return SetupNull();
+        }
+
+        GetPush().gain              = params->gain > 0.0f ? params->gain : 8.0f;
+        GetPush().noiseIntensity   = params->noiseIntensity >= 0.0f ? params->noiseIntensity : 0.15f;
+        GetPush().vignetteIntensity = params->vignetteIntensity >= 0.0f ? params->vignetteIntensity : 1.0f;
+        GetPush().pad               = 0.0f;
+
+        return EffectSimple::Setup(args, params->isActive, params->transitionDurationIn, params->transitionDurationOut);
+    }
+};
+
 
 // ------------------ //
 
