@@ -23,7 +23,7 @@ layout (constant_id = 1) const uint lightmapLayerIndex = 3;
 #define MATERIAL_MAX_ALBEDO_LAYERS maxAlbedoLayerCount
 #define MATERIAL_LIGHTMAP_LAYER_INDEX lightmapLayerIndex
 
-#define FORCE_EVALBRDF_GGX_LOOSE
+//#define FORCE_EVALBRDF_GGX_LOOSE
 
 #define DESC_SET_TLAS 0
 #define DESC_SET_FRAMEBUFFERS 1
