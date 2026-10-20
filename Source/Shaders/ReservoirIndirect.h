@@ -61,7 +61,8 @@ ReservoirIndirect emptyReservoirIndirect()
 
 float calcSelectedSampleWeightIndirect(const ReservoirIndirect r)
 {
-    return safePositiveRcp(r.selected_targetPdf) * (r.weightSum / float(max(1, r.M)));
+    float w = safePositiveRcp(max(r.selected_targetPdf, 1e-4)) * (r.weightSum / float(max(1, r.M)));
+    return min(w, 30.0);
 }
 
 void normalizeReservoirIndirect(inout ReservoirIndirect r, uint maxM)
