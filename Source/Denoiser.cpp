@@ -42,6 +42,8 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
     reblurSettings.specularPrepassBlurRadius = 15.0f;
     reblurSettings.antilagSettings.luminanceSigmaScale = 1.0f;
     reblurSettings.antilagSettings.luminanceSensitivity = 1.0f;
+    reblurSettings.fastHistoryClampingSigmaScale = 1.5f;
+    reblurSettings.fireflySuppressorMinRelativeScale = 1.5f;
     reblurSettings.enableAntiFirefly = true;
 
     relaxSettings.diffusePrepassBlurRadius = 0.0f;
