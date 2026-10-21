@@ -226,7 +226,7 @@ LightSample sampleDirectionalLight(const DirectionalLight l, const vec3 surfPosi
 {
     vec3 lightNormal;
     {
-        const float diskRadiusAtUnit = sin(max(0.01, l.angularRadius));
+        const float diskRadiusAtUnit = sin(max(0.0, l.angularRadius));
         const vec2 disk = sampleDisk(diskRadiusAtUnit, pointRnd.x, pointRnd.y);
         const mat3 basis = getONB(l.direction);
 
