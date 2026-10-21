@@ -671,12 +671,6 @@ void traceDirectIllumination( const Surface   surf,
         out_lightdirection = safeNormalize( surf.position - light.position );
     #endif
     }
-
-    if (reservoir.selected != LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET)
-    {
-        out_diffuse = min(out_diffuse, vec3(40.0));
-        out_specular = min(out_specular, vec3(40.0));
-    }
 }
 #endif // LIGHT_SAMPLE_METHOD != LIGHT_SAMPLE_METHOD_NONE
 

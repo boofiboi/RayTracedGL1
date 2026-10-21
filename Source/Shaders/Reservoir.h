@@ -46,8 +46,7 @@ bool isReservoirValid(const Reservoir r)
 
 float calcSelectedSampleWeight(const Reservoir r)
 {
-    float w = safePositiveRcp(max(r.selected_targetPdf, 1e-4)) * (r.weightSum / float(max(1, r.M)));
-    return min(w, 50.0);
+    return safePositiveRcp(r.selected_targetPdf) * (r.weightSum / float(max(1, r.M)));
 }
 
 void normalizeReservoir(inout Reservoir r, uint maxM)

@@ -46,7 +46,7 @@ void main()
 
     vec4 viewDirRay = texelFetch(framebufViewDirection_Sampler, cbp, 0);
     float hitDist = max(viewDirRay.w, 0.0);
-    if(hitDist <= 0.0 || isnan(hitDist) || isinf(hitDist))
+    if(hitDist <= 0.0)
     {
         hitDist = depth;
     }
@@ -55,17 +55,6 @@ void main()
     vec3 indirDiff = texelFetchUnfilteredIndir(cbp);
     vec3 diffRadiance = directDiff + indirDiff;
     vec3 specRadiance = texelFetchUnfilteredSpecular(cbp);
-
-    if(any(isnan(diffRadiance)) || any(isinf(diffRadiance)))
-    {
-        diffRadiance = vec3(0.0);
-    }
-    if(any(isnan(specRadiance)) || any(isinf(specRadiance)))
-    {
-        specRadiance = vec3(0.0);
-    }
-    diffRadiance = clamp(diffRadiance, vec3(0.0), vec3(100.0));
-    specRadiance = clamp(specRadiance, vec3(0.0), vec3(100.0));
 
     vec4 outDiffHitDist;
     vec4 outSpecHitDist;

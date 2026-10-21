@@ -98,7 +98,8 @@ void RTGL1::UpscalerFSR3::OnFramebuffersSizeChange( const ResolutionState& resol
     DestroyContextAndResources();
 
     FfxFsr3UpscalerContextDescription contextDesc = {
-        .flags = 0,
+        .flags = FFX_FSR3UPSCALER_ENABLE_HIGH_DYNAMIC_RANGE |
+                 FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE,
         .maxRenderSize  = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .maxUpscaleSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .fpMessage      = nullptr,
