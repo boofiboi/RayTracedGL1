@@ -385,9 +385,9 @@ void RTGL1::ImageComposition::SetupLpmParams( VkCommandBuffer                   
                   LPM_CONFIG_709_709,
                   LPM_COLORS_709_709,
                   0.0f,   // softGap
-                  256.0f, // hdrMax
-                  6.5f,   // exposure
-                  0.2f,   // contrast
+                  32.0f,  // hdrMax
+                  5.0f,   // exposure
+                  0.25f,  // contrast
                   1.0f,   // shoulder contrast
                   saturation,
                   crosstalk );
