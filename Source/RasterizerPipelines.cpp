@@ -126,33 +126,17 @@ VkPipeline RTGL1::RasterizerPipelines::CreatePipeline( PipelineStateFlags pipeli
         .pData         = &applyVertexColorGamma,
     };
 
-    struct FragSpecData
-    {
-        uint32_t alphaTest;
-        uint32_t isAdditive;
-    } fragSpecData = {
-        .alphaTest  = alphaTest,
-        .isAdditive = ( !isWorld && additive ) ? 1u : 0u,
-    };
-
-    VkSpecializationMapEntry fragMapEntries[] = {
-        {
-            .constantID = 0,
-            .offset     = offsetof( FragSpecData, alphaTest ),
-            .size       = sizeof( uint32_t ),
-        },
-        {
-            .constantID = 1,
-            .offset     = offsetof( FragSpecData, isAdditive ),
-            .size       = sizeof( uint32_t ),
-        },
+    VkSpecializationMapEntry fragMapEntry = {
+        .constantID = 0,
+        .offset     = 0,
+        .size       = sizeof( uint32_t ),
     };
 
     VkSpecializationInfo fragSpecInfo = {
-        .mapEntryCount = isWorld ? 1u : static_cast< uint32_t >( std::size( fragMapEntries ) ),
-        .pMapEntries   = fragMapEntries,
-        .dataSize      = sizeof( fragSpecData ),
-        .pData         = &fragSpecData,
+        .mapEntryCount = 1,
+        .pMapEntries   = &fragMapEntry,
+        .dataSize      = sizeof( alphaTest ),
+        .pData         = &alphaTest,
     };
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {
@@ -226,16 +210,8 @@ VkPipeline RTGL1::RasterizerPipelines::CreatePipeline( PipelineStateFlags pipeli
     {
         if( additive )
         {
-            if( isWorld )
-            {
-                blendSrc = VK_BLEND_FACTOR_SRC_ALPHA;
-                blendDst = VK_BLEND_FACTOR_ONE;
-            }
-            else
-            {
-                blendSrc = VK_BLEND_FACTOR_ONE;
-                blendDst = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-            }
+            blendSrc = VK_BLEND_FACTOR_SRC_ALPHA;
+            blendDst = VK_BLEND_FACTOR_ONE;
         }
         else
         {

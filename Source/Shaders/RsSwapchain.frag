@@ -38,7 +38,6 @@ layout(push_constant) uniform RasterizerFrag_BT
 } rasterizerFragInfo;
 
 layout (constant_id = 0) const uint alphaTest = 0;
-layout (constant_id = 1) const uint isAdditive = 0;
 
 #define ALPHA_THRESHOLD ( 1.0 / 255.0 )
 
@@ -46,24 +45,10 @@ layout (constant_id = 1) const uint isAdditive = 0;
 void main()
 {
     vec4 albedoAlpha = getTextureSample(rasterizerFragInfo.textureIndex, vertTexCoord);
-    vec4 baseColor = unpackUintColor( rasterizerFragInfo.packedColor ) * vertColor;
 
-    if (isAdditive != 0)
-    {
-        float mask = max(albedoAlpha.r, max(albedoAlpha.g, albedoAlpha.b));
-        float alpha = albedoAlpha.a < 0.999 ? albedoAlpha.a : mask;
 
-        outColor.rgb = baseColor.rgb * albedoAlpha.rgb;
-        if (albedoAlpha.a < 0.999)
-        {
-            outColor.rgb *= albedoAlpha.a;
-        }
-        outColor.a = baseColor.a * alpha;
-    }
-    else
-    {
-        outColor = baseColor * albedoAlpha;
-    }
+    outColor = unpackUintColor( rasterizerFragInfo.packedColor ) * vertColor * albedoAlpha;
+
 
     if (alphaTest != 0)
     {
