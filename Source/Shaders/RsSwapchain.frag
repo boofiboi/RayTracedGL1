@@ -34,7 +34,7 @@ layout(push_constant) uniform RasterizerFrag_BT
     layout(offset = 64) uint packedColor;
     layout(offset = 68) uint textureIndex;
     layout(offset = 72) uint emissiveTextureIndex;
-    layout(offset = 76) float emissiveMult;
+    layout(offset = 76) uint emissiveMult;
 } rasterizerFragInfo;
 
 layout (constant_id = 0) const uint alphaTest = 0;
@@ -52,17 +52,13 @@ void main()
     {
         float mask = max(albedoAlpha.r, max(albedoAlpha.g, albedoAlpha.b));
         float alpha = albedoAlpha.a < 0.999 ? albedoAlpha.a : mask;
-        float brightness = rasterizerFragInfo.emissiveMult > 0.0 ? rasterizerFragInfo.emissiveMult : 1.5;
 
+        outColor.rgb = baseColor.rgb * albedoAlpha.rgb;
         if (albedoAlpha.a < 0.999)
         {
-            outColor.rgb = baseColor.rgb * brightness * alpha;
+            outColor.rgb *= albedoAlpha.a;
         }
-        else
-        {
-            outColor.rgb = baseColor.rgb * albedoAlpha.rgb * brightness;
-        }
-        outColor.a = baseColor.a * alpha * 0.8;
+        outColor.a = baseColor.a * alpha;
     }
     else
     {

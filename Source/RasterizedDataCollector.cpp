@@ -250,7 +250,7 @@ void RTGL1::RasterizedDataCollector::AddPrimitive( uint32_t                   fr
         .roughnessFactor = Utils::Saturate( pbrInfo ? pbrInfo->roughnessDefault : 1.0f ),
         .metallicFactor  = Utils::Saturate( pbrInfo ? pbrInfo->metallicDefault : 0.0f ),
 
-        .emissive = std::max( 0.0f, info.emissive ),
+        .emissive = Utils::Saturate( info.emissive ),
 
         .viewProj = IfNotNull( pViewProjection, Float16D( pViewProjection ) ),
         .viewport = IfNotNull( pViewport, ToVk( *pViewport ) ),
