@@ -849,6 +849,7 @@ void RTGL1::VulkanDevice::CreateDevice()
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME,
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
         VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
@@ -919,9 +920,16 @@ void RTGL1::VulkanDevice::CreateDevice()
         .synchronization2 = 1,
     };
 
+    VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR rtMaintenance1Features = {
+        .sType                                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR,
+        .pNext                                = &sync2Features,
+        .rayTracingMaintenance1               = 1,
+        .rayTracingPipelineTraceRaysIndirect2 = 1,
+    };
+
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures = {
         .sType              = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
-        .pNext              = &sync2Features,
+        .pNext              = &rtMaintenance1Features,
         .rayTracingPipeline = 1,
     };
 
