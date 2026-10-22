@@ -1,0 +1,72 @@
+name: Build RTGL1
+
+on:
+  push:
+    branches: [ hl1 ]
+  pull_request:
+    branches: [ hl1 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v2
+        with:
+          version: 1.3.296.0
+          use-cache: true
+
+      - name: Compile Shaders
+        shell: pwsh
+        run: |
+          cd Source/Shaders
+          python GenerateShaders.py
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -B Build/x64-Release `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DRG_WITH_SURFACE_WIN32=ON `
+            -DRG_WITH_AMD_FSR3=ON `
+            -DRG_WITH_NVIDIA_NRD=ON `
+            -DRG_WITH_SHADERS=OFF `
+            -DRG_WITH_EXAMPLES=OFF `
+            -DCMAKE_CXX_FLAGS_RELEASE="/O2 /Ob3 /Ot /Oi /GL /Gw /Gy /fp:fast /arch:AVX2 /DNDEBUG"
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build Build/x64-Release --config Release --parallel
+
+      - name: Prepare Artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "artifact_rtgl1/Include/RTGL1"
+          New-Item -ItemType Directory -Force -Path "artifact_rtgl1/Build/x64-Release/Release"
+          New-Item -ItemType Directory -Force -Path "artifact_rtgl1/bin"
+          New-Item -ItemType Directory -Force -Path "artifact_rtgl1/Build/shaders"
+
+          Copy-Item -Path "Include/RTGL1/RTGL1.h" -Destination "artifact_rtgl1/Include/RTGL1/RTGL1.h" -Force
+          Copy-Item -Path "Build/x64-Release/Release/RayTracedGL1.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          Copy-Item -Path "Build/x64-Release/Release/RayTracedGL1.lib" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          Copy-Item -Path "Build/x64-Release/Release/NRI.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          Copy-Item -Path "bin/amd_fidelityfx_vk.dll" -Destination "artifact_rtgl1/bin/" -Force
+          Copy-Item -Path "Build/shaders/*.spv" -Destination "artifact_rtgl1/Build/shaders/" -Force
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RayTracedGL1-Artifact
+          path: artifact_rtgl1
