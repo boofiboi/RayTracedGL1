@@ -18,7 +18,6 @@ Source/FSR3/ffx-api/bin/
 
 # slop
 CLAUDE.md
-AGENTS.md
 GEMINI.md
 .claude/
 .gemini/
