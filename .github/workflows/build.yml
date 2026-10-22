@@ -70,3 +70,16 @@ jobs:
         with:
           name: RayTracedGL1-Artifact
           path: artifact_rtgl1
+
+      - name: Trigger xash-rt workflow
+        if: github.ref == 'refs/heads/hl1' && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          try {
+            gh workflow run rt.yml --repo boofiboi/xash-rt --ref master -f rtgl1_run_id=${{ github.run_id }}
+            Write-Host "Successfully triggered xash-rt workflow with run ID ${{ github.run_id }}."
+          } catch {
+            Write-Host "Could not trigger xash-rt workflow: $_"
+          }
