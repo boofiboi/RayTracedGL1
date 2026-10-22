@@ -853,6 +853,9 @@ void RTGL1::VulkanDevice::CreateDevice()
         VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
         VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME,
         VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+        VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+        VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME,
     };
 
     const bool hasRobustness2 = std::any_of( supportedDeviceExtensions.cbegin(),
@@ -874,9 +877,21 @@ void RTGL1::VulkanDevice::CreateDevice()
         deviceExtensions.push_back( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
     }
 
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicState = {
+        .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+        .pNext                = hasRobustness2 ? &robustness : nullptr,
+        .extendedDynamicState = 1,
+    };
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRendering = {
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
+        .pNext            = &extendedDynamicState,
+        .dynamicRendering = 1,
+    };
+
     VkPhysicalDeviceVulkan12Features vulkan12Features = {
         .sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext                    = hasRobustness2 ? &robustness : nullptr,
+        .pNext                    = &dynamicRendering,
         .samplerMirrorClampToEdge = 1,
         .drawIndirectCount        = 1,
         .shaderFloat16            = 1,
