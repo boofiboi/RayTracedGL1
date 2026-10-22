@@ -1,4 +1,4 @@
-﻿[submodule "Source/External/NRD"]
+[submodule "Source/External/NRD"]
 	path = Source/External/NRD
 	url = https://github.com/NVIDIA-RTX/NRD.git
 [submodule "Source/glaze"]
