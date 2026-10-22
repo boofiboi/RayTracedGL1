@@ -13,8 +13,8 @@ Bin/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Source/FSR3/
-Source/External/NRD/
+Source/FSR3/bin/
+Source/FSR3/ffx-api/bin/
 
 # slop
 CLAUDE.md
