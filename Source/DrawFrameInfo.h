@@ -101,11 +101,11 @@ namespace detail
             .sType                = sType,
             .pNext                = nullptr,
             .disableEyeAdaptation = false,
-            .ev100Min             = 0.0f,
-            .ev100Max             = 10.0f,
+            .ev100Min             = 4.0f,
+            .ev100Max             = 6.0f,
             .luminanceWhitePoint  = 10.0f,
-            .saturation           = { 0, 0, 0 },
-            .crosstalk            = { 1, 1, 1 },
+            .saturation           = { 1.0f, 1.0f, 1.0f },
+            .crosstalk            = { 0.75f, 1.0f, 1.0f },
         };
     };
 
