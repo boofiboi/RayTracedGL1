@@ -5,7 +5,7 @@
 
   
 
-RTGL1 is a library that aims to simplify the process of porting 3D applications to *real-time path tracing*, via hardware accelerated ray tracing, denoising algorithms (A-SVGF) and sampling algorithms (ReSTIR, ReSTIR GI) to improve the image quality by reusing spatio-temporal data.
+RTGL1 is a library that aims to simplify the process of porting 3D applications to *real-time path tracing*, via hardware accelerated ray tracing, denoising algorithms (NRD) and sampling algorithms (ReSTIR, ReSTIR GI) to improve the image quality by reusing spatio-temporal data.
 
   
 
@@ -19,21 +19,31 @@ It is intended to be used in addition to my fork of xash-rt, which also includes
 
 ## Improvements over original RTGL1
 
-Removed FSR2 and added FSR3 support - FSR3 works on exactly the same devices, but with better performance and better visual quality.
+- Removed FSR2 and added FSR3 support - FSR3 works on exactly the same devices, but with better performance and better visual quality.
 
-FSR3 Framegen support
+- FSR3 Framegen support
 
-Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
+- *eventual** FSR4 support once AMD releases the Redstone SDK for VK.
 
-Water semantics: "waterColor" is the color that white light becomes after passing through 1 meter of that water, "waterDensity" is an absorption multiplier (1.0 - exactly as the color implies, 0.0 - crystal clear), "waterReflectivity" is a [0,1] multiplier for the Fresnel reflection strength of the water surface. Global fallback for all water without per-texture params is set by the engine (rt_me_water_* cvars).
+- Fixed the long standing bug that made some textures incorrectly export into a gLTF scene. (Some textures had resolutions that werent powers of 2 (e.g 31x31), RTGL didnt like those.)
 
-Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning etc.
+- Cool "NVG" (Night vision) post processing shader for Opposing Force.
 
-nVidia NRD denoiser replacing SVGF Atrous.
+- DLSSU (DLSS 4.5 Upscaling), DLSSG (DLSS 4.5 Frame Generation), *eventual* DLSSR (DLSS 4.5 Ray Reconstruction)
+
+- If DLSS5 ever becomes public and has a VK SDK, why not?
+
+- Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
+
+- Water semantics: "waterColor" is the color that white light becomes after passing through 1 meter of that water, "waterDensity" is an absorption multiplier (1.0 - exactly as the color implies, 0.0 - crystal clear), "waterReflectivity" is a [0,1] multiplier for the Fresnel reflection strength of the water surface. Global fallback for all water without per-texture params is set by the engine (rt_me_water_* cvars).
+
+- Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning etc.
+
+- nVidia NRD denoiser replacing SVGF Atrous.
 
 ## Build
 
-
+# THESE ARE OUTDATED, I NEED TO REWRITE THEM!!!
 
 1. Requirements:
 
