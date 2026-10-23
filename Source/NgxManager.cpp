@@ -153,16 +153,16 @@ bool RTGL1::NgxManager::TryInit( VkInstance       instance,
 
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_Init_with_ProjectID fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_Init_with_ProjectID fail: 0x{:08X}",
+                        static_cast< uint32_t >( r ) );
         return false;
     }
 
     r = NVSDK_NGX_VULKAN_GetCapabilityParameters( &pParams );
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_GetCapabilityParameters fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_GetCapabilityParameters fail: 0x{:08X}",
+                        static_cast< uint32_t >( r ) );
 
         NVSDK_NGX_VULKAN_Shutdown1( _device );
         pParams = nullptr;
@@ -297,8 +297,8 @@ std::vector< const char* > RTGL1::NgxManager::GetVulkanInstanceExtensions()
         &instanceExtCount, &ppInstanceExts, &deviceExtCount, &ppDeviceExts );
     if( !NVSDK_NGX_SUCCEED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions fail: 0x{:08X}",
+                        static_cast< uint32_t >( r ) );
         return {};
     }
 
@@ -323,8 +323,8 @@ std::vector< const char* > RTGL1::NgxManager::GetVulkanDeviceExtensions()
         &instanceExtCount, &ppInstanceExts, &deviceExtCount, &ppDeviceExts );
     if( !NVSDK_NGX_SUCCEED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions fail: 0x{:08X}",
+                        static_cast< uint32_t >( r ) );
         return {};
     }
 
