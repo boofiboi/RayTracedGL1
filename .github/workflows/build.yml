@@ -27,6 +27,13 @@ jobs:
           version: 1.3.296.0
           use-cache: true
 
+      - name: Fetch DLSS SDK
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "Source/External/DLSS/lib/Windows_x86_64/rel/nvngx_dlss.dll")) {
+            git clone --depth 1 https://github.com/NVIDIA/DLSS Source/External/DLSS
+          }
+
       - name: Compile Shaders
         shell: pwsh
         run: |
@@ -41,6 +48,7 @@ jobs:
             -DRG_WITH_SURFACE_WIN32=ON `
             -DRG_WITH_AMD_FSR3=ON `
             -DRG_WITH_NVIDIA_NRD=ON `
+            -DRG_WITH_NVIDIA_DLSS=ON `
             -DRG_WITH_SHADERS=OFF `
             -DRG_WITH_EXAMPLES=OFF `
             -DCMAKE_CXX_FLAGS_RELEASE="/O2 /Ob3 /Ot /Oi /GL /Gw /Gy /fp:fast /arch:AVX2 /DNDEBUG"
@@ -63,6 +71,8 @@ jobs:
           Copy-Item -Path "Build/x64-Release/Release/RayTracedGL1.lib" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           Copy-Item -Path "Build/x64-Release/Release/NRI.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           Copy-Item -Path "bin/amd_fidelityfx_vk.dll" -Destination "artifact_rtgl1/bin/" -Force
+          Copy-Item -Path "Source/External/DLSS/lib/Windows_x86_64/rel/*.dll" -Destination "artifact_rtgl1/bin/" -Force
+          Copy-Item -Path "Source/External/DLSS/lib/Windows_x86_64/rel/*.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           Copy-Item -Path "Build/shaders/*.spv" -Destination "artifact_rtgl1/Build/shaders/" -Force
 
       - name: Upload Artifact
