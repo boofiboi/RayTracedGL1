@@ -254,16 +254,18 @@ void RTGL1::VulkanDevice::Dev_Draw() const
         }
         if( ImGui::TreeNode( "NRD Denoiser" ) )
         {
-            int currentMethod = static_cast< int >( denoiser->GetMethod() );
+            DenoiserNRD& nrd = denoiserManager->GetNRD();
+
+            int currentMethod = static_cast< int >( nrd.GetMethod() );
             const char* methodNames[] = { "ReBLUR", "RELAX" };
             if( ImGui::Combo( "Method", &currentMethod, methodNames, static_cast< int >( std::size( methodNames ) ) ) )
             {
-                denoiser->SetMethod( static_cast< NrdDenoiserMethod >( currentMethod ) );
+                nrd.SetMethod( static_cast< NrdDenoiserMethod >( currentMethod ) );
             }
 
             if( currentMethod == 0 )
             {
-                auto& s = denoiser->GetReblurSettings();
+                auto& s = nrd.GetReblurSettings();
                 ImGui::SliderFloat( "Max Blur Radius", &s.maxBlurRadius, 0.0f, 60.0f, "%.1f" );
                 ImGui::SliderFloat( "Min Blur Radius", &s.minBlurRadius, 0.0f, 10.0f, "%.1f" );
                 ImGui::SliderFloat( "Diffuse Prepass Blur Radius", &s.diffusePrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
@@ -275,7 +277,7 @@ void RTGL1::VulkanDevice::Dev_Draw() const
             }
             else
             {
-                auto& s = denoiser->GetRelaxSettings();
+                auto& s = nrd.GetRelaxSettings();
                 ImGui::SliderInt( "Diffuse Max History Frames", reinterpret_cast< int* >( &s.diffuseMaxAccumulatedFrameNum ), 0, 63 );
                 ImGui::SliderInt( "Specular Max History Frames", reinterpret_cast< int* >( &s.specularMaxAccumulatedFrameNum ), 0, 63 );
                 ImGui::SliderInt( "Diffuse Max Fast History Frames", reinterpret_cast< int* >( &s.diffuseMaxFastAccumulatedFrameNum ), 0, 30 );

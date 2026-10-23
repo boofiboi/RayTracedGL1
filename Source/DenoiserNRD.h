@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include "IDenoiser.h"
 #include "ShaderManager.h"
 #include "Framebuffers.h"
 #include "GlobalUniform.h"
@@ -24,28 +25,28 @@ enum class NrdDenoiserMethod
     Relax
 };
 
-class Denoiser final : public IShaderDependency, public IFramebuffersDependency
+class DenoiserNRD final : public IDenoiser, public IShaderDependency
 {
 public:
-    Denoiser( VkInstance instance,
-              VkDevice device,
-              VkPhysicalDevice physDevice,
-              uint32_t graphicsQueueFamilyIndex,
-              std::shared_ptr< Framebuffers > framebuffers,
-              const ShaderManager& shaderManager,
-              const GlobalUniform& uniform );
-    ~Denoiser() override;
+    DenoiserNRD( VkInstance instance,
+                 VkDevice device,
+                 VkPhysicalDevice physDevice,
+                 uint32_t graphicsQueueFamilyIndex,
+                 std::shared_ptr< Framebuffers > framebuffers,
+                 const ShaderManager& shaderManager,
+                 const GlobalUniform& uniform );
+    ~DenoiserNRD() override;
 
-    Denoiser( const Denoiser& other ) = delete;
-    Denoiser( Denoiser&& other ) noexcept = delete;
-    Denoiser& operator=( const Denoiser& other ) = delete;
-    Denoiser& operator=( Denoiser&& other ) noexcept = delete;
+    DenoiserNRD( const DenoiserNRD& other ) = delete;
+    DenoiserNRD( DenoiserNRD&& other ) noexcept = delete;
+    DenoiserNRD& operator=( const DenoiserNRD& other ) = delete;
+    DenoiserNRD& operator=( DenoiserNRD&& other ) noexcept = delete;
 
     void Denoise( VkCommandBuffer cmd,
                   uint32_t frameIndex,
                   const std::shared_ptr< const GlobalUniform >& uniform,
                   RgFloat2D jitter,
-                  bool resetAccumulation );
+                  bool resetAccumulation ) override;
 
     void OnShaderReload( const ShaderManager* shaderManager ) override;
     void OnFramebuffersSizeChange( const ResolutionState& resolutionState ) override;

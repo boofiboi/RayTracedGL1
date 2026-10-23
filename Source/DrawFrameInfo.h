@@ -45,6 +45,7 @@ namespace detail
             .pPixelizedRenderSize  = nullptr,
             .resetUpscalerHistory  = false,
             .enableFrameGeneration = false,
+            .frameGenerationTechnique = RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3,
         };
     };
 
@@ -56,6 +57,7 @@ namespace detail
         constexpr static RgDrawFrameIlluminationParams value = {
             .sType                                       = sType,
             .pNext                                       = nullptr,
+            .denoiserTechnique                           = RG_RENDER_DENOISER_TECHNIQUE_NRD_REBLUR,
             .maxBounceShadows                            = 2,
             .enableSecondBounceForIndirect               = true,
             .cellWorldSize                               = 1.0f,

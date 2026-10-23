@@ -663,10 +663,22 @@ typedef struct RgDrawFrameTexturesParams
     float           minRoughness;
 } RgDrawFrameTexturesParams;
 
+typedef enum RgRenderDenoiserTechnique
+{
+    RG_RENDER_DENOISER_TECHNIQUE_NRD_REBLUR,
+    RG_RENDER_DENOISER_TECHNIQUE_NRD_RELAX,
+    RG_RENDER_DENOISER_TECHNIQUE_NVIDIA_DLSS_RR,
+    RG_RENDER_DENOISER_TECHNIQUE_NONE,
+} RgRenderDenoiserTechnique;
+
 typedef struct RgDrawFrameIlluminationParams
 {
     RgStructureType sType;
     void*           pNext;
+    // Denoiser that processes the unfiltered illumination. If the requested
+    // technique is not available, the default NRD denoiser is used instead.
+    // Default: RG_RENDER_DENOISER_TECHNIQUE_NRD_REBLUR
+    RgRenderDenoiserTechnique denoiserTechnique;
     // Shadow rays are cast, if illumination bounce index is in [0, maxBounceShadows).
     uint32_t        maxBounceShadows;
     // If false, only one bounce will be cast from a primary surface.
@@ -904,6 +916,13 @@ typedef enum RgRenderSharpenTechnique
     RG_RENDER_SHARPEN_TECHNIQUE_AMD_CAS,
 } RgRenderSharpenTechnique;
 
+typedef enum RgFrameGenerationTechnique
+{
+    RG_FRAME_GENERATION_TECHNIQUE_NONE,
+    RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3,
+    RG_FRAME_GENERATION_TECHNIQUE_NVIDIA_DLSS,
+} RgFrameGenerationTechnique;
+
 typedef enum RgRenderResolutionMode
 {
     RG_RENDER_RESOLUTION_MODE_CUSTOM,
@@ -930,6 +949,9 @@ typedef struct RgDrawFrameRenderResolutionParams
     // Drop history, e.g. if there's camera changed its position drastically.
     RgBool32                    resetUpscalerHistory;
     RgBool32                    enableFrameGeneration;
+    // Frame generation implementation that is used if enableFrameGeneration is true.
+    // Default: RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3
+    RgFrameGenerationTechnique  frameGenerationTechnique;
 } RgDrawFrameRenderResolutionParams;
 
 typedef struct RgDrawFrameLightmapParams
@@ -1012,7 +1034,9 @@ RGAPI void RGCONV               rgUtilImScratchSetToPrimitive( RgInstance instan
 RGAPI void RGCONV               rgUtilImScratchPushVertices( RgInstance instance, uint32_t vertexCount, const float* pPositions, uint32_t strideVerts, const float* pTexCoords, uint32_t strideTexCoords, const float* pTexCoordsLayer1, uint32_t strideTexCoordsLayer1 );
 
 RGAPI RgBool32 RGCONV           rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscaleTechnique technique );
+RGAPI RgBool32 RGCONV           rgUtilIsDenoiserTechniqueAvailable( RgInstance instance, RgRenderDenoiserTechnique technique );
 RGAPI RgBool32 RGCONV           rgUtilIsFrameGenerationAvailable( RgInstance instance );
+RGAPI RgBool32 RGCONV           rgUtilIsFrameGenerationTechniqueAvailable( RgInstance instance, RgFrameGenerationTechnique technique );
 RGAPI RgBool32 RGCONV           rgUtilIsExportActive( RgInstance instance );
 RGAPI const char* RGCONV        rgUtilGetResultDescription( RgResult result );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorByte4D( uint8_t r, uint8_t g, uint8_t b, uint8_t a );

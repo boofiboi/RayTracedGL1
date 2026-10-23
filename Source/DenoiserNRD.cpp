@@ -1,4 +1,4 @@
-#include "Denoiser.h"
+#include "DenoiserNRD.h"
 
 #include <cmath>
 #include <cstring>
@@ -10,13 +10,13 @@
 #include <NRDIntegration.hpp>
 #endif
 
-RTGL1::Denoiser::Denoiser( VkInstance _instance,
-                           VkDevice _device,
-                           VkPhysicalDevice _physDevice,
-                           uint32_t _graphicsQueueFamilyIndex,
-                           std::shared_ptr< Framebuffers > _framebuffers,
-                           const ShaderManager& _shaderManager,
-                           const GlobalUniform& _uniform )
+RTGL1::DenoiserNRD::DenoiserNRD( VkInstance _instance,
+                                 VkDevice _device,
+                                 VkPhysicalDevice _physDevice,
+                                 uint32_t _graphicsQueueFamilyIndex,
+                                 std::shared_ptr< Framebuffers > _framebuffers,
+                                 const ShaderManager& _shaderManager,
+                                 const GlobalUniform& _uniform )
     : instance( _instance )
     , device( _device )
     , physDevice( _physDevice )
@@ -62,7 +62,7 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
     CreatePipelines( &_shaderManager );
 }
 
-RTGL1::Denoiser::~Denoiser()
+RTGL1::DenoiserNRD::~DenoiserNRD()
 {
 #ifdef RG_USE_NVIDIA_NRD
     if( nrdInitialized )
@@ -76,29 +76,29 @@ RTGL1::Denoiser::~Denoiser()
     DestroyPipelines();
 }
 
-void RTGL1::Denoiser::SetMethod( NrdDenoiserMethod method )
+void RTGL1::DenoiserNRD::SetMethod( NrdDenoiserMethod method )
 {
     currentMethod = method;
 }
 
-RTGL1::NrdDenoiserMethod RTGL1::Denoiser::GetMethod() const
+RTGL1::NrdDenoiserMethod RTGL1::DenoiserNRD::GetMethod() const
 {
     return currentMethod;
 }
 
 #ifdef RG_USE_NVIDIA_NRD
-nrd::ReblurSettings& RTGL1::Denoiser::GetReblurSettings()
+nrd::ReblurSettings& RTGL1::DenoiserNRD::GetReblurSettings()
 {
     return reblurSettings;
 }
 
-nrd::RelaxSettings& RTGL1::Denoiser::GetRelaxSettings()
+nrd::RelaxSettings& RTGL1::DenoiserNRD::GetRelaxSettings()
 {
     return relaxSettings;
 }
 #endif
 
-void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
+void RTGL1::DenoiserNRD::RecreateNrd( uint32_t width, uint32_t height )
 {
 #ifdef RG_USE_NVIDIA_NRD
     if( width == 0 || height == 0 )
@@ -175,7 +175,7 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
 #endif
 }
 
-void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
+void RTGL1::DenoiserNRD::Denoise( VkCommandBuffer cmd,
                                uint32_t frameIndex,
                                const std::shared_ptr< const GlobalUniform >& uniform,
                                RgFloat2D jitter,
@@ -388,18 +388,18 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
 #endif
 }
 
-void RTGL1::Denoiser::OnShaderReload( const ShaderManager* shaderManager )
+void RTGL1::DenoiserNRD::OnShaderReload( const ShaderManager* shaderManager )
 {
     DestroyPipelines();
     CreatePipelines( shaderManager );
 }
 
-void RTGL1::Denoiser::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
+void RTGL1::DenoiserNRD::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
 {
     RecreateNrd( resolutionState.renderWidth, resolutionState.renderHeight );
 }
 
-void RTGL1::Denoiser::CreatePipelineLayout( VkDescriptorSetLayout* pSetLayouts, uint32_t setLayoutCount )
+void RTGL1::DenoiserNRD::CreatePipelineLayout( VkDescriptorSetLayout* pSetLayouts, uint32_t setLayoutCount )
 {
     VkPushConstantRange pushConst = {
         .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -420,7 +420,7 @@ void RTGL1::Denoiser::CreatePipelineLayout( VkDescriptorSetLayout* pSetLayouts, 
     SET_DEBUG_NAME( device, pipelineLayout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, "NRD Denoiser pipeline layout" );
 }
 
-void RTGL1::Denoiser::DestroyPipelines()
+void RTGL1::DenoiserNRD::DestroyPipelines()
 {
     if( prepassPipeline != VK_NULL_HANDLE )
     {
@@ -434,7 +434,7 @@ void RTGL1::Denoiser::DestroyPipelines()
     }
 }
 
-void RTGL1::Denoiser::CreatePipelines( const ShaderManager* shaderManager )
+void RTGL1::DenoiserNRD::CreatePipelines( const ShaderManager* shaderManager )
 {
     {
         VkComputePipelineCreateInfo plInfo = {

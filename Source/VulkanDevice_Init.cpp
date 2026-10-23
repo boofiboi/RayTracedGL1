@@ -445,7 +445,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         framebuffers, 
         shaderManager );
 
-    denoiser = std::make_shared< Denoiser >(
+    denoiserManager = std::make_shared< DenoiserManager >(
         instance,
         device,
         physDevice->Get(),
@@ -454,7 +454,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         *shaderManager,
         *uniform );
 
-    framebuffers->Subscribe( denoiser );
+    framebuffers->Subscribe( denoiserManager );
 
     effectWipe = std::make_shared< EffectWipe >(
         device, 
@@ -484,7 +484,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 #undef SIMPLE_EFFECT_CONSTRUCTOR_PARAMS
 
 
-    shaderManager->Subscribe( denoiser );
+    shaderManager->Subscribe( denoiserManager );
     shaderManager->Subscribe( imageComposition );
     shaderManager->Subscribe( rasterizer );
     shaderManager->Subscribe( volumetric );
@@ -543,7 +543,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
     effectRadialBlur.reset();
     effectWipe.reset();
 
-    denoiser.reset();
+    denoiserManager.reset();
     sharpening.reset();
     nvDlss.reset();
     upscalerFsr3.reset();

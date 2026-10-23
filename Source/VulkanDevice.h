@@ -42,7 +42,7 @@
 #include "ImageComposition.h"
 #include "Tonemapping.h"
 #include "CubemapManager.h"
-#include "Denoiser.h"
+#include "DenoiserManager.h"
 #include "UserFunction.h"
 #include "Bloom.h"
 #include "Sharpening.h"
@@ -107,7 +107,9 @@ public:
 
     bool IsSuspended() const;
     bool IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique technique ) const;
+    bool IsDenoiserTechniqueAvailable( RgRenderDenoiserTechnique technique ) const;
     bool IsFrameGenerationAvailable() const;
+    bool IsFrameGenerationTechniqueAvailable( RgFrameGenerationTechnique technique ) const;
     bool IsExportActive() const;
 
     RgPrimitiveVertex* ScratchAllocForVertices( uint32_t count );
@@ -212,7 +214,7 @@ private:
     std::shared_ptr< PortalList >                portalList;
     std::shared_ptr< LightManager >              lightManager;
     std::shared_ptr< LightGrid >                 lightGrid;
-    std::shared_ptr< Denoiser >                  denoiser;
+    std::shared_ptr< DenoiserManager >           denoiserManager;
     std::shared_ptr< Tonemapping >               tonemapping;
     std::shared_ptr< ImageComposition >          imageComposition;
     std::shared_ptr< Bloom >                     bloom;

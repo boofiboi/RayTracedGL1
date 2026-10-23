@@ -16,6 +16,9 @@ cmake_install.cmake
 Source/FSR3/bin/
 Source/FSR3/ffx-api/bin/
 
+# NVIDIA DLSS SDK, fetch with: git clone --depth 1 https://github.com/NVIDIA/DLSS Source/External/DLSS
+Source/External/DLSS/
+
 # slop
 CLAUDE.md
 GEMINI.md

@@ -367,9 +367,20 @@ RgBool32 rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscale
     return Call( instance, &RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable, technique );
 }
 
+RgBool32 rgUtilIsDenoiserTechniqueAvailable( RgInstance instance, RgRenderDenoiserTechnique technique )
+{
+    return Call( instance, &RTGL1::VulkanDevice::IsDenoiserTechniqueAvailable, technique );
+}
+
 RgBool32 rgUtilIsFrameGenerationAvailable( RgInstance instance )
 {
     return Call( instance, &RTGL1::VulkanDevice::IsFrameGenerationAvailable );
+}
+
+RgBool32 rgUtilIsFrameGenerationTechniqueAvailable( RgInstance               instance,
+                                                   RgFrameGenerationTechnique technique )
+{
+    return Call( instance, &RTGL1::VulkanDevice::IsFrameGenerationTechniqueAvailable, technique );
 }
 
 RgBool32 rgUtilIsExportActive( RgInstance instance )

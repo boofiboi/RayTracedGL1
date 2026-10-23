@@ -589,7 +589,13 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 
         bool resetHistory =
             AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo ).resetUpscalerHistory;
-        denoiser->Denoise( cmd, frameIndex, uniform, jitter, resetHistory );
+        denoiserManager->Denoise(
+            cmd,
+            frameIndex,
+            uniform,
+            AccessParams< RgDrawFrameIlluminationParams >( drawInfo ).denoiserTechnique,
+            jitter,
+            resetHistory );
         volumetric->ProcessScattering(
             cmd, frameIndex, *uniform, *blueNoise, *framebuffers, volumetricMaxHistoryLen );
         tonemapping->CalculateExposure( cmd, frameIndex, uniform );
@@ -1425,9 +1431,43 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
     }
 }
 
+bool RTGL1::VulkanDevice::IsDenoiserTechniqueAvailable( RgRenderDenoiserTechnique technique ) const
+{
+    switch( technique )
+    {
+        case RG_RENDER_DENOISER_TECHNIQUE_NONE:
+        case RG_RENDER_DENOISER_TECHNIQUE_NRD_REBLUR:
+        case RG_RENDER_DENOISER_TECHNIQUE_NRD_RELAX:
+        case RG_RENDER_DENOISER_TECHNIQUE_NVIDIA_DLSS_RR:
+            return denoiserManager && denoiserManager->IsTechniqueAvailable( technique );
+
+        default:
+            throw RgException(
+                RG_RESULT_WRONG_FUNCTION_ARGUMENT,
+                "Incorrect technique was passed to rgUtilIsDenoiserTechniqueAvailable" );
+    }
+}
+
 bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
 {
     return frameGenerator && frameGenerator->IsAvailable();
+}
+
+bool RTGL1::VulkanDevice::IsFrameGenerationTechniqueAvailable(
+    RgFrameGenerationTechnique technique ) const
+{
+    switch( technique )
+    {
+        case RG_FRAME_GENERATION_TECHNIQUE_NONE: return true;
+
+        case RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3:
+        case RG_FRAME_GENERATION_TECHNIQUE_NVIDIA_DLSS: return IsFrameGenerationAvailable();
+
+        default:
+            throw RgException(
+                RG_RESULT_WRONG_FUNCTION_ARGUMENT,
+                "Incorrect technique was passed to rgUtilIsFrameGenerationTechniqueAvailable" );
+    }
 }
 
 bool RTGL1::VulkanDevice::IsExportActive() const
