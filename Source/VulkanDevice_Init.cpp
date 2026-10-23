@@ -433,12 +433,16 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
     }
 
-    nvDlss = std::make_shared< DLSS >(
-        instance, 
-        device, 
-        physDevice->Get(), 
-        info->pAppGUID, 
+    ngxManager = std::make_shared< NgxManager >(
+        instance,
+        device,
+        physDevice->Get(),
+        info->pAppGUID,
         libconfig.dlssValidation );
+
+    nvDlss = std::make_shared< UpscalerDLSS >(
+        device,
+        ngxManager );
 
     sharpening = std::make_shared< Sharpening >( 
         device, 
@@ -511,6 +515,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
     framebuffers->Subscribe( upscalerFsr3 );
+    framebuffers->Subscribe( nvDlss );
     if( frameGenerator )
     {
         framebuffers->Subscribe( frameGenerator );
@@ -546,6 +551,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
     denoiserManager.reset();
     sharpening.reset();
     nvDlss.reset();
+    ngxManager.reset();
     upscalerFsr3.reset();
     bloom.reset();
     imageComposition.reset();
@@ -713,7 +719,7 @@ void RTGL1::VulkanDevice::CreateInstance( const RgInstanceCreateInfo& info )
         extensions.push_back( VK_EXT_DEBUG_REPORT_EXTENSION_NAME );
     }
 
-    for( const char* n : DLSS::GetDlssVulkanInstanceExtensions() )
+    for( const char* n : NgxManager::GetVulkanInstanceExtensions() )
     {
         const bool isSupported =
             std::ranges::any_of( std::as_const( supportedInstanceExtensions ),
@@ -945,7 +951,7 @@ void RTGL1::VulkanDevice::CreateDevice()
         .features = features,
     };
 
-    for( const char* n : DLSS::GetDlssVulkanDeviceExtensions() )
+    for( const char* n : NgxManager::GetVulkanDeviceExtensions() )
     {
         const bool isSupported = std::any_of( supportedDeviceExtensions.cbegin(),
                                               supportedDeviceExtensions.cend(),

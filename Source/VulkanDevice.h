@@ -46,7 +46,8 @@
 #include "UserFunction.h"
 #include "Bloom.h"
 #include "Sharpening.h"
-#include "DLSS.h"
+#include "NgxManager.h"
+#include "UpscalerDLSS.h"
 #include "RenderResolutionHelper.h"
 #include "DecalManager.h"
 #include "EffectWipe.h"
@@ -220,7 +221,8 @@ private:
     std::shared_ptr< Bloom >                     bloom;
     std::shared_ptr< IUpscaler >                 upscalerFsr3;
     std::shared_ptr< IFrameGenerator >           frameGenerator;
-    std::shared_ptr< DLSS >                      nvDlss;
+    std::shared_ptr< NgxManager >                ngxManager;
+    std::shared_ptr< UpscalerDLSS >              nvDlss;
     std::shared_ptr< Sharpening >                sharpening;
     std::shared_ptr< EffectWipe >                effectWipe;
     std::shared_ptr< EffectRadialBlur >          effectRadialBlur;

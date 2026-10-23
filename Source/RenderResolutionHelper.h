@@ -23,7 +23,7 @@
 #include <cassert>
 #include <cmath>
 
-#include "DLSS.h"
+#include "UpscalerDLSS.h"
 #include "RgException.h"
 #include "ResolutionState.h"
 
@@ -44,7 +44,7 @@ public:
     void                    Setup( const RgDrawFrameRenderResolutionParams& params,
                                    uint32_t                                 windowWidth,
                                    uint32_t                                 windowHeight,
-                                   const std::shared_ptr< DLSS >&           dlss )
+                                   const std::shared_ptr< UpscalerDLSS >&   dlss )
     {
         renderWidth  = windowWidth;
         renderHeight = windowHeight;
@@ -135,11 +135,14 @@ public:
             }
             else
             {
-                dlss->GetOptimalSettings( windowWidth,
-                                          windowHeight,
-                                          resolutionMode,
-                                          &renderWidth,
-                                          &renderHeight );
+                if( dlss )
+                {
+                    dlss->GetOptimalSettings( windowWidth,
+                                              windowHeight,
+                                              resolutionMode,
+                                              &renderWidth,
+                                              &renderHeight );
+                }
 
                 // ultra quality returns (0,0)
                 if( renderWidth == 0 || renderHeight == 0 )
