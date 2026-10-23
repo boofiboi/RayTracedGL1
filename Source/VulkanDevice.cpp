@@ -1460,8 +1460,9 @@ bool RTGL1::VulkanDevice::IsFrameGenerationTechniqueAvailable(
     {
         case RG_FRAME_GENERATION_TECHNIQUE_NONE: return true;
 
-        case RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3:
-        case RG_FRAME_GENERATION_TECHNIQUE_NVIDIA_DLSS: return IsFrameGenerationAvailable();
+        case RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3: return IsFrameGenerationAvailable();
+        case RG_FRAME_GENERATION_TECHNIQUE_NVIDIA_DLSS:
+            return ngxManager && ngxManager->IsFrameGenerationAvailable();
 
         default:
             throw RgException(
