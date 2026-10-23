@@ -117,9 +117,9 @@ namespace detail
         constexpr static RgDrawFrameBloomParams value = {
             .sType                   = sType,
             .pNext                   = nullptr,
-            .bloomIntensity          = 1.0f,
-            .inputThreshold          = 4.0f,
-            .bloomEmissionMultiplier = 16.0f,
+            .bloomIntensity          = 0.1f,
+            .inputThreshold          = 1.0f,
+            .bloomEmissionMultiplier = 9.0f,
             .lensDirtIntensity       = 2.0f,
         };
     };
