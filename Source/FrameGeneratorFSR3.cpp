@@ -601,6 +601,11 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
         []( ffxDispatchDescFrameGeneration* params, void* pUserCtx ) -> ffxReturnCode_t {
         auto* self = static_cast< FrameGeneratorFSR3* >( pUserCtx );
 
+        if( !self || !self->fgContext || !params )
+        {
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        }
+
         if( self->pendingReset.exchange( false ) )
         {
             params->reset = true;
