@@ -732,11 +732,14 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         }
     }
 
+    const auto& resParams = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
+    IFrameGenerator* frameGenerator = GetActiveFrameGenerator( resParams.frameGenerationTechnique );
+
     if( frameGenerator )
     {
-        const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
+        swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
 
-        frameGenerationActive = frameGenerator->IsAvailable() && params.enableFrameGeneration;
+        frameGenerationActive = frameGenerator->IsAvailable() && resParams.enableFrameGeneration;
 
         const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
         double timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
@@ -771,10 +774,15 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                           drawInfo.cameraNear,
                                           drawInfo.cameraFar,
                                           drawInfo.fovYRadians,
-                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame,
+                                          resParams.resetUpscalerHistory || drawInfo.presentPrevFrame,
                                           uniform->GetData()->view,
                                           frameId );
         }
+    }
+    else
+    {
+        swapchain->SetFrameGenerator( nullptr );
+        frameGenerationActive = false;
     }
 
     if( !drawInfo.disableRasterization )
@@ -1448,9 +1456,24 @@ bool RTGL1::VulkanDevice::IsDenoiserTechniqueAvailable( RgRenderDenoiserTechniqu
     }
 }
 
+RTGL1::IFrameGenerator* RTGL1::VulkanDevice::GetActiveFrameGenerator(
+    RgFrameGenerationTechnique technique ) const
+{
+    switch( technique )
+    {
+        case RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3:
+            return frameGeneratorFsr3.get();
+        case RG_FRAME_GENERATION_TECHNIQUE_NVIDIA_DLSS:
+            return frameGeneratorDlss.get();
+        default:
+            return nullptr;
+    }
+}
+
 bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
 {
-    return frameGenerator && frameGenerator->IsAvailable();
+    return ( frameGeneratorFsr3 && frameGeneratorFsr3->IsAvailable() ) ||
+           ( frameGeneratorDlss && frameGeneratorDlss->IsAvailable() );
 }
 
 bool RTGL1::VulkanDevice::IsFrameGenerationTechniqueAvailable(
@@ -1460,9 +1483,11 @@ bool RTGL1::VulkanDevice::IsFrameGenerationTechniqueAvailable(
     {
         case RG_FRAME_GENERATION_TECHNIQUE_NONE: return true;
 
-        case RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3: return IsFrameGenerationAvailable();
+        case RG_FRAME_GENERATION_TECHNIQUE_AMD_FSR3:
+            return frameGeneratorFsr3 && frameGeneratorFsr3->IsAvailable();
+
         case RG_FRAME_GENERATION_TECHNIQUE_NVIDIA_DLSS:
-            return ngxManager && ngxManager->IsFrameGenerationAvailable();
+            return frameGeneratorDlss && frameGeneratorDlss->IsAvailable();
 
         default:
             throw RgException(

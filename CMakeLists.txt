@@ -86,6 +86,7 @@ set(Sources
     "Source/LightGrid.cpp"
     "Source/UpscalerFSR3.cpp"
     "Source/FrameGeneratorFSR3.cpp"
+    "Source/FrameGeneratorDLSS.cpp"
     "Source/Stb/stb_image.cpp"
     "Source/Stb/stb_image_write.cpp"
     "Source/ImageLoaderDev.cpp"

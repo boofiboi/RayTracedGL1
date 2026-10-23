@@ -55,6 +55,7 @@
 #include "LightGrid.h"
 #include "UpscalerFSR3.h"
 #include "FrameGeneratorFSR3.h"
+#include "FrameGeneratorDLSS.h"
 #include "FrameState.h"
 #include "PortalList.h"
 #include "RestirBuffers.h"
@@ -220,7 +221,9 @@ private:
     std::shared_ptr< ImageComposition >          imageComposition;
     std::shared_ptr< Bloom >                     bloom;
     std::shared_ptr< IUpscaler >                 upscalerFsr3;
-    std::shared_ptr< IFrameGenerator >           frameGenerator;
+    IFrameGenerator*                             GetActiveFrameGenerator( RgFrameGenerationTechnique technique ) const;
+    std::shared_ptr< FrameGeneratorFSR3 >        frameGeneratorFsr3;
+    std::shared_ptr< FrameGeneratorDLSS >        frameGeneratorDlss;
     std::shared_ptr< NgxManager >                ngxManager;
     std::shared_ptr< UpscalerDLSS >              nvDlss;
     std::shared_ptr< Sharpening >                sharpening;

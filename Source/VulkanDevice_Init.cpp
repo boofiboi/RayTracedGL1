@@ -421,18 +421,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         device,
         physDevice->Get() );
 
-    if( enableFrameGeneration )
-    {
-        frameGenerator = std::make_shared< FrameGeneratorFSR3 >(
-            device,
-            physDevice->Get(),
-            memAllocator,
-            queues,
-            swapchain->GetSurfaceFormat() );
-
-        swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
-    }
-
     ngxManager = std::make_shared< NgxManager >(
         instance,
         device,
@@ -443,6 +431,26 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     nvDlss = std::make_shared< UpscalerDLSS >(
         device,
         ngxManager );
+
+    if( enableFrameGeneration )
+    {
+        frameGeneratorFsr3 = std::make_shared< FrameGeneratorFSR3 >(
+            device,
+            physDevice->Get(),
+            memAllocator,
+            queues,
+            swapchain->GetSurfaceFormat() );
+
+        frameGeneratorDlss = std::make_shared< FrameGeneratorDLSS >(
+            device,
+            physDevice->Get(),
+            memAllocator,
+            queues,
+            ngxManager,
+            swapchain->GetSurfaceFormat() );
+
+        swapchain->SetFrameGenerator( frameGeneratorFsr3->GetSwapchainHooks() );
+    }
 
     sharpening = std::make_shared< Sharpening >( 
         device, 
@@ -516,9 +524,13 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     framebuffers->Subscribe( decalManager );
     framebuffers->Subscribe( upscalerFsr3 );
     framebuffers->Subscribe( nvDlss );
-    if( frameGenerator )
+    if( frameGeneratorFsr3 )
     {
-        framebuffers->Subscribe( frameGenerator );
+        framebuffers->Subscribe( frameGeneratorFsr3 );
+    }
+    if( frameGeneratorDlss )
+    {
+        framebuffers->Subscribe( frameGeneratorDlss );
     }
     framebuffers->Subscribe( restirBuffers );
 
@@ -586,7 +598,8 @@ RTGL1::VulkanDevice::~VulkanDevice()
 
     framebuffers.reset();
     swapchain.reset();
-    frameGenerator.reset();
+    frameGeneratorDlss.reset();
+    frameGeneratorFsr3.reset();
     cmdManager.reset();
     memAllocator.reset();
 

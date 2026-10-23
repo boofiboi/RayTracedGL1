@@ -730,7 +730,20 @@ bool RTGL1::Swapchain::IsFrameGenerationEnabled() const
 
 void RTGL1::Swapchain::SetFrameGenerator( IFrameGeneratorSwapchain* hooks )
 {
-    fgHooks = hooks;
+    if( fgHooks != hooks )
+    {
+        if( swapchain != VK_NULL_HANDLE )
+        {
+            cmdManager->WaitDeviceIdle();
+            VkSwapchainKHR old = DestroyWithoutSwapchain();
+            fgHooks = hooks;
+            Create( surfaceExtent.width, surfaceExtent.height, isVsync, old );
+        }
+        else
+        {
+            fgHooks = hooks;
+        }
+    }
 }
 
 void RTGL1::Swapchain::Subscribe( std::shared_ptr< ISwapchainDependency > subscriber )
