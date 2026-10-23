@@ -182,6 +182,7 @@ private:
     // set when a stale frame was presented (level transitions); the next rendered
     // frame starts with a clean upscaler / frame-generation history
     bool forceUpscalerReset;
+    IFrameGeneratorSwapchain* requestedFrameGeneratorHooks;
 
     VkFence     frameFences[ MAX_FRAMES_IN_FLIGHT ]              = {};
     VkSemaphore imageAvailableSemaphores[ MAX_FRAMES_IN_FLIGHT ] = {};

@@ -186,6 +186,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     , frameId( 1 )
     , frameGenerationActive( false )
     , forceUpscalerReset( false )
+    , requestedFrameGeneratorHooks( nullptr )
     , waitForOutOfFrameFence( false )
     , ovrdFolder( Utils::SafeCstr( info->pOverrideFolderPath ) )
     , libconfig( ReadConfig( info->pConfigPath ) )
@@ -448,8 +449,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
             queues,
             ngxManager,
             swapchain->GetSurfaceFormat() );
-
-        swapchain->SetFrameGenerator( frameGeneratorFsr3->GetSwapchainHooks() );
     }
 
     sharpening = std::make_shared< Sharpening >( 

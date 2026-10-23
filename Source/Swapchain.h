@@ -104,6 +104,7 @@ private:
     VkPhysicalDevice                                   physDevice;
     std::shared_ptr< CommandBufferManager >            cmdManager;
     IFrameGeneratorSwapchain*                          fgHooks;
+    bool                                               swapchainIsFFX;
 
     VkSurfaceFormatKHR                                 surfaceFormat;
     VkPresentModeKHR                                   presentModeVsync;

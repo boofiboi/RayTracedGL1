@@ -45,6 +45,8 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
             device, frameFences[ frameIndex ], outOfFrameFences[ frameIndex ] );
     }
 
+    swapchain->SetFrameGenerator( requestedFrameGeneratorHooks );
+
     // frame generation requires a vsync (FIFO) present mode for correct pacing
     swapchain->RequestVsync( vsync || frameGenerationActive );
     swapchain->AcquireImage( imageAvailableSemaphores[ frameIndex ] );
@@ -735,12 +737,20 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
     const auto& resParams = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
     IFrameGenerator* frameGenerator = GetActiveFrameGenerator( resParams.frameGenerationTechnique );
 
-    if( frameGenerator )
+    if( frameGenerator && frameGenerator->IsAvailable() && resParams.enableFrameGeneration )
     {
-        swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
+        requestedFrameGeneratorHooks = frameGenerator->GetSwapchainHooks();
+    }
+    else
+    {
+        requestedFrameGeneratorHooks = nullptr;
+    }
 
-        frameGenerationActive = frameGenerator->IsAvailable() && resParams.enableFrameGeneration;
+    const bool isFgSwapchainEnabled = swapchain->IsFrameGenerationEnabled();
+    frameGenerationActive = isFgSwapchainEnabled && resParams.enableFrameGeneration && frameGenerator && frameGenerator->IsAvailable();
 
+    if( isFgSwapchainEnabled && frameGenerator )
+    {
         const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
         double timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
 
@@ -781,7 +791,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
     }
     else
     {
-        swapchain->SetFrameGenerator( nullptr );
         frameGenerationActive = false;
     }
 

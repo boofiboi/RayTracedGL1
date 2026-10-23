@@ -54,6 +54,7 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
     , physDevice( _physDevice )
     , cmdManager( std::move( _cmdManager ) )
     , fgHooks( nullptr )
+    , swapchainIsFFX( false )
     , surfaceFormat{}
     , presentModeVsync( VK_PRESENT_MODE_FIFO_KHR )
     , presentModeImmediate( VK_PRESENT_MODE_FIFO_KHR )
@@ -237,7 +238,7 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
     while( true )
     {
         VkResult r;
-        if( fgHooks && fgHooks->IsActive() )
+        if( swapchainIsFFX && fgHooks )
         {
             r = fgHooks->AcquireNextImage( device,
                                            swapchain,
@@ -568,9 +569,30 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         .oldSwapchain     = oldSwapchain,
     };
 
-    if( fgHooks && fgHooks->CreateSwapchain( swapchainInfo, &swapchain ) != VK_SUCCESS )
+    if( fgHooks )
     {
-        swapchain = VK_NULL_HANDLE;
+        if( oldSwapchain != VK_NULL_HANDLE )
+        {
+            vkDeviceWaitIdle( device );
+            vkDestroySwapchainKHR( device, oldSwapchain, nullptr );
+            oldSwapchain = VK_NULL_HANDLE;
+            swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
+        }
+
+        VkResult fgResult = fgHooks->CreateSwapchain( swapchainInfo, &swapchain );
+        swapchainIsFFX = ( fgResult == VK_SUCCESS && swapchain != VK_NULL_HANDLE );
+        debug::Info( "Swapchain::Create: fgHooks->CreateSwapchain result={}, handle={}, swapchainIsFFX={}",
+                     static_cast< int >( fgResult ),
+                     (void*)swapchain,
+                     swapchainIsFFX );
+        if( !swapchainIsFFX )
+        {
+            swapchain = VK_NULL_HANDLE;
+        }
+    }
+    else
+    {
+        swapchainIsFFX = false;
     }
 
     if( swapchain == VK_NULL_HANDLE )
@@ -584,7 +606,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         vkDestroySwapchainKHR( device, oldSwapchain, nullptr );
     }
 
-    if( fgHooks && fgHooks->IsActive() )
+    if( swapchainIsFFX && fgHooks )
     {
         r = fgHooks->GetSwapchainImages( device, swapchain, &imageCount, nullptr );
     }
@@ -593,11 +615,12 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         r = vkGetSwapchainImagesKHR( device, swapchain, &imageCount, nullptr );
     }
     VK_CHECKERROR( r );
+    debug::Info( "Swapchain::Create: GetSwapchainImages count query returned imageCount={}", imageCount );
 
     swapchainImages.resize( imageCount );
     swapchainViews.resize( imageCount );
 
-    if( fgHooks && fgHooks->IsActive() )
+    if( swapchainIsFFX && fgHooks )
     {
         r = fgHooks->GetSwapchainImages( device, swapchain, &imageCount, swapchainImages.data() );
     }
@@ -606,6 +629,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         r = vkGetSwapchainImagesKHR( device, swapchain, &imageCount, swapchainImages.data() );
     }
     VK_CHECKERROR( r );
+    debug::Info( "Swapchain::Create: GetSwapchainImages data retrieved imageCount={}", imageCount );
 
     for( uint32_t i = 0; i < imageCount; i++ )
     {
@@ -677,12 +701,20 @@ VkSwapchainKHR RTGL1::Swapchain::DestroyWithoutSwapchain()
     VkSwapchainKHR old = swapchain;
     swapchain          = VK_NULL_HANDLE;
 
-    if( fgHooks )
+    debug::Info( "Swapchain::DestroyWithoutSwapchain: swapchainIsFFX={}, handle={}",
+                 swapchainIsFFX,
+                 (void*)old );
+
+    if( swapchainIsFFX )
     {
-        // the frame generator owns the (hijacked) swapchain handle
-        fgHooks->DestroySwapchain( old );
+        if( fgHooks )
+        {
+            fgHooks->DestroySwapchain( old );
+        }
         old = VK_NULL_HANDLE;
     }
+
+    swapchainIsFFX = false;
 
     return old;
 }
@@ -716,7 +748,7 @@ RTGL1::Swapchain::~Swapchain()
 
 VkResult RTGL1::Swapchain::Present( VkQueue queue, const VkPresentInfoKHR* pPresentInfo )
 {
-    if( fgHooks && fgHooks->IsActive() )
+    if( swapchainIsFFX && fgHooks )
     {
         return fgHooks->QueuePresent( queue, *pPresentInfo );
     }
@@ -725,13 +757,17 @@ VkResult RTGL1::Swapchain::Present( VkQueue queue, const VkPresentInfoKHR* pPres
 
 bool RTGL1::Swapchain::IsFrameGenerationEnabled() const
 {
-    return fgHooks && fgHooks->IsActive();
+    return swapchainIsFFX && fgHooks && fgHooks->IsActive();
 }
 
 void RTGL1::Swapchain::SetFrameGenerator( IFrameGeneratorSwapchain* hooks )
 {
     if( fgHooks != hooks )
     {
+        debug::Info( "Swapchain::SetFrameGenerator transition: old={}, new={}",
+                     (void*)fgHooks,
+                     (void*)hooks );
+
         if( swapchain != VK_NULL_HANDLE )
         {
             cmdManager->WaitDeviceIdle();

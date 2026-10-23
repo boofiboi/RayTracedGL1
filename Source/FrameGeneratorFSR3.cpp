@@ -36,12 +36,16 @@ namespace
 ffxReturnCode_t SafeCreateFfxContext( ffxContext* context, ffxCreateContextDescHeader* header )
 {
 #if defined( _MSC_VER )
+    DWORD exceptionCode = 0;
     __try
     {
         return ffxCreateContext( context, header, nullptr );
     }
-    __except( EXCEPTION_EXECUTE_HANDLER )
+    __except( exceptionCode = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER )
     {
+        RTGL1::debug::Error( "SafeCreateFfxContext caught exception 0x{:08X}, returning ffx code {}",
+                             exceptionCode,
+                             static_cast< int >( FFX_API_RETURN_ERROR ) );
         return FFX_API_RETURN_ERROR;
     }
 #else
@@ -90,7 +94,7 @@ RTGL1::IFrameGeneratorSwapchain* RTGL1::FrameGeneratorFSR3::GetSwapchainHooks()
 
 bool RTGL1::FrameGeneratorFSR3::IsActive() const
 {
-    return swapchainContext != nullptr;
+    return swapchainContext != nullptr && swapchainHandleAlive;
 }
 
 void RTGL1::FrameGeneratorFSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
@@ -226,7 +230,6 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
-    // context already exists: just recreate the swapchain through the replacement function
     if( swapchainContext != nullptr )
     {
         if( pfnCreateSwapchainFFX == nullptr )
@@ -240,32 +243,53 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
         VkResult r = pfnCreateSwapchainFFX(
             device, &ci, nullptr, outSwapchain, static_cast< void* >( swapchainContext ) );
         swapchainHandleAlive = ( r == VK_SUCCESS );
+        debug::Info( "FSR3 FG: pfnCreateSwapchainFFX result={}, handle={}",
+                     static_cast< int >( r ),
+                     (void*)*outSwapchain );
         return r;
     }
 
+    VkQueue qGame = queues->GetGraphics();
+    VkQueue qCompute = queues->GetCompute();
+    VkQueue qPresent = queues->GetPresentQueue();
+    VkQueue qAcquire = queues->GetImageAcquireQueue();
+
+    debug::Info( "FSR3 FG: Queues - game={}, compute={}, present={}, acquire={}",
+                 (void*)qGame,
+                 (void*)qCompute,
+                 (void*)qPresent,
+                 (void*)qAcquire );
+
+    if( qGame == qCompute || qGame == qPresent || qGame == qAcquire ||
+        qCompute == qPresent || qCompute == qAcquire || qPresent == qAcquire )
+    {
+        debug::Warning( "FSR3 FG: Queues are not all distinct! FFX may encounter pacing or synchronization issues" );
+    }
+
     ffxCreateContextDescFrameGenerationSwapChainModeVK modeDesc = {};
-    modeDesc.header.type          = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_MODE_VK;
+    modeDesc.header.type           = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_MODE_VK;
     modeDesc.composeOnPresentQueue = false;
 
     ffxCreateContextDescFrameGenerationSwapChainVK createDesc = {};
-    createDesc.header.type     = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
-    createDesc.header.pNext    = &modeDesc.header;
-    createDesc.physicalDevice  = physDevice;
-    createDesc.device          = device;
-    createDesc.swapchain       = outSwapchain;
-    createDesc.createInfo      = createInfo;
+    createDesc.header.type         = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
+    createDesc.header.pNext        = &modeDesc.header;
+    createDesc.physicalDevice      = physDevice;
+    createDesc.device              = device;
+    createDesc.swapchain           = outSwapchain;
+    createDesc.createInfo          = createInfo;
     createDesc.createInfo.oldSwapchain = VK_NULL_HANDLE;
-    createDesc.allocator       = nullptr;
-    createDesc.gameQueue       = { queues->GetGraphics(), queues->GetIndexGraphics(), nullptr };
-    createDesc.asyncComputeQueue = { queues->GetCompute(), queues->GetIndexCompute(), nullptr };
-    createDesc.presentQueue    = { queues->GetPresentQueue(), queues->GetIndexPresent(), nullptr };
-    createDesc.imageAcquireQueue = { queues->GetImageAcquireQueue(),
-                                     queues->GetIndexImageAcquire(),
-                                     nullptr };
+    createDesc.allocator           = nullptr;
+    createDesc.gameQueue           = { qGame, queues->GetIndexGraphics(), nullptr };
+    createDesc.asyncComputeQueue   = { qCompute, queues->GetIndexCompute(), nullptr };
+    createDesc.presentQueue        = { qPresent, queues->GetIndexPresent(), nullptr };
+    createDesc.imageAcquireQueue   = { qAcquire, queues->GetIndexImageAcquire(), nullptr };
 
     *outSwapchain = VK_NULL_HANDLE;
 
     ffxReturnCode_t ret = SafeCreateFfxContext( &swapchainContext, &createDesc.header );
+    debug::Info( "FSR3 FG: CreateSwapchain SafeCreateFfxContext ret={}, outSwapchain={}",
+                 static_cast< int >( ret ),
+                 (void*)*outSwapchain );
     if( ret != FFX_API_RETURN_OK || *outSwapchain == VK_NULL_HANDLE )
     {
         debug::Warning( "FSR3 FG: ffxCreateContext (swapchain) failed, code {}",
@@ -307,12 +331,15 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
     }
 
     swapchainHandleAlive = true;
-    debug::Info( "FSR3 FG: swapchain context created" );
+    debug::Info( "FSR3 FG: swapchain context created, handle={}", (void*)*outSwapchain );
     return VK_SUCCESS;
 }
 
 void RTGL1::FrameGeneratorFSR3::DestroySwapchain( VkSwapchainKHR swapchain )
 {
+    debug::Info( "FSR3 FG: DestroySwapchain called for handle={}, context={}",
+                 (void*)swapchain,
+                 (void*)swapchainContext );
     if( swapchainContext != nullptr && pfnDestroySwapchainFFX != nullptr &&
         swapchain != VK_NULL_HANDLE )
     {
@@ -567,7 +594,7 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
                                                 uint32_t       frameId,
                                                 bool           frameGenEnabled )
 {
-    if( !fgContext || !swapchainContext )
+    if( !fgContext || !swapchainContext || !swapchainHandleAlive )
     {
         return;
     }
