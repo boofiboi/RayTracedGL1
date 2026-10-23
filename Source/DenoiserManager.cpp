@@ -27,6 +27,19 @@ void RTGL1::DenoiserManager::Denoise( VkCommandBuffer                           
                                       RgFloat2D                                     jitter,
                                       bool                                          resetAccumulation )
 {
+    if( technique != appliedTechnique )
+    {
+        appliedTechnique = technique;
+        if( technique == RG_RENDER_DENOISER_TECHNIQUE_NRD_RELAX )
+        {
+            nrd->SetMethod( NrdDenoiserMethod::Relax );
+        }
+        else if( technique == RG_RENDER_DENOISER_TECHNIQUE_NRD_REBLUR )
+        {
+            nrd->SetMethod( NrdDenoiserMethod::Reblur );
+        }
+    }
+
     if( technique == RG_RENDER_DENOISER_TECHNIQUE_NONE )
     {
         bypass->Denoise( cmd, frameIndex, uniform, jitter, resetAccumulation );

@@ -45,6 +45,8 @@ public:
 private:
     std::shared_ptr< DenoiserNRD >    nrd;
     std::shared_ptr< DenoiserBypass > bypass;
+
+    RgRenderDenoiserTechnique appliedTechnique = RG_RENDER_DENOISER_TECHNIQUE_NRD_REBLUR;
 };
 
 }
