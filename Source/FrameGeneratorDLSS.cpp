@@ -19,6 +19,7 @@
 #include "CmdLabel.h"
 #include "DebugPrint.h"
 #include "RgException.h"
+#include "Utils.h"
 
 static NVSDK_NGX_Resource_VK ToNGXResource(
     const std::shared_ptr< RTGL1::Framebuffers >& framebuffers,
@@ -87,7 +88,52 @@ RTGL1::FrameGeneratorDLSS::FrameGeneratorDLSS(
     , displayHeight( 0 )
     , isFrameGenEnabled( false )
     , pendingReset( true )
+    , blitCommandPool( VK_NULL_HANDLE )
+    , blitCmd{}
+    , interpAcquireSemaphores{}
+    , interpRenderFinishedSemaphores{}
+    , realRenderFinishedSemaphores{}
+    , blitFences{}
+    , currentSwapchainHandle( VK_NULL_HANDLE )
+    , currentFrameIndex( 0 )
+    , swapchainHandleAlive( false )
 {
+    VkCommandPoolCreateInfo poolInfo = {
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queues->GetIndexGraphics(),
+    };
+    VkResult r = vkCreateCommandPool( device, &poolInfo, nullptr, &blitCommandPool );
+    VK_CHECKERROR( r );
+
+    VkCommandBufferAllocateInfo allocInfo = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = blitCommandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+    };
+    r = vkAllocateCommandBuffers( device, &allocInfo, blitCmd );
+    VK_CHECKERROR( r );
+
+    VkSemaphoreCreateInfo semInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    };
+    VkFenceCreateInfo fenceInfo = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+
+    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    {
+        r = vkCreateSemaphore( device, &semInfo, nullptr, &interpAcquireSemaphores[ i ] );
+        VK_CHECKERROR( r );
+        r = vkCreateSemaphore( device, &semInfo, nullptr, &interpRenderFinishedSemaphores[ i ] );
+        VK_CHECKERROR( r );
+        r = vkCreateSemaphore( device, &semInfo, nullptr, &realRenderFinishedSemaphores[ i ] );
+        VK_CHECKERROR( r );
+        r = vkCreateFence( device, &fenceInfo, nullptr, &blitFences[ i ] );
+        VK_CHECKERROR( r );
+    }
 }
 
 RTGL1::FrameGeneratorDLSS::~FrameGeneratorDLSS()
@@ -96,6 +142,36 @@ RTGL1::FrameGeneratorDLSS::~FrameGeneratorDLSS()
     DestroyDlssgFeature();
     DestroyHudlessImages();
     DestroyInterpImages();
+
+    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    {
+        if( interpAcquireSemaphores[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroySemaphore( device, interpAcquireSemaphores[ i ], nullptr );
+            interpAcquireSemaphores[ i ] = VK_NULL_HANDLE;
+        }
+        if( interpRenderFinishedSemaphores[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroySemaphore( device, interpRenderFinishedSemaphores[ i ], nullptr );
+            interpRenderFinishedSemaphores[ i ] = VK_NULL_HANDLE;
+        }
+        if( realRenderFinishedSemaphores[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroySemaphore( device, realRenderFinishedSemaphores[ i ], nullptr );
+            realRenderFinishedSemaphores[ i ] = VK_NULL_HANDLE;
+        }
+        if( blitFences[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroyFence( device, blitFences[ i ], nullptr );
+            blitFences[ i ] = VK_NULL_HANDLE;
+        }
+    }
+
+    if( blitCommandPool != VK_NULL_HANDLE )
+    {
+        vkDestroyCommandPool( device, blitCommandPool, nullptr );
+        blitCommandPool = VK_NULL_HANDLE;
+    }
 }
 
 bool RTGL1::FrameGeneratorDLSS::IsAvailable() const
@@ -110,7 +186,7 @@ RTGL1::IFrameGeneratorSwapchain* RTGL1::FrameGeneratorDLSS::GetSwapchainHooks()
 
 bool RTGL1::FrameGeneratorDLSS::IsActive() const
 {
-    return IsAvailable() && isFrameGenEnabled;
+    return IsAvailable() && swapchainHandleAlive;
 }
 
 void RTGL1::FrameGeneratorDLSS::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
@@ -433,9 +509,11 @@ void RTGL1::FrameGeneratorDLSS::ConfigureFrame(
     uint32_t       frameId,
     bool           frameGenEnabled )
 {
-    displayWidth      = width;
-    displayHeight     = height;
-    isFrameGenEnabled = frameGenEnabled;
+    displayWidth           = width;
+    displayHeight          = height;
+    isFrameGenEnabled      = frameGenEnabled;
+    currentFrameIndex      = frameIndex;
+    currentSwapchainHandle = swapchain;
 }
 
 void RTGL1::FrameGeneratorDLSS::PrepareFrame(
@@ -464,11 +542,13 @@ void RTGL1::FrameGeneratorDLSS::PrepareFrame(
 
     if( !ValidateDlssgFeature( cmd, renderResolution.UpscaledWidth(), renderResolution.UpscaledHeight() ) )
     {
+        isFrameGenEnabled = false;
         return;
     }
 
     if( hudlessViews[ frameIndex ] == VK_NULL_HANDLE || interpViews[ frameIndex ] == VK_NULL_HANDLE )
     {
+        isFrameGenEnabled = false;
         return;
     }
 
@@ -617,6 +697,7 @@ void RTGL1::FrameGeneratorDLSS::PrepareFrame(
     if( NVSDK_NGX_FAILED( r ) )
     {
         debug::Warning( "DLSS FG: NGX_VK_EVALUATE_DLSSG failed: 0x{:08X}", static_cast< uint32_t >( r ) );
+        isFrameGenEnabled = false;
     }
 }
 
@@ -624,11 +705,25 @@ VkResult RTGL1::FrameGeneratorDLSS::CreateSwapchain(
     const VkSwapchainCreateInfoKHR& createInfo,
     VkSwapchainKHR*                 outSwapchain )
 {
-    return vkCreateSwapchainKHR( device, &createInfo, nullptr, outSwapchain );
+    VkResult r = vkCreateSwapchainKHR( device, &createInfo, nullptr, outSwapchain );
+    swapchainHandleAlive = ( r == VK_SUCCESS );
+    if( swapchainHandleAlive && outSwapchain != nullptr )
+    {
+        currentSwapchainHandle = *outSwapchain;
+    }
+    else
+    {
+        currentSwapchainHandle = VK_NULL_HANDLE;
+    }
+    return r;
 }
 
 void RTGL1::FrameGeneratorDLSS::DestroySwapchain( VkSwapchainKHR swapchain )
 {
+    WaitForPresents();
+    swapchainImages.clear();
+    currentSwapchainHandle = VK_NULL_HANDLE;
+    swapchainHandleAlive   = false;
     if( swapchain != VK_NULL_HANDLE )
     {
         vkDestroySwapchainKHR( device, swapchain, nullptr );
@@ -649,7 +744,152 @@ VkResult RTGL1::FrameGeneratorDLSS::QueuePresent(
     VkQueue                 queue,
     const VkPresentInfoKHR& presentInfo )
 {
-    return vkQueuePresentKHR( queue, &presentInfo );
+    if( !isFrameGenEnabled || !swapchainHandleAlive || swapchainImages.empty() ||
+        interpImages[ currentFrameIndex ] == VK_NULL_HANDLE ||
+        currentSwapchainHandle == VK_NULL_HANDLE )
+    {
+        isFrameGenEnabled = false;
+        return vkQueuePresentKHR( queue, &presentInfo );
+    }
+
+    isFrameGenEnabled = false;
+
+    vkWaitForFences( device, 1, &blitFences[ currentFrameIndex ], VK_TRUE, UINT64_MAX );
+    vkResetFences( device, 1, &blitFences[ currentFrameIndex ] );
+
+    uint32_t interpImageIndex = UINT32_MAX;
+    VkResult acquireRes = vkAcquireNextImageKHR(
+        device,
+        currentSwapchainHandle,
+        UINT64_MAX,
+        interpAcquireSemaphores[ currentFrameIndex ],
+        VK_NULL_HANDLE,
+        &interpImageIndex );
+
+    if( acquireRes != VK_SUCCESS && acquireRes != VK_SUBOPTIMAL_KHR )
+    {
+        return vkQueuePresentKHR( queue, &presentInfo );
+    }
+
+    if( interpImageIndex >= swapchainImages.size() )
+    {
+        return vkQueuePresentKHR( queue, &presentInfo );
+    }
+
+    VkCommandBuffer cmd = blitCmd[ currentFrameIndex ];
+    vkResetCommandBuffer( cmd, 0 );
+
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer( cmd, &beginInfo );
+
+    VkImage interpSrc = interpImages[ currentFrameIndex ];
+    VkImage swapDst   = swapchainImages[ interpImageIndex ];
+
+    Utils::BarrierImage( cmd,
+                         interpSrc,
+                         VK_ACCESS_SHADER_WRITE_BIT,
+                         VK_ACCESS_TRANSFER_WRITE_BIT,
+                         VK_IMAGE_LAYOUT_GENERAL,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL );
+
+    Utils::BarrierImage( cmd,
+                         swapDst,
+                         0,
+                         VK_ACCESS_TRANSFER_WRITE_BIT,
+                         VK_IMAGE_LAYOUT_UNDEFINED,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL );
+
+    VkImageBlit blitRegion = {};
+    blitRegion.srcSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    blitRegion.srcOffsets[ 0 ] = { 0, 0, 0 };
+    blitRegion.srcOffsets[ 1 ] = { static_cast< int32_t >( displayWidth ),
+                                   static_cast< int32_t >( displayHeight ),
+                                   1 };
+    blitRegion.dstSubresource  = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    blitRegion.dstOffsets[ 0 ] = { 0, 0, 0 };
+    blitRegion.dstOffsets[ 1 ] = { static_cast< int32_t >( displayWidth ),
+                                   static_cast< int32_t >( displayHeight ),
+                                   1 };
+
+    vkCmdBlitImage( cmd,
+                    interpSrc,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    swapDst,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1,
+                    &blitRegion,
+                    VK_FILTER_NEAREST );
+
+    Utils::BarrierImage( cmd,
+                         interpSrc,
+                         VK_ACCESS_TRANSFER_WRITE_BIT,
+                         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         VK_IMAGE_LAYOUT_GENERAL );
+
+    Utils::BarrierImage( cmd,
+                         swapDst,
+                         VK_ACCESS_TRANSFER_WRITE_BIT,
+                         0,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR );
+
+    vkEndCommandBuffer( cmd );
+
+    VkSemaphore waitSemaphores[ 2 ] = {
+        presentInfo.waitSemaphoreCount > 0 ? presentInfo.pWaitSemaphores[ 0 ] : VK_NULL_HANDLE,
+        interpAcquireSemaphores[ currentFrameIndex ],
+    };
+    VkPipelineStageFlags waitStages[ 2 ] = {
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+    };
+    uint32_t waitCount = ( waitSemaphores[ 0 ] != VK_NULL_HANDLE ) ? 2 : 1;
+    if( waitCount == 1 )
+    {
+        waitSemaphores[ 0 ] = interpAcquireSemaphores[ currentFrameIndex ];
+    }
+
+    VkSemaphore signalSemaphores[ 2 ] = {
+        interpRenderFinishedSemaphores[ currentFrameIndex ],
+        realRenderFinishedSemaphores[ currentFrameIndex ],
+    };
+
+    VkSubmitInfo submitInfo = {
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount   = waitCount,
+        .pWaitSemaphores      = waitSemaphores,
+        .pWaitDstStageMask    = waitStages,
+        .commandBufferCount   = 1,
+        .pCommandBuffers      = &cmd,
+        .signalSemaphoreCount = 2,
+        .pSignalSemaphores    = signalSemaphores,
+    };
+
+    VkResult submitRes = vkQueueSubmit( queue, 1, &submitInfo, blitFences[ currentFrameIndex ] );
+    if( submitRes != VK_SUCCESS )
+    {
+        return vkQueuePresentKHR( queue, &presentInfo );
+    }
+
+    VkPresentInfoKHR interpPresent = {
+        .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores    = &interpRenderFinishedSemaphores[ currentFrameIndex ],
+        .swapchainCount     = 1,
+        .pSwapchains        = presentInfo.pSwapchains,
+        .pImageIndices      = &interpImageIndex,
+        .pResults           = nullptr,
+    };
+    vkQueuePresentKHR( queue, &interpPresent );
+
+    VkPresentInfoKHR realPresent   = presentInfo;
+    realPresent.waitSemaphoreCount = 1;
+    realPresent.pWaitSemaphores    = &realRenderFinishedSemaphores[ currentFrameIndex ];
+    return vkQueuePresentKHR( queue, &realPresent );
 }
 
 VkResult RTGL1::FrameGeneratorDLSS::GetSwapchainImages(
@@ -658,12 +898,26 @@ VkResult RTGL1::FrameGeneratorDLSS::GetSwapchainImages(
     uint32_t*      pCount,
     VkImage*       pImages )
 {
-    return vkGetSwapchainImagesKHR( device_, swapchain, pCount, pImages );
+    VkResult r = vkGetSwapchainImagesKHR( device_, swapchain, pCount, pImages );
+    if( r == VK_SUCCESS && pImages != nullptr && pCount != nullptr )
+    {
+        swapchainImages.assign( pImages, pImages + *pCount );
+        currentSwapchainHandle = swapchain;
+        swapchainHandleAlive   = true;
+    }
+    return r;
 }
 
 void RTGL1::FrameGeneratorDLSS::WaitForPresents()
 {
-    vkDeviceWaitIdle( device );
+    if( queues )
+    {
+        vkQueueWaitIdle( queues->GetGraphics() );
+    }
+    else if( device != VK_NULL_HANDLE )
+    {
+        vkDeviceWaitIdle( device );
+    }
 }
 
 #else

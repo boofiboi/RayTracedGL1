@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "FrameGenerator.h"
 
 #ifdef RG_USE_NVIDIA_DLSS
@@ -112,6 +114,17 @@ private:
 
     bool                               isFrameGenEnabled;
     bool                               pendingReset;
+
+    VkCommandPool                      blitCommandPool;
+    VkCommandBuffer                    blitCmd[ MAX_FRAMES_IN_FLIGHT ];
+    VkSemaphore                        interpAcquireSemaphores[ MAX_FRAMES_IN_FLIGHT ];
+    VkSemaphore                        interpRenderFinishedSemaphores[ MAX_FRAMES_IN_FLIGHT ];
+    VkSemaphore                        realRenderFinishedSemaphores[ MAX_FRAMES_IN_FLIGHT ];
+    VkFence                            blitFences[ MAX_FRAMES_IN_FLIGHT ];
+    std::vector< VkImage >             swapchainImages;
+    VkSwapchainKHR                     currentSwapchainHandle;
+    uint32_t                           currentFrameIndex;
+    bool                               swapchainHandleAlive;
 #endif
 };
 

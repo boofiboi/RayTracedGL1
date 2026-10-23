@@ -545,7 +545,8 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
     assert( swapchainImages.empty() );
     assert( swapchainViews.empty() );
 
-    uint32_t imageCount = std::max( 3U, surfCapabilities.minImageCount );
+    uint32_t minCount   = fgHooks ? 4U : 3U;
+    uint32_t imageCount = std::max( minCount, surfCapabilities.minImageCount );
     if( surfCapabilities.maxImageCount > 0 )
     {
         imageCount = std::min( imageCount, surfCapabilities.maxImageCount );
