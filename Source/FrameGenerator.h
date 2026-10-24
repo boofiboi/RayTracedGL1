@@ -73,6 +73,7 @@ public:
 
     virtual void PrepareFrame( VkCommandBuffer                        cmd,
                                uint32_t                               frameIndex,
+                               VkImage                                backbufferSrcImage,
                                const std::shared_ptr< Framebuffers >& framebuffers,
                                const RenderResolutionHelper&          renderResolution,
                                RgFloat2D                              jitterOffset,

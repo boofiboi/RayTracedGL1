@@ -1,6 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include "FrameGenerator.h"
 
@@ -39,6 +42,7 @@ public:
 
     void PrepareFrame( VkCommandBuffer                        cmd,
                        uint32_t                               frameIndex,
+                       VkImage                                backbufferSrcImage,
                        const std::shared_ptr< Framebuffers >& framebuffers,
                        const RenderResolutionHelper&          renderResolution,
                        RgFloat2D                              jitterOffset,
@@ -85,8 +89,16 @@ private:
     void DestroyDlssgFeature();
     void CreateHudlessImages( uint32_t width, uint32_t height );
     void DestroyHudlessImages();
+    void CreateBackbufferImages( uint32_t width, uint32_t height );
+    void DestroyBackbufferImages();
     void CreateInterpImages( uint32_t width, uint32_t height );
     void DestroyInterpImages();
+    void CaptureBackbuffer( VkCommandBuffer cmd,
+                            uint32_t        frameIndex,
+                            VkImage         srcImage,
+                            uint32_t        width,
+                            uint32_t        height );
+    void PacerThreadFunc();
 
 private:
     VkDevice                           device;
@@ -102,6 +114,10 @@ private:
     VkImage                            hudlessImages[ MAX_FRAMES_IN_FLIGHT ];
     VkImageView                        hudlessViews[ MAX_FRAMES_IN_FLIGHT ];
     VkDeviceMemory                     hudlessMemories[ MAX_FRAMES_IN_FLIGHT ];
+
+    VkImage                            backbufferImages[ MAX_FRAMES_IN_FLIGHT ];
+    VkImageView                        backbufferViews[ MAX_FRAMES_IN_FLIGHT ];
+    VkDeviceMemory                     backbufferMemories[ MAX_FRAMES_IN_FLIGHT ];
 
     VkImage                            interpImages[ MAX_FRAMES_IN_FLIGHT ];
     VkImageView                        interpViews[ MAX_FRAMES_IN_FLIGHT ];
@@ -125,6 +141,30 @@ private:
     VkSwapchainKHR                     currentSwapchainHandle;
     uint32_t                           currentFrameIndex;
     bool                               swapchainHandleAlive;
+
+    struct PresentTask
+    {
+        VkQueue        queue{ VK_NULL_HANDLE };
+        VkSwapchainKHR swapchain{ VK_NULL_HANDLE };
+        uint32_t       interpImageIndex{ 0 };
+        uint32_t       realImageIndex{ 0 };
+        VkSemaphore    interpWaitSemaphore{ VK_NULL_HANDLE };
+        VkSemaphore    realWaitSemaphore{ VK_NULL_HANDLE };
+        int64_t        targetRealQpc{ 0 };
+        bool           valid{ false };
+    };
+
+    std::thread                        pacerThread;
+    std::mutex                         pacerMutex;
+    std::condition_variable            pacerCv;
+    std::condition_variable            pacerDoneCv;
+    bool                               pacerStop{ false };
+    bool                               taskBusy{ false };
+    PresentTask                        pendingTask;
+
+    int64_t                            lastRealPresentQpc{ 0 };
+    int64_t                            avgFrameDeltaQpc{ 0 };
+    int64_t                            qpcFrequency{ 0 };
 #endif
 };
 

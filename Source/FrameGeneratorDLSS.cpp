@@ -79,6 +79,9 @@ RTGL1::FrameGeneratorDLSS::FrameGeneratorDLSS(
     , hudlessImages{}
     , hudlessViews{}
     , hudlessMemories{}
+    , backbufferImages{}
+    , backbufferViews{}
+    , backbufferMemories{}
     , interpImages{}
     , interpViews{}
     , interpMemories{}
@@ -97,7 +100,20 @@ RTGL1::FrameGeneratorDLSS::FrameGeneratorDLSS(
     , currentSwapchainHandle( VK_NULL_HANDLE )
     , currentFrameIndex( 0 )
     , swapchainHandleAlive( false )
+    , pacerThread{}
+    , pacerStop( false )
+    , taskBusy( false )
+    , pendingTask{}
+    , lastRealPresentQpc( 0 )
+    , avgFrameDeltaQpc( 0 )
+    , qpcFrequency( 0 )
 {
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency( &freq );
+    qpcFrequency = freq.QuadPart;
+
+    pacerThread = std::thread( &FrameGeneratorDLSS::PacerThreadFunc, this );
+
     VkCommandPoolCreateInfo poolInfo = {
         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -138,9 +154,19 @@ RTGL1::FrameGeneratorDLSS::FrameGeneratorDLSS(
 
 RTGL1::FrameGeneratorDLSS::~FrameGeneratorDLSS()
 {
-    WaitForPresents();
+    {
+        std::unique_lock< std::mutex > lock( pacerMutex );
+        pacerStop = true;
+        pacerCv.notify_all();
+    }
+    if( pacerThread.joinable() )
+    {
+        pacerThread.join();
+    }
+
     DestroyDlssgFeature();
     DestroyHudlessImages();
+    DestroyBackbufferImages();
     DestroyInterpImages();
 
     for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
@@ -201,6 +227,7 @@ void RTGL1::FrameGeneratorDLSS::OnFramebuffersSizeChange( const ResolutionState&
 
     DestroyDlssgFeature();
     CreateHudlessImages( resolutionState.upscaledWidth, resolutionState.upscaledHeight );
+    CreateBackbufferImages( resolutionState.upscaledWidth, resolutionState.upscaledHeight );
     CreateInterpImages( resolutionState.upscaledWidth, resolutionState.upscaledHeight );
 
     displayWidth  = resolutionState.upscaledWidth;
@@ -333,6 +360,80 @@ void RTGL1::FrameGeneratorDLSS::DestroyHudlessImages()
         {
             MemoryAllocator::FreeDedicated( device, hudlessMemories[ i ] );
             hudlessMemories[ i ] = VK_NULL_HANDLE;
+        }
+    }
+}
+
+void RTGL1::FrameGeneratorDLSS::CreateBackbufferImages( uint32_t width, uint32_t height )
+{
+    DestroyBackbufferImages();
+
+    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    {
+        VkImageCreateInfo imageInfo = {
+            .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType     = VK_IMAGE_TYPE_2D,
+            .format        = backBufferFormat,
+            .extent        = { width, height, 1 },
+            .mipLevels     = 1,
+            .arrayLayers   = 1,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .tiling        = VK_IMAGE_TILING_OPTIMAL,
+            .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+
+        VkResult r = vkCreateImage( device, &imageInfo, nullptr, &backbufferImages[ i ] );
+        VK_CHECKERROR( r );
+
+        VkMemoryRequirements memReqs = {};
+        vkGetImageMemoryRequirements( device, backbufferImages[ i ], &memReqs );
+
+        backbufferMemories[ i ] = allocator->AllocDedicated( memReqs,
+                                                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                             MemoryAllocator::AllocType::DEFAULT,
+                                                             "DLSS FG Backbuffer Image" );
+
+        r = vkBindImageMemory( device, backbufferImages[ i ], backbufferMemories[ i ], 0 );
+        VK_CHECKERROR( r );
+
+        VkImageViewCreateInfo viewInfo = {
+            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image            = backbufferImages[ i ],
+            .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+            .format           = backBufferFormat,
+            .subresourceRange = {
+                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 0,
+                .layerCount     = 1,
+            },
+        };
+
+        r = vkCreateImageView( device, &viewInfo, nullptr, &backbufferViews[ i ] );
+        VK_CHECKERROR( r );
+    }
+}
+
+void RTGL1::FrameGeneratorDLSS::DestroyBackbufferImages()
+{
+    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    {
+        if( backbufferViews[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroyImageView( device, backbufferViews[ i ], nullptr );
+            backbufferViews[ i ] = VK_NULL_HANDLE;
+        }
+        if( backbufferImages[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroyImage( device, backbufferImages[ i ], nullptr );
+            backbufferImages[ i ] = VK_NULL_HANDLE;
+        }
+        if( backbufferMemories[ i ] != VK_NULL_HANDLE )
+        {
+            MemoryAllocator::FreeDedicated( device, backbufferMemories[ i ] );
+            backbufferMemories[ i ] = VK_NULL_HANDLE;
         }
     }
 }
@@ -501,6 +602,96 @@ void RTGL1::FrameGeneratorDLSS::CaptureHudless(
     svkCmdPipelineBarrier2KHR( cmd, &dep );
 }
 
+void RTGL1::FrameGeneratorDLSS::CaptureBackbuffer(
+    VkCommandBuffer cmd,
+    uint32_t        frameIndex,
+    VkImage         srcImage,
+    uint32_t        width,
+    uint32_t        height )
+{
+    if( !IsAvailable() || backbufferImages[ frameIndex ] == VK_NULL_HANDLE || srcImage == VK_NULL_HANDLE )
+    {
+        return;
+    }
+
+    VkImageMemoryBarrier2 barriers[ 2 ] = {};
+
+    barriers[ 0 ] = {
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask  = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        .srcAccessMask = VK_ACCESS_2_NONE,
+        .dstStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,
+        .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .image         = backbufferImages[ frameIndex ],
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    };
+
+    barriers[ 1 ] = {
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,
+        .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+        .oldLayout     = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .image         = srcImage,
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    };
+
+    VkDependencyInfo dep = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 2,
+        .pImageMemoryBarriers    = barriers,
+    };
+    svkCmdPipelineBarrier2KHR( cmd, &dep );
+
+    VkImageBlit blitRegion = {
+        .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+        .srcOffsets     = { { 0, 0, 0 }, { static_cast< int32_t >( width ), static_cast< int32_t >( height ), 1 } },
+        .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+        .dstOffsets     = { { 0, 0, 0 }, { static_cast< int32_t >( width ), static_cast< int32_t >( height ), 1 } },
+    };
+    vkCmdBlitImage( cmd,
+                    srcImage,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    backbufferImages[ frameIndex ],
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1,
+                    &blitRegion,
+                    VK_FILTER_NEAREST );
+
+    barriers[ 0 ].srcStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT;
+    barriers[ 0 ].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    barriers[ 0 ].dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barriers[ 0 ].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+    barriers[ 0 ].oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[ 0 ].newLayout     = VK_IMAGE_LAYOUT_GENERAL;
+
+    barriers[ 1 ].srcStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT;
+    barriers[ 1 ].srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+    barriers[ 1 ].dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+    barriers[ 1 ].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT |
+                                  VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    barriers[ 1 ].oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[ 1 ].newLayout     = VK_IMAGE_LAYOUT_GENERAL;
+
+    svkCmdPipelineBarrier2KHR( cmd, &dep );
+}
+
 void RTGL1::FrameGeneratorDLSS::ConfigureFrame(
     VkSwapchainKHR swapchain,
     uint32_t       frameIndex,
@@ -519,6 +710,7 @@ void RTGL1::FrameGeneratorDLSS::ConfigureFrame(
 void RTGL1::FrameGeneratorDLSS::PrepareFrame(
     VkCommandBuffer                        cmd,
     uint32_t                               frameIndex,
+    VkImage                                backbufferSrcImage,
     const std::shared_ptr< Framebuffers >& framebuffers,
     const RenderResolutionHelper&          renderResolution,
     RgFloat2D                              jitterOffset,
@@ -546,11 +738,15 @@ void RTGL1::FrameGeneratorDLSS::PrepareFrame(
         return;
     }
 
-    if( hudlessViews[ frameIndex ] == VK_NULL_HANDLE || interpViews[ frameIndex ] == VK_NULL_HANDLE )
+    if( hudlessViews[ frameIndex ] == VK_NULL_HANDLE || interpViews[ frameIndex ] == VK_NULL_HANDLE ||
+        backbufferViews[ frameIndex ] == VK_NULL_HANDLE )
     {
         isFrameGenEnabled = false;
         return;
     }
+
+    CaptureBackbuffer(
+        cmd, frameIndex, backbufferSrcImage, renderResolution.UpscaledWidth(), renderResolution.UpscaledHeight() );
 
     using FI = FramebufferImageIndex;
     FI fs[]  = { FI::FB_IMAGE_INDEX_DEPTH_NDC, FI::FB_IMAGE_INDEX_MOTION_DLSS };
@@ -591,7 +787,7 @@ void RTGL1::FrameGeneratorDLSS::PrepareFrame(
     };
 
     NVSDK_NGX_Resource_VK backbufferResource =
-        ToNGXResource( framebuffers, frameIndex, FI::FB_IMAGE_INDEX_FINAL, targetSize );
+        ToNGXResourceFromView( backbufferImages[ frameIndex ], backbufferViews[ frameIndex ], backBufferFormat, targetSize );
     NVSDK_NGX_Resource_VK depthResource =
         ToNGXResource( framebuffers, frameIndex, FI::FB_IMAGE_INDEX_DEPTH_NDC, sourceSize );
     NVSDK_NGX_Resource_VK motionResource =
@@ -724,6 +920,8 @@ void RTGL1::FrameGeneratorDLSS::DestroySwapchain( VkSwapchainKHR swapchain )
     swapchainImages.clear();
     currentSwapchainHandle = VK_NULL_HANDLE;
     swapchainHandleAlive   = false;
+    lastRealPresentQpc     = 0;
+    avgFrameDeltaQpc       = 0;
     if( swapchain != VK_NULL_HANDLE )
     {
         vkDestroySwapchainKHR( device, swapchain, nullptr );
@@ -749,10 +947,13 @@ VkResult RTGL1::FrameGeneratorDLSS::QueuePresent(
         currentSwapchainHandle == VK_NULL_HANDLE )
     {
         isFrameGenEnabled = false;
+        WaitForPresents();
         return vkQueuePresentKHR( queue, &presentInfo );
     }
 
     isFrameGenEnabled = false;
+
+    WaitForPresents();
 
     vkWaitForFences( device, 1, &blitFences[ currentFrameIndex ], VK_TRUE, UINT64_MAX );
     vkResetFences( device, 1, &blitFences[ currentFrameIndex ] );
@@ -875,21 +1076,51 @@ VkResult RTGL1::FrameGeneratorDLSS::QueuePresent(
         return vkQueuePresentKHR( queue, &presentInfo );
     }
 
-    VkPresentInfoKHR interpPresent = {
-        .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &interpRenderFinishedSemaphores[ currentFrameIndex ],
-        .swapchainCount     = 1,
-        .pSwapchains        = presentInfo.pSwapchains,
-        .pImageIndices      = &interpImageIndex,
-        .pResults           = nullptr,
-    };
-    vkQueuePresentKHR( queue, &interpPresent );
+    LARGE_INTEGER curQpc;
+    QueryPerformanceCounter( &curQpc );
+    if( lastRealPresentQpc > 0 && qpcFrequency > 0 )
+    {
+        int64_t deltaQpc = curQpc.QuadPart - lastRealPresentQpc;
+        if( deltaQpc > 0 && deltaQpc < ( qpcFrequency / 5 ) )
+        {
+            if( avgFrameDeltaQpc == 0 )
+            {
+                avgFrameDeltaQpc = deltaQpc;
+            }
+            else
+            {
+                avgFrameDeltaQpc = ( avgFrameDeltaQpc * 7 + deltaQpc ) / 8;
+            }
+        }
+    }
+    lastRealPresentQpc = curQpc.QuadPart;
 
-    VkPresentInfoKHR realPresent   = presentInfo;
-    realPresent.waitSemaphoreCount = 1;
-    realPresent.pWaitSemaphores    = &realRenderFinishedSemaphores[ currentFrameIndex ];
-    return vkQueuePresentKHR( queue, &realPresent );
+    int64_t halfInterval = avgFrameDeltaQpc / 2;
+    int64_t minInterval  = ( qpcFrequency * 1 ) / 1000;
+    int64_t maxInterval  = ( qpcFrequency * 40 ) / 1000;
+    halfInterval = std::clamp( halfInterval, minInterval, maxInterval );
+
+    int64_t targetRealQpc = curQpc.QuadPart + halfInterval;
+
+    {
+        std::unique_lock< std::mutex > lock( pacerMutex );
+        pendingTask.queue               = queue;
+        pendingTask.swapchain           = ( presentInfo.swapchainCount > 0 && presentInfo.pSwapchains != nullptr )
+                                              ? presentInfo.pSwapchains[ 0 ]
+                                              : currentSwapchainHandle;
+        pendingTask.interpImageIndex    = interpImageIndex;
+        pendingTask.realImageIndex      = ( presentInfo.swapchainCount > 0 && presentInfo.pImageIndices != nullptr )
+                                              ? presentInfo.pImageIndices[ 0 ]
+                                              : 0;
+        pendingTask.interpWaitSemaphore = interpRenderFinishedSemaphores[ currentFrameIndex ];
+        pendingTask.realWaitSemaphore   = realRenderFinishedSemaphores[ currentFrameIndex ];
+        pendingTask.targetRealQpc       = targetRealQpc;
+        pendingTask.valid               = true;
+        taskBusy                        = true;
+        pacerCv.notify_one();
+    }
+
+    return VK_SUCCESS;
 }
 
 VkResult RTGL1::FrameGeneratorDLSS::GetSwapchainImages(
@@ -910,6 +1141,9 @@ VkResult RTGL1::FrameGeneratorDLSS::GetSwapchainImages(
 
 void RTGL1::FrameGeneratorDLSS::WaitForPresents()
 {
+    std::unique_lock< std::mutex > lock( pacerMutex );
+    pacerDoneCv.wait( lock, [ this ] { return !taskBusy; } );
+
     if( queues )
     {
         vkQueueWaitIdle( queues->GetGraphics() );
@@ -917,6 +1151,80 @@ void RTGL1::FrameGeneratorDLSS::WaitForPresents()
     else if( device != VK_NULL_HANDLE )
     {
         vkDeviceWaitIdle( device );
+    }
+}
+
+void RTGL1::FrameGeneratorDLSS::PacerThreadFunc()
+{
+    while( true )
+    {
+        PresentTask task;
+        {
+            std::unique_lock< std::mutex > lock( pacerMutex );
+            pacerCv.wait( lock, [ this ] { return pacerStop || pendingTask.valid; } );
+
+            if( pacerStop && !pendingTask.valid )
+            {
+                break;
+            }
+
+            task              = pendingTask;
+            pendingTask.valid = false;
+        }
+
+        if( task.queue != VK_NULL_HANDLE && task.swapchain != VK_NULL_HANDLE )
+        {
+            VkPresentInfoKHR interpPresent = {
+                .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                .waitSemaphoreCount = 1,
+                .pWaitSemaphores    = &task.interpWaitSemaphore,
+                .swapchainCount     = 1,
+                .pSwapchains        = &task.swapchain,
+                .pImageIndices      = &task.interpImageIndex,
+                .pResults           = nullptr,
+            };
+            vkQueuePresentKHR( task.queue, &interpPresent );
+
+            if( task.targetRealQpc > 0 && qpcFrequency > 0 )
+            {
+                int64_t sleepThreshold = ( qpcFrequency * 2 ) / 1000;
+                while( true )
+                {
+                    LARGE_INTEGER cur;
+                    QueryPerformanceCounter( &cur );
+                    int64_t rem = task.targetRealQpc - cur.QuadPart;
+                    if( rem <= 0 )
+                    {
+                        break;
+                    }
+                    if( rem > sleepThreshold )
+                    {
+                        Sleep( 1 );
+                    }
+                    else
+                    {
+                        YieldProcessor();
+                    }
+                }
+            }
+
+            VkPresentInfoKHR realPresent = {
+                .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                .waitSemaphoreCount = 1,
+                .pWaitSemaphores    = &task.realWaitSemaphore,
+                .swapchainCount     = 1,
+                .pSwapchains        = &task.swapchain,
+                .pImageIndices      = &task.realImageIndex,
+                .pResults           = nullptr,
+            };
+            vkQueuePresentKHR( task.queue, &realPresent );
+        }
+
+        {
+            std::unique_lock< std::mutex > lock( pacerMutex );
+            taskBusy = false;
+            pacerDoneCv.notify_all();
+        }
     }
 }
 
@@ -954,6 +1262,7 @@ void RTGL1::FrameGeneratorDLSS::OnFramebuffersSizeChange( const ResolutionState&
 void RTGL1::FrameGeneratorDLSS::PrepareFrame(
     VkCommandBuffer                        cmd,
     uint32_t                               frameIndex,
+    VkImage                                backbufferSrcImage,
     const std::shared_ptr< Framebuffers >& framebuffers,
     const RenderResolutionHelper&          renderResolution,
     RgFloat2D                              jitterOffset,

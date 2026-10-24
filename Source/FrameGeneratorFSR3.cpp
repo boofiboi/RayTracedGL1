@@ -388,6 +388,7 @@ void RTGL1::FrameGeneratorFSR3::WaitForPresents()
 void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     VkCommandBuffer                        cmd,
     uint32_t                               frameIndex,
+    VkImage                                backbufferSrcImage,
     const std::shared_ptr< Framebuffers >& framebuffers,
     const RenderResolutionHelper&          renderResolution,
     RgFloat2D                              jitterOffset,
@@ -687,6 +688,7 @@ void RTGL1::FrameGeneratorFSR3::OnFramebuffersSizeChange( const ResolutionState&
 
 void RTGL1::FrameGeneratorFSR3::PrepareFrame( VkCommandBuffer                        cmd,
                                               uint32_t                               frameIndex,
+                                              VkImage                                backbufferSrcImage,
                                               const std::shared_ptr< Framebuffers >& framebuffers,
                                               const RenderResolutionHelper&          renderResolution,
                                               RgFloat2D      jitterOffset,

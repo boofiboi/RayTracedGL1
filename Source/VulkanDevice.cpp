@@ -752,7 +752,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
     if( isFgSwapchainEnabled && frameGenerator )
     {
         const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
-        double timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
 
         if( isFgActive )
         {
@@ -772,22 +771,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                         renderResolution.UpscaledHeight(),
                                         frameId,
                                         isFgActive );
-
-        if( isFgActive )
-        {
-            frameGenerator->PrepareFrame( cmd,
-                                          frameIndex,
-                                          framebuffers,
-                                          renderResolution,
-                                          jitter,
-                                          timeDelta,
-                                          drawInfo.cameraNear,
-                                          drawInfo.cameraFar,
-                                          drawInfo.fovYRadians,
-                                          resParams.resetUpscalerHistory || drawInfo.presentPrevFrame,
-                                          uniform->GetData()->view,
-                                          frameId );
-        }
     }
     else
     {
@@ -824,6 +807,28 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
             effectCrtDecode->Setup( args );
             accum = effectCrtDecode->Apply( args, accum );
         }
+    }
+
+    if( isFgSwapchainEnabled && frameGenerator && frameGenerationActive && !drawInfo.presentPrevFrame )
+    {
+        double timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
+
+        auto [ accumImage, accumView, accumFormat, accumSz ] =
+            framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
+
+        frameGenerator->PrepareFrame( cmd,
+                                      frameIndex,
+                                      accumImage,
+                                      framebuffers,
+                                      renderResolution,
+                                      jitter,
+                                      timeDelta,
+                                      drawInfo.cameraNear,
+                                      drawInfo.cameraFar,
+                                      drawInfo.fovYRadians,
+                                      resParams.resetUpscalerHistory || drawInfo.presentPrevFrame,
+                                      uniform->GetData()->view,
+                                      frameId );
     }
 
     // blit result image to present on a surface
