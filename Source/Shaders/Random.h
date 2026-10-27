@@ -225,7 +225,6 @@ layout(
     #error BLUE_NOISE_TEXTURE_SIZE_POW must be lower, around 6-8
 #endif
 
-// Blue noise random in [0..1] with 1/255 precision
 vec4 rndBlueNoise8(uint seed, uint salt)
 {
     uint texIndex;
@@ -236,10 +235,25 @@ vec4 rndBlueNoise8(uint seed, uint salt)
 
     return texelFetch(blueNoiseTextures, ivec3(offset.x, offset.y, texIndex), 0);
 }
-#endif // DESC_SET_RANDOM
 
+float rnd16(uint seed, uint salt)
+{
+    vec4 bn = rndBlueNoise8(seed, salt);
+    return fract(bn.x + float(salt) * 0.61803398875);
+}
 
-// https://nullprogram.com/blog/2018/07/31/
+vec2 rnd16_2(uint seed, uint salt)
+{
+    vec4 bn = rndBlueNoise8(seed, salt);
+    return fract(bn.xy + vec2(float(salt) * 0.754877666, float(salt) * 0.569840291));
+}
+
+vec4 rnd8_4(uint seed, uint salt)
+{
+    vec4 bn = rndBlueNoise8(seed, salt);
+    return fract(bn + vec4(float(salt) * 0.819172513, float(salt) * 0.671043607, float(salt) * 0.549700478, float(salt) * 0.450325178));
+}
+#else
 uint wellonsLowBias32(uint x)
 {
     x ^= x >> 16;
@@ -250,19 +264,17 @@ uint wellonsLowBias32(uint x)
     return x;
 }
 
-// Random in [0..1] with 1/65535 precision
 float rnd16(uint seed, uint salt)
 {
     uint rnd = wellonsLowBias32(seed + salt);
-    return 
-        float((rnd & 0x0000FFFF)      ) / float(UINT16_MAX);
+    return float((rnd & 0x0000FFFF)) / float(UINT16_MAX);
 }
 
 vec2 rnd16_2(uint seed, uint salt)
 {
     uint rnd = wellonsLowBias32(seed + salt);
     return vec2(
-        float((rnd & 0x0000FFFF)      ) / float(UINT16_MAX),
+        float((rnd & 0x0000FFFF)) / float(UINT16_MAX),
         float((rnd & 0xFFFF0000) >> 16) / float(UINT16_MAX));
 }
 
@@ -270,33 +282,22 @@ vec4 rnd8_4(uint seed, uint salt)
 {
     uint rnd = wellonsLowBias32(seed + salt);
     return vec4(
-        float((rnd & 0x000000FF)      ) / float(UINT8_MAX),
-        float((rnd & 0x0000FF00) >> 8 ) / float(UINT8_MAX),
+        float((rnd & 0x000000FF)) / float(UINT8_MAX),
+        float((rnd & 0x0000FF00) >> 8) / float(UINT8_MAX),
         float((rnd & 0x00FF0000) >> 16) / float(UINT8_MAX),
         float((rnd & 0xFF000000) >> 24) / float(UINT8_MAX));
 }
-
-// https://gist.github.com/mpottinger/54d99732d4831d8137d178b4a6007d1a
-uvec3 murmurHash33(uvec3 src) {
-    const uint M = 0x5bd1e995u;
-    uvec3 h = uvec3(1190494759u, 2147483647u, 3559788179u);
-    src *= M; src ^= src>>24u; src *= M;
-    h *= M; h ^= src.x; h *= M; h ^= src.y; h *= M; h ^= src.z;
-    h ^= h>>13u; h *= M; h ^= h>>15u;
-    return h;
-}
+#endif
 
 uint getRandomSeed(const ivec2 pix, uint frameIndex)
 {
-    uvec3 hash = murmurHash33(uvec3(pix.x, pix.y, frameIndex));
-
     uvec2 offset = uvec2(
-        hash.x % BLUE_NOISE_TEXTURE_SIZE,
-        hash.y % BLUE_NOISE_TEXTURE_SIZE
+        uint(max(pix.x, 0)) & (BLUE_NOISE_TEXTURE_SIZE - 1),
+        uint(max(pix.y, 0)) & (BLUE_NOISE_TEXTURE_SIZE - 1)
     );
-    uint texIndex = hash.z % BLUE_NOISE_TEXTURE_COUNT;
+    uint texIndex = frameIndex % BLUE_NOISE_TEXTURE_COUNT;
 
     return packRandomSeed(texIndex, offset);
 }
 
-#endif // RANDOM_H_
+#endif
