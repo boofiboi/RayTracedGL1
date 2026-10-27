@@ -75,12 +75,15 @@ public:
                          uint32_t        width,
                          uint32_t        height ) override;
 
+    void SetDlss( std::shared_ptr< class DLSS > dlss ) override;
+
     void ConfigureFrame( VkSwapchainKHR swapchain,
                          uint32_t       frameIndex,
                          uint32_t       width,
                          uint32_t       height,
                          uint32_t       frameId,
-                         bool           frameGenEnabled ) override;
+                         bool           frameGenEnabled,
+                         bool           useDlssG = false ) override;
 
     bool     IsActive() const override;
     VkResult CreateSwapchain( const VkSwapchainCreateInfoKHR& createInfo,
@@ -128,7 +131,23 @@ private:
     std::atomic< bool >                pendingReset{ false };
 
     VkImage                            hudlessImages[ MAX_FRAMES_IN_FLIGHT ]{};
+    VkImageView                        hudlessViews[ MAX_FRAMES_IN_FLIGHT ]{};
     VkDeviceMemory                     hudlessMemories[ MAX_FRAMES_IN_FLIGHT ]{};
+
+    std::shared_ptr< class DLSS >      dlss;
+    bool                               isDlssGActive{ false };
+
+    VkImage                            savedDepthImage{ VK_NULL_HANDLE };
+    VkImageView                        savedDepthView{ VK_NULL_HANDLE };
+    VkImage                            savedMotionImage{ VK_NULL_HANDLE };
+    VkImageView                        savedMotionView{ VK_NULL_HANDLE };
+    float                              savedViewMatrix[ 16 ]{};
+    float                              savedCameraNear{ 0.0f };
+    float                              savedCameraFar{ 0.0f };
+    float                              savedFovVerticalRad{ 0.0f };
+    uint32_t                           currentWidth{ 0 };
+    uint32_t                           currentHeight{ 0 };
+    uint32_t                           currentFrameIndex{ 0 };
 #endif
 };
 

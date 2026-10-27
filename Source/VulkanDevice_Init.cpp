@@ -421,6 +421,13 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         device,
         physDevice->Get() );
 
+    nvDlss = std::make_shared< DLSS >(
+        instance, 
+        device, 
+        physDevice->Get(), 
+        info->pAppGUID, 
+        libconfig.dlssValidation );
+
     if( enableFrameGeneration )
     {
         frameGenerator = std::make_shared< FrameGeneratorFSR3 >(
@@ -431,15 +438,10 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
             swapchain->GetSurfaceFormat(),
             info->worldScale );
 
+        frameGenerator->SetDlss( nvDlss );
+
         swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
     }
-
-    nvDlss = std::make_shared< DLSS >(
-        instance, 
-        device, 
-        physDevice->Get(), 
-        info->pAppGUID, 
-        libconfig.dlssValidation );
 
     sharpening = std::make_shared< Sharpening >( 
         device, 

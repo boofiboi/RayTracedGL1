@@ -34,6 +34,7 @@
 
     #include <nvsdk_ngx_helpers_vk.h>
     #include <nvsdk_ngx_helpers.h>
+    #include <nvsdk_ngx_helpers_dlssg_vk.h>
 
     #if __linux__
         #include <unistd.h>
@@ -57,7 +58,9 @@ RTGL1::DLSS::DLSS( VkInstance       _instance,
     , isInitialized( false )
     , pParams( nullptr )
     , pDlssFeature( nullptr )
+    , pDlssgFeature( nullptr )
     , prevDlssFeatureValues{}
+    , prevDlssgFeatureValues{}
 {
     isInitialized = TryInit( _instance, _device, _physDevice, _pAppGuid, _enableDebug );
 
@@ -105,12 +108,13 @@ bool RTGL1::DLSS::TryInit( VkInstance       instance,
 {
     NVSDK_NGX_Result r;
 
-    std::wstring   dllPath   = GetFolderPath() + ( enableDebug ? L"/dev/" : L"/rel/" );
-    const wchar_t* dllPath_c = dllPath.c_str();
+    std::wstring   dllPath0  = GetFolderPath();
+    std::wstring   dllPath1  = GetFolderPath() + ( enableDebug ? L"/dev/" : L"/rel/" );
+    const wchar_t* dllPaths[] = { dllPath0.c_str(), dllPath1.c_str() };
 
     NVSDK_NGX_PathListInfo pathsInfo = {
-        .Path   = &dllPath_c,
-        .Length = 1,
+        .Path   = dllPaths,
+        .Length = 2,
     };
 
     NVSDK_NGX_FeatureCommonInfo commonInfo = {
@@ -268,6 +272,64 @@ void RTGL1::DLSS::DestroyDlssFeature()
     }
 }
 
+void RTGL1::DLSS::DestroyDlssgFeature()
+{
+    if( pDlssgFeature != nullptr )
+    {
+        vkDeviceWaitIdle( device );
+
+        NVSDK_NGX_Result r = NVSDK_NGX_VULKAN_ReleaseFeature( pDlssgFeature );
+        pDlssgFeature       = nullptr;
+
+        if( NVSDK_NGX_FAILED( r ) )
+        {
+            debug::Warning( "DLSS-G: NVSDK_NGX_VULKAN_ReleaseFeature fail: {}", static_cast< int >( r ) );
+        }
+    }
+
+    for( auto& [ img, view ] : viewCache )
+    {
+        if( view != VK_NULL_HANDLE )
+        {
+            vkDestroyImageView( device, view, nullptr );
+        }
+    }
+    viewCache.clear();
+}
+
+VkImageView RTGL1::DLSS::GetOrCreateView( VkImage image, VkFormat format, VkImageAspectFlags aspect )
+{
+    if( image == VK_NULL_HANDLE )
+    {
+        return VK_NULL_HANDLE;
+    }
+    auto it = viewCache.find( image );
+    if( it != viewCache.end() )
+    {
+        return it->second;
+    }
+    VkImageViewCreateInfo viewInfo = {
+        .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image    = image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format   = format,
+        .subresourceRange = {
+            .aspectMask     = aspect,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    };
+    VkImageView view = VK_NULL_HANDLE;
+    VkResult r = vkCreateImageView( device, &viewInfo, nullptr, &view );
+    if( r == VK_SUCCESS )
+    {
+        viewCache[ image ] = view;
+    }
+    return view;
+}
+
 void RTGL1::DLSS::Destroy()
 {
     if( isInitialized )
@@ -277,6 +339,11 @@ void RTGL1::DLSS::Destroy()
         if( pDlssFeature != nullptr )
         {
             DestroyDlssFeature();
+        }
+
+        if( pDlssgFeature != nullptr )
+        {
+            DestroyDlssgFeature();
         }
 
         NVSDK_NGX_VULKAN_DestroyParameters( pParams );
@@ -290,6 +357,22 @@ void RTGL1::DLSS::Destroy()
 bool RTGL1::DLSS::IsDlssAvailable() const
 {
     return isInitialized && pParams != nullptr /* && pDlssFeature != nullptr */;
+}
+
+bool RTGL1::DLSS::IsDlssgAvailable() const
+{
+    if( !isInitialized || pParams == nullptr )
+    {
+        return false;
+    }
+    int available = 0;
+    NVSDK_NGX_Result r = pParams->Get( NVSDK_NGX_Parameter_FrameGeneration_Available, &available );
+    if( NVSDK_NGX_SUCCEED( r ) && available )
+    {
+        return true;
+    }
+    r = pParams->Get( NVSDK_NGX_Parameter_FrameInterpolation_Available, &available );
+    return NVSDK_NGX_SUCCEED( r ) && available;
 }
 
 static NVSDK_NGX_PerfQuality_Value ToNGXPerfQuality( RgRenderResolutionMode mode )
@@ -381,6 +464,151 @@ bool RTGL1::DLSS::ValidateDlssFeature( VkCommandBuffer               cmd,
         debug::Warning( "DLSS: NGX_VULKAN_CREATE_DLSS_EXT fail: {}", static_cast< int >( r ) );
 
         pDlssFeature = nullptr;
+        return false;
+    }
+
+    return true;
+}
+
+bool RTGL1::DLSS::ValidateDlssgFeature( VkCommandBuffer cmd,
+                                        uint32_t        width,
+                                        uint32_t        height,
+                                        VkFormat        backBufferFormat )
+{
+    if( !isInitialized || pParams == nullptr )
+    {
+        return false;
+    }
+
+    if( prevDlssgFeatureValues.width == width && prevDlssgFeatureValues.height == height &&
+        prevDlssgFeatureValues.format == backBufferFormat && pDlssgFeature != nullptr )
+    {
+        return true;
+    }
+
+    prevDlssgFeatureValues.width  = width;
+    prevDlssgFeatureValues.height = height;
+    prevDlssgFeatureValues.format = backBufferFormat;
+
+    if( pDlssgFeature != nullptr )
+    {
+        DestroyDlssgFeature();
+    }
+
+    NVSDK_NGX_DLSSG_Create_Params dlssgParams = {
+        .Width                    = width,
+        .Height                   = height,
+        .NativeBackbufferFormat   = static_cast< unsigned int >( backBufferFormat ),
+        .RenderWidth              = width,
+        .RenderHeight             = height,
+        .DynamicResolutionScaling = false,
+    };
+
+    uint32_t creationNodeMask   = 1;
+    uint32_t visibilityNodeMask = 1;
+
+    NVSDK_NGX_Result r = NGX_VK_CREATE_DLSSG(
+        cmd, creationNodeMask, visibilityNodeMask, &pDlssgFeature, pParams, &dlssgParams );
+    if( NVSDK_NGX_FAILED( r ) )
+    {
+        debug::Warning( "DLSS-G: NGX_VK_CREATE_DLSSG fail: {}", static_cast< int >( r ) );
+        pDlssgFeature = nullptr;
+        return false;
+    }
+
+    return true;
+}
+
+bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
+                                 VkImage         backbuffer,
+                                 VkImage         outputInterp,
+                                 VkImage         depth,
+                                 VkImageView     depthView,
+                                 VkImage         mvecs,
+                                 VkImageView     mvecsView,
+                                 VkImage         hudless,
+                                 VkImageView     hudlessView,
+                                 uint32_t        width,
+                                 uint32_t        height,
+                                 VkFormat        backBufferFormat,
+                                 const float*    pView,
+                                 float           cameraNear,
+                                 float           cameraFar,
+                                 float           fovVerticalRad,
+                                 bool            reset )
+{
+    if( !IsDlssgAvailable() || pDlssgFeature == nullptr )
+    {
+        return false;
+    }
+
+    VkImageSubresourceRange colorRange = {
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
+
+    VkImageView backbufferView = GetOrCreateView( backbuffer, backBufferFormat, VK_IMAGE_ASPECT_COLOR_BIT );
+    VkImageView outputInterpView = GetOrCreateView( outputInterp, backBufferFormat, VK_IMAGE_ASPECT_COLOR_BIT );
+
+    NVSDK_NGX_Resource_VK backbufferRes = NVSDK_NGX_Create_ImageView_Resource_VK(
+        backbufferView, backbuffer, colorRange, backBufferFormat, width, height, false );
+    NVSDK_NGX_Resource_VK outputInterpRes = NVSDK_NGX_Create_ImageView_Resource_VK(
+        outputInterpView, outputInterp, colorRange, backBufferFormat, width, height, true );
+    NVSDK_NGX_Resource_VK depthRes = NVSDK_NGX_Create_ImageView_Resource_VK(
+        depthView, depth, colorRange, VK_FORMAT_R32_SFLOAT, width, height, false );
+    NVSDK_NGX_Resource_VK mvecsRes = NVSDK_NGX_Create_ImageView_Resource_VK(
+        mvecsView, mvecs, colorRange, VK_FORMAT_R16G16_SFLOAT, width, height, false );
+    NVSDK_NGX_Resource_VK hudlessRes = ( hudless != VK_NULL_HANDLE && hudlessView != VK_NULL_HANDLE ) ? NVSDK_NGX_Create_ImageView_Resource_VK(
+        hudlessView, hudless, colorRange, backBufferFormat, width, height, false ) : NVSDK_NGX_Resource_VK{};
+
+    NVSDK_NGX_VK_DLSSG_Eval_Params evalParams = {
+        .pBackbuffer        = &backbufferRes,
+        .pDepth             = &depthRes,
+        .pMVecs             = &mvecsRes,
+        .pHudless           = ( hudless != VK_NULL_HANDLE && hudlessView != VK_NULL_HANDLE ) ? &hudlessRes : nullptr,
+        .pOutputInterpFrame = &outputInterpRes,
+    };
+
+    NVSDK_NGX_DLSSG_Opt_Eval_Params optParams = {};
+    optParams.multiFrameCount       = 1;
+    optParams.multiFrameIndex       = 1;
+    optParams.cameraMotionIncluded  = 1;
+    optParams.reset                 = reset ? 1 : 0;
+    optParams.mvecScale[ 0 ]        = float( width );
+    optParams.mvecScale[ 1 ]        = float( height );
+    optParams.cameraNear            = cameraNear;
+    optParams.cameraFar             = cameraFar;
+    optParams.cameraFOV             = fovVerticalRad;
+    optParams.cameraAspectRatio     = float( width ) / float( height );
+
+    if( pView != nullptr )
+    {
+        optParams.cameraRight[ 0 ]   = pView[ 0 ];
+        optParams.cameraRight[ 1 ]   = pView[ 4 ];
+        optParams.cameraRight[ 2 ]   = pView[ 8 ];
+        optParams.cameraUp[ 0 ]      = pView[ 1 ];
+        optParams.cameraUp[ 1 ]      = pView[ 5 ];
+        optParams.cameraUp[ 2 ]      = pView[ 9 ];
+        optParams.cameraFwd[ 0 ]     = -pView[ 2 ];
+        optParams.cameraFwd[ 1 ]     = -pView[ 6 ];
+        optParams.cameraFwd[ 2 ]     = -pView[ 10 ];
+
+        const float tx = pView[ 12 ];
+        const float ty = pView[ 13 ];
+        const float tz = pView[ 14 ];
+        optParams.cameraPos[ 0 ]     = -( pView[ 0 ] * tx + pView[ 1 ] * ty + pView[ 2 ] * tz );
+        optParams.cameraPos[ 1 ]     = -( pView[ 4 ] * tx + pView[ 5 ] * ty + pView[ 6 ] * tz );
+        optParams.cameraPos[ 2 ]     = -( pView[ 8 ] * tx + pView[ 9 ] * ty + pView[ 10 ] * tz );
+    }
+
+    NVSDK_NGX_Result r = NGX_VK_EVALUATE_DLSSG(
+        cmd, pDlssgFeature, pParams, &evalParams, &optParams );
+    if( NVSDK_NGX_FAILED( r ) )
+    {
+        debug::Warning( "DLSS-G: NGX_VK_EVALUATE_DLSSG fail: {}", static_cast< int >( r ) );
         return false;
     }
 
@@ -604,7 +832,9 @@ RTGL1::DLSS::DLSS( VkInstance       _instance,
     , isInitialized( false )
     , pParams( nullptr )
     , pDlssFeature( nullptr )
+    , pDlssgFeature( nullptr )
     , prevDlssFeatureValues{}
+    , prevDlssgFeatureValues{}
 {
 }
 RTGL1::DLSS::~DLSS() {}
@@ -638,6 +868,28 @@ void RTGL1::DLSS::GetOptimalSettings( uint32_t               userWidth,
 }
 
 bool RTGL1::DLSS::IsDlssAvailable() const
+{
+    return false;
+}
+
+bool RTGL1::DLSS::IsDlssgAvailable() const
+{
+    return false;
+}
+
+void RTGL1::DLSS::DestroyDlssgFeature() {}
+
+bool RTGL1::DLSS::ValidateDlssgFeature( VkCommandBuffer, uint32_t, uint32_t, VkFormat )
+{
+    return false;
+}
+
+VkImageView RTGL1::DLSS::GetOrCreateView( VkImage, VkFormat, VkImageAspectFlags )
+{
+    return VK_NULL_HANDLE;
+}
+
+bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer, VkImage, VkImage, VkImage, VkImageView, VkImage, VkImageView, VkImage, VkImageView, uint32_t, uint32_t, VkFormat, const float*, float, float, float, bool )
 {
     return false;
 }

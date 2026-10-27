@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <vector>
 
 #include "Upscaler.h"
@@ -74,6 +75,33 @@ public:
                              uint32_t*              pOutHeight ) const;
 
     bool IsDlssAvailable() const;
+    bool IsDlssgAvailable() const;
+
+    bool ValidateDlssgFeature( VkCommandBuffer cmd,
+                               uint32_t        width,
+                               uint32_t        height,
+                               VkFormat        backBufferFormat );
+    void DestroyDlssgFeature();
+
+    bool EvaluateDlssg( VkCommandBuffer cmd,
+                        VkImage         backbuffer,
+                        VkImage         outputInterp,
+                        VkImage         depth,
+                        VkImageView     depthView,
+                        VkImage         mvecs,
+                        VkImageView     mvecsView,
+                        VkImage         hudless,
+                        VkImageView     hudlessView,
+                        uint32_t        width,
+                        uint32_t        height,
+                        VkFormat        backBufferFormat,
+                        const float*    pView,
+                        float           cameraNear,
+                        float           cameraFar,
+                        float           fovVerticalRad,
+                        bool            reset );
+
+    VkImageView GetOrCreateView( VkImage image, VkFormat format, VkImageAspectFlags aspect );
 
     static std::vector< const char* > GetDlssVulkanInstanceExtensions();
     static std::vector< const char* > GetDlssVulkanDeviceExtensions();
@@ -99,6 +127,16 @@ private:
     bool                 isInitialized;
     NVSDK_NGX_Parameter* pParams;
     NVSDK_NGX_Handle*    pDlssFeature;
+    NVSDK_NGX_Handle*    pDlssgFeature;
+
+    std::unordered_map< VkImage, VkImageView > viewCache;
+
+    struct PrevDlssgFeatureValues
+    {
+        uint32_t width;
+        uint32_t height;
+        VkFormat format;
+    } prevDlssgFeatureValues;
 
     struct PrevDlssFeatureValues
     {

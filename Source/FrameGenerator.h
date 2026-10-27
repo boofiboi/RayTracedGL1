@@ -90,12 +90,15 @@ public:
                                  uint32_t        width,
                                  uint32_t        height ) = 0;
 
+    virtual void SetDlss( std::shared_ptr< class DLSS > dlss ) {}
+
     virtual void ConfigureFrame( VkSwapchainKHR swapchain,
                                  uint32_t       frameIndex,
                                  uint32_t       width,
                                  uint32_t       height,
                                  uint32_t       frameId,
-                                 bool           frameGenEnabled ) = 0;
+                                 bool           frameGenEnabled,
+                                 bool           useDlssG = false ) = 0;
 };
 
 }

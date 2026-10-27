@@ -26,6 +26,7 @@
 
 #include <ffx_api/ffx_framegeneration.h>
 
+#include "DLSS.h"
 #include "MemoryAllocator.h"
 #include "Queues.h"
 #include "RenderResolutionHelper.h"
@@ -63,6 +64,11 @@ RTGL1::FrameGeneratorFSR3::FrameGeneratorFSR3( VkDevice                         
     , backBufferFormat( _backBufferFormat )
     , worldScale( _worldScale <= 0.0f ? 1.0f : _worldScale )
 {
+}
+
+void RTGL1::FrameGeneratorFSR3::SetDlss( std::shared_ptr< DLSS > _dlss )
+{
+    dlss = std::move( _dlss );
 }
 
 RTGL1::FrameGeneratorFSR3::~FrameGeneratorFSR3()
@@ -200,6 +206,22 @@ void RTGL1::FrameGeneratorFSR3::CreateHudlessImages( uint32_t width, uint32_t he
 
         r = vkBindImageMemory( device, hudlessImages[ i ], hudlessMemories[ i ], 0 );
         VK_CHECKERROR( r );
+
+        VkImageViewCreateInfo viewInfo = {
+            .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image    = hudlessImages[ i ],
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format   = backBufferFormat,
+            .subresourceRange = {
+                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 0,
+                .layerCount     = 1,
+            },
+        };
+        r = vkCreateImageView( device, &viewInfo, nullptr, &hudlessViews[ i ] );
+        VK_CHECKERROR( r );
     }
 }
 
@@ -207,6 +229,11 @@ void RTGL1::FrameGeneratorFSR3::DestroyHudlessImages()
 {
     for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
     {
+        if( hudlessViews[ i ] != VK_NULL_HANDLE )
+        {
+            vkDestroyImageView( device, hudlessViews[ i ], nullptr );
+            hudlessViews[ i ] = VK_NULL_HANDLE;
+        }
         if( hudlessImages[ i ] != VK_NULL_HANDLE )
         {
             vkDestroyImage( device, hudlessImages[ i ], nullptr );
@@ -374,14 +401,17 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     const float*                           pView,
     uint32_t                               frameId )
 {
-    if( !fgContext )
-    {
-        return;
-    }
-
     if( resetAccumulation )
     {
         pendingReset.store( true );
+    }
+
+    savedCameraNear = nearPlane;
+    savedCameraFar = farPlane;
+    savedFovVerticalRad = fovVerticalRad;
+    if( pView != nullptr )
+    {
+        memcpy( savedViewMatrix, pView, sizeof( savedViewMatrix ) );
     }
 
     using FI = FramebufferImageIndex;
@@ -392,6 +422,25 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
         FI::FB_IMAGE_INDEX_DEPTH_NDC, frameIndex, renderResolution.GetResolutionState() );
     auto [ motionImage, motionView, motionFormat, motionSz ] = framebuffers->GetImageHandles(
         FI::FB_IMAGE_INDEX_MOTION_DLSS, frameIndex, renderResolution.GetResolutionState() );
+
+    savedDepthImage = depthImage;
+    savedDepthView = depthView;
+    savedMotionImage = motionImage;
+    savedMotionView = motionView;
+
+    if( isDlssGActive && dlss )
+    {
+        dlss->ValidateDlssgFeature( cmd,
+                                    renderResolution.UpscaledWidth(),
+                                    renderResolution.UpscaledHeight(),
+                                    backBufferFormat );
+        return;
+    }
+
+    if( !fgContext )
+    {
+        return;
+    }
 
     VkImageCreateInfo depthInfo = {
         .sType       = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -480,7 +529,7 @@ void RTGL1::FrameGeneratorFSR3::CaptureHudless( VkCommandBuffer cmd,
                                                 uint32_t        width,
                                                 uint32_t        height )
 {
-    if( !fgContext || hudlessImages[ frameIndex ] == VK_NULL_HANDLE )
+    if( hudlessImages[ frameIndex ] == VK_NULL_HANDLE )
     {
         return;
     }
@@ -567,8 +616,14 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
                                                 uint32_t       width,
                                                 uint32_t       height,
                                                 uint32_t       frameId,
-                                                bool           frameGenEnabled )
+                                                bool           frameGenEnabled,
+                                                bool           useDlssG )
 {
+    isDlssGActive     = frameGenEnabled && useDlssG;
+    currentWidth      = width;
+    currentHeight     = height;
+    currentFrameIndex = frameIndex;
+
     if( !fgContext || !swapchainContext )
     {
         return;
@@ -606,6 +661,38 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
         if( self->pendingReset.exchange( false ) )
         {
             params->reset = true;
+        }
+
+        if( self->isDlssGActive && self->dlss )
+        {
+            VkCommandBuffer cb = static_cast< VkCommandBuffer >( params->commandList );
+            VkImage outInterpolatedImage = static_cast< VkImage >( params->outputs[ 0 ].resource );
+            VkImage realFrameImage = static_cast< VkImage >( params->presentColor.resource );
+
+            VkImage hudlessImg = self->hudlessImages[ self->currentFrameIndex ];
+            VkImageView hudlessVw = self->hudlessViews[ self->currentFrameIndex ];
+
+            bool ok = self->dlss->EvaluateDlssg(
+                cb,
+                realFrameImage,
+                outInterpolatedImage,
+                self->savedDepthImage,
+                self->savedDepthView,
+                self->savedMotionImage,
+                self->savedMotionView,
+                hudlessImg,
+                hudlessVw,
+                self->currentWidth,
+                self->currentHeight,
+                self->backBufferFormat,
+                self->savedViewMatrix,
+                self->savedCameraNear,
+                self->savedCameraFar,
+                self->savedFovVerticalRad,
+                params->reset
+            );
+
+            return ok ? FFX_API_RETURN_OK : FFX_API_RETURN_ERROR;
         }
 
         return ffxDispatch( &self->fgContext, &params->header );
@@ -676,12 +763,15 @@ void RTGL1::FrameGeneratorFSR3::CaptureHudless(
 {
 }
 
+void RTGL1::FrameGeneratorFSR3::SetDlss( std::shared_ptr< class DLSS > _dlss ) {}
+
 void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
                                                 uint32_t       frameIndex,
                                                 uint32_t       width,
                                                 uint32_t       height,
                                                 uint32_t       frameId,
-                                                bool           frameGenEnabled )
+                                                bool           frameGenEnabled,
+                                                bool           useDlssG )
 {
 }
 
