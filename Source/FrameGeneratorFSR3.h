@@ -147,6 +147,8 @@ private:
     float                              savedFovVerticalRad{ 0.0f };
     uint32_t                           currentWidth{ 0 };
     uint32_t                           currentHeight{ 0 };
+    uint32_t                           savedRenderWidth{ 0 };
+    uint32_t                           savedRenderHeight{ 0 };
     uint32_t                           currentFrameIndex{ 0 };
 #endif
 };

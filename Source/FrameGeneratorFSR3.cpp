@@ -427,6 +427,8 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     savedDepthView = depthView;
     savedMotionImage = motionImage;
     savedMotionView = motionView;
+    savedRenderWidth = renderResolution.Width();
+    savedRenderHeight = renderResolution.Height();
 
     if( isDlssGActive && dlss )
     {
@@ -684,6 +686,8 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
                 hudlessVw,
                 self->currentWidth,
                 self->currentHeight,
+                self->savedRenderWidth,
+                self->savedRenderHeight,
                 self->backBufferFormat,
                 self->savedViewMatrix,
                 self->savedCameraNear,

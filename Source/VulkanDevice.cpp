@@ -730,8 +730,8 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
 
         const bool isDlssActive = renderResolution.IsNvDlssEnabled();
-        const bool fgSupported  = isDlssActive ? ( nvDlss && nvDlss->IsDlssgAvailable() )
-                                               : ( frameGenerator && frameGenerator->IsAvailable() );
+        const bool fgSupported  = frameGenerator->IsAvailable() &&
+                                  ( isDlssActive ? ( nvDlss && nvDlss->IsDlssgAvailable() ) : true );
 
         frameGenerationActive = fgSupported && params.enableFrameGeneration;
 
@@ -1438,8 +1438,7 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
 
 bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
 {
-    return ( frameGenerator && frameGenerator->IsAvailable() ) ||
-           ( nvDlss && nvDlss->IsDlssgAvailable() );
+    return frameGenerator && frameGenerator->IsAvailable();
 }
 
 bool RTGL1::VulkanDevice::IsExportActive() const

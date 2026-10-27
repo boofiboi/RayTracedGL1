@@ -528,8 +528,10 @@ bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
                                  VkImageView     mvecsView,
                                  VkImage         hudless,
                                  VkImageView     hudlessView,
-                                 uint32_t        width,
-                                 uint32_t        height,
+                                 uint32_t        upscaledWidth,
+                                 uint32_t        upscaledHeight,
+                                 uint32_t        renderWidth,
+                                 uint32_t        renderHeight,
                                  VkFormat        backBufferFormat,
                                  const float*    pView,
                                  float           cameraNear,
@@ -554,15 +556,15 @@ bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
     VkImageView outputInterpView = GetOrCreateView( outputInterp, backBufferFormat, VK_IMAGE_ASPECT_COLOR_BIT );
 
     NVSDK_NGX_Resource_VK backbufferRes = NVSDK_NGX_Create_ImageView_Resource_VK(
-        backbufferView, backbuffer, colorRange, backBufferFormat, width, height, false );
+        backbufferView, backbuffer, colorRange, backBufferFormat, upscaledWidth, upscaledHeight, false );
     NVSDK_NGX_Resource_VK outputInterpRes = NVSDK_NGX_Create_ImageView_Resource_VK(
-        outputInterpView, outputInterp, colorRange, backBufferFormat, width, height, true );
+        outputInterpView, outputInterp, colorRange, backBufferFormat, upscaledWidth, upscaledHeight, true );
     NVSDK_NGX_Resource_VK depthRes = NVSDK_NGX_Create_ImageView_Resource_VK(
-        depthView, depth, colorRange, VK_FORMAT_R32_SFLOAT, width, height, false );
+        depthView, depth, colorRange, VK_FORMAT_R32_SFLOAT, renderWidth, renderHeight, false );
     NVSDK_NGX_Resource_VK mvecsRes = NVSDK_NGX_Create_ImageView_Resource_VK(
-        mvecsView, mvecs, colorRange, VK_FORMAT_R16G16_SFLOAT, width, height, false );
+        mvecsView, mvecs, colorRange, VK_FORMAT_R16G16_SFLOAT, renderWidth, renderHeight, false );
     NVSDK_NGX_Resource_VK hudlessRes = ( hudless != VK_NULL_HANDLE && hudlessView != VK_NULL_HANDLE ) ? NVSDK_NGX_Create_ImageView_Resource_VK(
-        hudlessView, hudless, colorRange, backBufferFormat, width, height, false ) : NVSDK_NGX_Resource_VK{};
+        hudlessView, hudless, colorRange, backBufferFormat, upscaledWidth, upscaledHeight, false ) : NVSDK_NGX_Resource_VK{};
 
     NVSDK_NGX_VK_DLSSG_Eval_Params evalParams = {
         .pBackbuffer        = &backbufferRes,
@@ -577,12 +579,20 @@ bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
     optParams.multiFrameIndex       = 1;
     optParams.cameraMotionIncluded  = 1;
     optParams.reset                 = reset ? 1 : 0;
-    optParams.mvecScale[ 0 ]        = float( width );
-    optParams.mvecScale[ 1 ]        = float( height );
+    optParams.mvecScale[ 0 ]        = float( renderWidth );
+    optParams.mvecScale[ 1 ]        = float( renderHeight );
     optParams.cameraNear            = cameraNear;
     optParams.cameraFar             = cameraFar;
     optParams.cameraFOV             = fovVerticalRad;
-    optParams.cameraAspectRatio     = float( width ) / float( height );
+    optParams.cameraAspectRatio     = float( upscaledWidth ) / float( upscaledHeight );
+    optParams.mvecsSubrectSize      = { renderWidth, renderHeight };
+    optParams.depthSubrectSize      = { renderWidth, renderHeight };
+    optParams.backbufferSubrectSize = { upscaledWidth, upscaledHeight };
+    optParams.outputInterpSubrectSize = { upscaledWidth, upscaledHeight };
+    if( hudless != VK_NULL_HANDLE && hudlessView != VK_NULL_HANDLE )
+    {
+        optParams.hudLessSubrectSize = { upscaledWidth, upscaledHeight };
+    }
 
     if( pView != nullptr )
     {
@@ -889,7 +899,7 @@ VkImageView RTGL1::DLSS::GetOrCreateView( VkImage, VkFormat, VkImageAspectFlags 
     return VK_NULL_HANDLE;
 }
 
-bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer, VkImage, VkImage, VkImage, VkImageView, VkImage, VkImageView, VkImage, VkImageView, uint32_t, uint32_t, VkFormat, const float*, float, float, float, bool )
+bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer, VkImage, VkImage, VkImage, VkImageView, VkImage, VkImageView, VkImage, VkImageView, uint32_t, uint32_t, uint32_t, uint32_t, VkFormat, const float*, float, float, float, bool )
 {
     return false;
 }
