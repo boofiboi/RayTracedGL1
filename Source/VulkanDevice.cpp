@@ -45,8 +45,7 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
             device, frameFences[ frameIndex ], outOfFrameFences[ frameIndex ] );
     }
 
-    // frame generation requires a vsync (FIFO) present mode for correct pacing
-    swapchain->RequestVsync( vsync || frameGenerationActive );
+    swapchain->RequestVsync( vsync );
     swapchain->AcquireImage( imageAvailableSemaphores[ frameIndex ] );
 
     VkSemaphore semaphoreToWaitOnSubmit = imageAvailableSemaphores[ frameIndex ];
@@ -176,7 +175,7 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
     {
         gu->frameId   = frameId;
         gu->timeDelta = static_cast< float >(
-            std::max< double >( currentFrameTime - previousFrameTime, 0.001 ) );
+            std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 ) );
         // monotonic clock, see RenderFrame: post-effect transitions must not
         // depend on the (resettable) game clock
         gu->time = static_cast< float >( currentFrameTime + postEffectTimeOffset );
@@ -629,7 +628,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
     FramebufferImageIndex accum = FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;
     {
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
-        double      timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
+        double      timeDelta = std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 );
 
         // presenting a stale frame (level transition) breaks temporal continuity,
         // so the next rendered frame starts with a clean upscaler history
@@ -733,7 +732,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         frameGenerationActive = frameGenerator->IsAvailable() && params.enableFrameGeneration;
 
         const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
-        double timeDelta = std::max< double >( currentFrameTime - previousFrameTime, 0.0001 );
+        double timeDelta = std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 );
 
         if( isFgActive )
         {
@@ -959,7 +958,14 @@ void RTGL1::VulkanDevice::DrawFrame( const RgDrawFrameInfo* pOriginalInfo )
 
     VkCommandBuffer cmd = currentFrameState.GetCmdBuffer();
 
-    previousFrameTime = currentFrameTime;
+    if( previousFrameTime < 0.0 || currentFrameTime <= 0.0 )
+    {
+        previousFrameTime = info.currentTime - ( 1.0 / 60.0 );
+    }
+    else
+    {
+        previousFrameTime = currentFrameTime;
+    }
     currentFrameTime  = info.currentTime;
 
     // The game clock (info.currentTime) is not monotonic: it resets to a small
