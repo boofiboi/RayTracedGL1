@@ -54,13 +54,11 @@ void main()
 
     if(!isSky)
     {
-        vec2 mr = texelFetch(framebufMetallicRoughness_Sampler, cbp, 0).rg;
-        float metallic = mr.r;
-        float roughness = mr.g;
+        float metallic = texelFetch(framebufMetallicRoughness_Sampler, cbp, 0).r;
         vec3 ro_s = getSpecularColor(albedo, metallic);
-        vec3 ro_d = albedo * (1.0 - metallic) * (vec3(1.0) - ro_s);
-        float specRoughFactor = 1.0 - smoothstep(FAKE_ROUGH_SPECULAR_THRESHOLD, FAKE_ROUGH_SPECULAR_THRESHOLD + FAKE_ROUGH_SPECULAR_LENGTH, roughness);
-        illuminated = diffuse * ro_d + spec * ro_s * specRoughFactor;
+        vec3 ro_d = albedo * (1.0 - metallic);
+
+        illuminated = diffuse * ro_d + spec * ro_s;
 
         if((globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_ONLY_DIRECT_DIFFUSE) != 0)
         {

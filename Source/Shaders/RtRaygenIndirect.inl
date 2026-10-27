@@ -105,20 +105,17 @@ SampleIndirect processIndirect( const uint seed, const Surface surf, out float o
 {
     vec3 bounceDir;
 
-    if( surf.roughness > FAKE_ROUGH_SPECULAR_THRESHOLD )
-    {
-        bounceDir = getDiffuseBounce( seed, 1, surf.normal, oneOverSourcePdf );
-    }
-    else
-    {
-        bounceDir = getSpecularBounce( seed,
-                                       1,
-                                       surf.normal,
-                                       surf.roughness,
-                                       surf.specularColor,
-                                       surf.toViewerDir,
-                                       oneOverSourcePdf );
-    }
+#if 1
+    bounceDir = getSpecularBounce( seed,
+                                   1,
+                                   surf.normal,
+                                   surf.roughness,
+                                   surf.specularColor,
+                                   surf.toViewerDir,
+                                   oneOverSourcePdf );
+#else
+    bounceDir = getDiffuseBounce( seed, 1, surf.normal, oneOverSourcePdf );
+#endif
 
     vec3 emis;
     const Surface hitSurf = traceBounce(surf.position + surf.normal * 0.01, 
