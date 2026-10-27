@@ -621,7 +621,13 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
                                                 bool           frameGenEnabled,
                                                 bool           useDlssG )
 {
-    isDlssGActive     = frameGenEnabled && useDlssG;
+    bool newDlssG = frameGenEnabled && useDlssG;
+    if( isDlssGActive != newDlssG || ( frameGenEnabled && !prevFrameGenEnabled ) )
+    {
+        pendingReset.store( true );
+    }
+    prevFrameGenEnabled = frameGenEnabled;
+    isDlssGActive       = newDlssG;
     currentWidth      = width;
     currentHeight     = height;
     currentFrameIndex = frameIndex;

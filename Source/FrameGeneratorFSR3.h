@@ -136,6 +136,7 @@ private:
 
     std::shared_ptr< class DLSS >      dlss;
     bool                               isDlssGActive{ false };
+    bool                               prevFrameGenEnabled{ false };
 
     VkImage                            savedDepthImage{ VK_NULL_HANDLE };
     VkImageView                        savedDepthView{ VK_NULL_HANDLE };

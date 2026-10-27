@@ -108,6 +108,7 @@ public:
     bool IsSuspended() const;
     bool IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique technique ) const;
     bool IsFrameGenerationAvailable() const;
+    bool IsDlssgAvailable() const;
     bool IsExportActive() const;
 
     RgPrimitiveVertex* ScratchAllocForVertices( uint32_t count );
@@ -260,6 +261,7 @@ private:
     bool allowGeometryWithSkyFlag;
 
     RenderResolutionHelper renderResolution;
+    RgRenderUpscaleTechnique prevUpscaleTechnique{ RG_RENDER_UPSCALE_TECHNIQUE_LINEAR };
 
     double previousFrameTime;
     double currentFrameTime;

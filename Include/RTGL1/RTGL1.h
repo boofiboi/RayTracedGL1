@@ -1013,6 +1013,7 @@ RGAPI void RGCONV               rgUtilImScratchPushVertices( RgInstance instance
 
 RGAPI RgBool32 RGCONV           rgUtilIsUpscaleTechniqueAvailable( RgInstance instance, RgRenderUpscaleTechnique technique );
 RGAPI RgBool32 RGCONV           rgUtilIsFrameGenerationAvailable( RgInstance instance );
+RGAPI RgBool32 RGCONV           rgUtilIsDlssgAvailable( RgInstance instance );
 RGAPI RgBool32 RGCONV           rgUtilIsExportActive( RgInstance instance );
 RGAPI const char* RGCONV        rgUtilGetResultDescription( RgResult result );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorByte4D( uint8_t r, uint8_t g, uint8_t b, uint8_t a );

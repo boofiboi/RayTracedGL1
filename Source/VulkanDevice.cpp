@@ -626,13 +626,15 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 
 
     FramebufferImageIndex accum = FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;
+    bool                  upscaleTechniqueChanged = false;
     {
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
         double      timeDelta = std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 );
 
-        // presenting a stale frame (level transition) breaks temporal continuity,
-        // so the next rendered frame starts with a clean upscaler history
-        const bool resetUpscaler = params.resetUpscalerHistory || forceUpscalerReset;
+        upscaleTechniqueChanged = ( prevUpscaleTechnique != renderResolution.GetUpscaleTechnique() );
+        prevUpscaleTechnique    = renderResolution.GetUpscaleTechnique();
+
+        const bool resetUpscaler = params.resetUpscalerHistory || forceUpscalerReset || upscaleTechniqueChanged;
         forceUpscalerReset       = drawInfo.presentPrevFrame;
 
         // upscale finalized image
@@ -769,7 +771,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                           drawInfo.cameraNear,
                                           drawInfo.cameraFar,
                                           drawInfo.fovYRadians,
-                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame,
+                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame || upscaleTechniqueChanged,
                                           uniform->GetData()->view,
                                           frameId );
         }
@@ -1439,6 +1441,11 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
 bool RTGL1::VulkanDevice::IsFrameGenerationAvailable() const
 {
     return frameGenerator && frameGenerator->IsAvailable();
+}
+
+bool RTGL1::VulkanDevice::IsDlssgAvailable() const
+{
+    return nvDlss && nvDlss->IsDlssgAvailable();
 }
 
 bool RTGL1::VulkanDevice::IsExportActive() const

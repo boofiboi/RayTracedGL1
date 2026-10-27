@@ -372,6 +372,11 @@ RgBool32 rgUtilIsFrameGenerationAvailable( RgInstance instance )
     return Call( instance, &RTGL1::VulkanDevice::IsFrameGenerationAvailable );
 }
 
+RgBool32 rgUtilIsDlssgAvailable( RgInstance instance )
+{
+    return Call( instance, &RTGL1::VulkanDevice::IsDlssgAvailable );
+}
+
 RgBool32 rgUtilIsExportActive( RgInstance instance )
 {
     return Call( instance, &RTGL1::VulkanDevice::IsExportActive );

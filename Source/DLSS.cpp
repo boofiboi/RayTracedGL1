@@ -379,6 +379,8 @@ static NVSDK_NGX_PerfQuality_Value ToNGXPerfQuality( RgRenderResolutionMode mode
 {
     switch( mode )
     {
+        case RG_RENDER_RESOLUTION_MODE_CUSTOM:
+            return NVSDK_NGX_PerfQuality_Value::NVSDK_NGX_PerfQuality_Value_DLAA;
         case RG_RENDER_RESOLUTION_MODE_ULTRA_PERFORMANCE:
             return NVSDK_NGX_PerfQuality_Value::NVSDK_NGX_PerfQuality_Value_UltraPerformance;
         case RG_RENDER_RESOLUTION_MODE_PERFORMANCE:
@@ -749,6 +751,11 @@ void RTGL1::DLSS::GetOptimalSettings( uint32_t               userWidth,
     *pOutWidth  = userWidth;
     *pOutHeight = userHeight;
 
+    if( mode == RG_RENDER_RESOLUTION_MODE_CUSTOM )
+    {
+        return;
+    }
+
     if( !isInitialized || pParams == nullptr )
     {
         return;
@@ -872,9 +879,8 @@ void RTGL1::DLSS::GetOptimalSettings( uint32_t               userWidth,
                                       uint32_t*              pOutWidth,
                                       uint32_t*              pOutHeight ) const
 {
-    throw RgException(
-        RG_RESULT_WRONG_FUNCTION_ARGUMENT,
-        "RTGL1 was built without DLSS support. Enable RG_WITH_NVIDIA_DLSS CMake option." );
+    *pOutWidth  = userWidth;
+    *pOutHeight = userHeight;
 }
 
 bool RTGL1::DLSS::IsDlssAvailable() const

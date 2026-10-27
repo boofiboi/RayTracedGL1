@@ -105,8 +105,8 @@ public:
 
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_CUSTOM )
             {
-                renderWidth  = params.customRenderSize.width;
-                renderHeight = params.customRenderSize.height;
+                renderWidth  = params.customRenderSize.width ? params.customRenderSize.width : windowWidth;
+                renderHeight = params.customRenderSize.height ? params.customRenderSize.height : windowHeight;
             }
             else
             {
@@ -130,8 +130,8 @@ public:
         {
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_CUSTOM )
             {
-                renderWidth  = params.customRenderSize.width;
-                renderHeight = params.customRenderSize.height;
+                renderWidth  = params.customRenderSize.width ? params.customRenderSize.width : windowWidth;
+                renderHeight = params.customRenderSize.height ? params.customRenderSize.height : windowHeight;
             }
             else
             {
@@ -153,8 +153,8 @@ public:
         {
             if( resolutionMode == RG_RENDER_RESOLUTION_MODE_CUSTOM )
             {
-                renderWidth  = params.customRenderSize.width;
-                renderHeight = params.customRenderSize.height;
+                renderWidth  = params.customRenderSize.width ? params.customRenderSize.width : windowWidth;
+                renderHeight = params.customRenderSize.height ? params.customRenderSize.height : windowHeight;
             }
         }
     }
@@ -190,6 +190,7 @@ public:
         return upscaleTechnique == RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS;
     }
     bool  IsUpscaleEnabled() const { return IsAmdFsr3Enabled() || IsNvDlssEnabled(); }
+    RgRenderUpscaleTechnique GetUpscaleTechnique() const { return upscaleTechnique; }
 
     float GetAmdFsrSharpness() const { return 1.0f; } // 0.0 - max, 1.0 - min
 
