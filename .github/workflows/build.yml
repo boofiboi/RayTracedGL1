@@ -16,6 +16,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Download DLSS SDK
+        uses: actions/checkout@v4
+        with:
+          repository: NVIDIA/DLSS
+          path: Source/External/DLSS
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -62,6 +68,9 @@ jobs:
           Copy-Item -Path "Build/x64-Release/Release/RayTracedGL1.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           Copy-Item -Path "Build/x64-Release/Release/RayTracedGL1.lib" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           Copy-Item -Path "Build/x64-Release/Release/NRI.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          if (Test-Path "Source/External/DLSS/lib/Windows_x86_64/rel") {
+            Copy-Item -Path "Source/External/DLSS/lib/Windows_x86_64/rel/*.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          }
           Copy-Item -Path "bin/amd_fidelityfx_vk.dll" -Destination "artifact_rtgl1/bin/" -Force
           Copy-Item -Path "Build/shaders/*.spv" -Destination "artifact_rtgl1/Build/shaders/" -Force
 

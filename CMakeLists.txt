@@ -226,6 +226,20 @@ if (RG_WITH_NVIDIA_DLSS)
         set(DLSS_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/DLSS")
     endif()
 
+    if (NOT DLSS_SDK_DIR AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/DLSS")
+        message(STATUS "DLSS SDK not found. Cloning https://github.com/NVIDIA/DLSS...")
+        find_package(Git QUIET)
+        if (Git_FOUND)
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} clone --depth 1 https://github.com/NVIDIA/DLSS.git "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/DLSS"
+                RESULT_VARIABLE GIT_CLONE_DLSS_RESULT
+            )
+            if (GIT_CLONE_DLSS_RESULT EQUAL 0 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/DLSS")
+                set(DLSS_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Source/External/DLSS")
+            endif()
+        endif()
+    endif()
+
     if (DLSS_SDK_DIR)
         message(STATUS "Found DLSS SDK: ${DLSS_SDK_DIR}")
         target_include_directories(RayTracedGL1 PRIVATE "${DLSS_SDK_DIR}/include")
@@ -239,6 +253,19 @@ if (RG_WITH_NVIDIA_DLSS)
                 target_link_libraries(RayTracedGL1 PRIVATE "${DLSS_LIB_DIR}/nvsdk_ngx_d_dbg.lib")
             else()
                 target_link_libraries(RayTracedGL1 PRIVATE "${DLSS_LIB_DIR}/nvsdk_ngx_d.lib")
+            endif()
+            set(DLSS_BIN_DIR "${DLSS_SDK_DIR}/lib/Windows_x86_64/rel")
+            if (BUILD_TYPE STREQUAL "DEBUG" AND EXISTS "${DLSS_SDK_DIR}/lib/Windows_x86_64/dev/nvngx_dlss.dll")
+                set(DLSS_BIN_DIR "${DLSS_SDK_DIR}/lib/Windows_x86_64/dev")
+            endif()
+            if (EXISTS "${DLSS_BIN_DIR}/nvngx_dlss.dll")
+                add_custom_command(TARGET RayTracedGL1 POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLSS_BIN_DIR}/nvngx_dlss.dll"
+                        "$<TARGET_FILE_DIR:RayTracedGL1>"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLSS_BIN_DIR}/nvngx_dlssg.dll"
+                        "$<TARGET_FILE_DIR:RayTracedGL1>")
             endif()
         else()
             target_link_libraries(RayTracedGL1 PRIVATE "${DLSS_SDK_DIR}/lib/Linux_x86_64/libnvsdk_ngx.a")
