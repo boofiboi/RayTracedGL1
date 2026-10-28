@@ -68,6 +68,12 @@ vec3 demodulateSpecular(const vec3 contrib, const vec3 surfSpecularColor)
     return contrib / max(vec3(0.01), surfSpecularColor);
 }
 
+vec3 getFresnelSchlickRoughness(float cosTheta, const vec3 specularColor, float roughness)
+{
+    vec3 f90 = max(vec3(1.0 - roughness), specularColor);
+    return specularColor + (f90 - specularColor) * pow(1.0 - max(cosTheta, 0.0), 5.0);
+}
+
 // nl -- cos between surface normal and light direction
 // specularColor -- reflectance color at zero angle
 vec3 getFresnelSchlick(float nl, const vec3 specularColor)
@@ -124,28 +130,20 @@ vec3 evalBRDFSmithGGX(const vec3 n, const vec3 v, const vec3 l, float alpha, con
 {
     alpha = max(alpha, MIN_GGX_ROUGHNESS);
 
-    const float nl = max(dot(n, l), 0);
+    const float nl = max(dot(n, l), 0.0);
+    const float nv = max(dot(n, v), 0.0);
 
-    if (nl <= 0)
+    if (nl <= 0.0 || nv <= 0.0)
     {
         return vec3(0.0);
     }
 
-    const vec3 F = getFresnelSchlick(nl, specularColor);
+    const vec3 h = normalize( v + l );
+    const float vh = max(dot(v, h), 0.0);
 
-    // here, microfacet normal is a half-vector,
-    // since we know in which direction l should be reflected
-    const vec3  h = normalize( v + l );
+    const vec3 F = getFresnelSchlickRoughness(vh, specularColor, alpha);
     const float D = D_GGX( dot( n, h ), alpha );
-
-    float G2Modif;
-    {
-        const float nv = max(dot(n, v), 0);
-
-        // approximation for SmithGGX, Hammon ("PBR Diffuse Lighting for GGX+Smith Microsurfaces")
-        // inlcudes 1 / (4 * nl * nv)
-        G2Modif = 0.5 / mix(2 * nl * nv, nl + nv, alpha);
-    }
+    const float G2Modif = 0.5 / mix(2.0 * nl * nv, nl + nv, alpha);
 
     return F * G2Modif * D;
 }
