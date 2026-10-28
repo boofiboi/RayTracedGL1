@@ -677,9 +677,6 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
             VkImage outInterpolatedImage = static_cast< VkImage >( params->outputs[ 0 ].resource );
             VkImage realFrameImage = static_cast< VkImage >( params->presentColor.resource );
 
-            VkImage hudlessImg = self->hudlessImages[ self->currentFrameIndex ];
-            VkImageView hudlessVw = self->hudlessViews[ self->currentFrameIndex ];
-
             bool ok = self->dlss->EvaluateDlssg(
                 cb,
                 realFrameImage,
@@ -688,8 +685,8 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
                 self->savedDepthView,
                 self->savedMotionImage,
                 self->savedMotionView,
-                hudlessImg,
-                hudlessVw,
+                VK_NULL_HANDLE,
+                VK_NULL_HANDLE,
                 self->currentWidth,
                 self->currentHeight,
                 self->savedRenderWidth,
