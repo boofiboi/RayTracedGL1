@@ -60,6 +60,7 @@ layout(local_size_x = COMPUTE_SVGF_ATROUS_GROUP_SIZE_X, local_size_y = COMPUTE_S
 
 const int STEP_SIZE = 1;
 const float SIGMA_LUMINANCE = 4.0;
+const float SIGMA_LUMINANCE_INDIR = 8.0;
 // 3x3 box filter
 const int FILTER_RADIUS = 1;
 const float WAVELET_KERNEL[2][2] = 
@@ -222,7 +223,10 @@ void atrous0(
     outIndir    = decodeE5B9G9R9(center.encIndirColor);
 
     const float l = getLuminance(outDiff);
-    const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * prefilterLuminanceVariance() + 0.00001);
+    const float l_indir = getLuminance(outIndir);
+    const float filteredVar = prefilterLuminanceVariance();
+    const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * filteredVar + 0.00001);
+    const float wLumMultiplierIndir = 1.0 / (SIGMA_LUMINANCE_INDIR * max(filteredVar, max(l_indir, 0.1)));
    
     // the rougher the surface, the more blur to apply
     const float wRoughMultiplier = clamp(center.roughness * 30, 0, 1);
@@ -257,11 +261,13 @@ void atrous0(
 
 
             const float l_q = getLuminance(other.directDiffuseColor);
+            const float l_q_indir = getLuminance(decodeE5B9G9R9(other.encIndirColor));
             const float n_n = max(0.0, dotEnc(center.encNormal, other.encNormal));
 
             const float w_z = abs(center.depth - other.depth) / max(gradDepth * (abs(xx) + abs(yy)), 0.01);
             const float w_n = pow(n_n, 128.0);
             const float w_l = abs(l - l_q) * wLumMultiplier;
+            const float w_l_indir = abs(l_indir - l_q_indir) * wLumMultiplierIndir;
 
             // larger weight if roughness difference is small
             float w_r =  max(0, 1 - 10 * abs(center.roughness - other.roughness)) * wRoughMultiplier;
@@ -278,7 +284,7 @@ void atrous0(
 
             const float wDiff      = wBase * exp(-w_l);
             const float wSpec      = wBase * w_r;
-            const float wDiffIndir = wBase;
+            const float wDiffIndir = wBase * exp(-w_l_indir);
 
 
             outDiff += other.directDiffuseColor * wDiff;

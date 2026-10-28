@@ -60,6 +60,7 @@ layout (constant_id = 0) const uint atrousIteration = 1;
 
 const int STEP_SIZE = 1 << atrousIteration;
 const float SIGMA_LUMINANCE = 4.0;
+const float SIGMA_LUMINANCE_INDIR = 8.0;
 
 
 float getPrefilteredLuminanceVariance(const ivec2 pix)
@@ -102,6 +103,8 @@ void atrous(sampler2D samplerDiff,
 
     const float l = getLuminance(outDiff);
     const float wLumMultiplier = 1.0 / (SIGMA_LUMINANCE * getPrefilteredLuminanceVariance(pix) + 0.00001);
+    const float l_indir = getLuminance(outIndir);
+    const float wLumMultiplierIndir = 1.0 / (SIGMA_LUMINANCE_INDIR * max(getPrefilteredLuminanceVariance(pix), max(l_indir, 0.1)));
    
     // the rougher the surface, the more blur to apply
     const float roughness = texelFetch(framebufMetallicRoughness_Sampler, pix, 0).g;
@@ -173,11 +176,13 @@ void atrous(sampler2D samplerDiff,
             const float n_n         = max(0.0, dot(normal, normal_q));
 
             const vec3 indir_q      = decodeE5B9G9R9(texelFetch(samplerIndir,       pix_q, 0).r);
+            const float l_q_indir   = getLuminance(indir_q);
 
 
             const float w_z = abs(depth - depth_q) / max(gradDepth * (abs(xx) + abs(yy)), 0.01);
             const float w_n = pow(n_n, 128.0);
             const float w_l = abs(l - l_q) * wLumMultiplier;
+            const float w_l_indir = abs(l_indir - l_q_indir) * wLumMultiplierIndir;
 
             // larger weight if roughness difference is small
             float w_r =  max(0, 1 - 10 * abs(roughness - roughness_q)) * wRoughMultiplier;
@@ -194,7 +199,7 @@ void atrous(sampler2D samplerDiff,
 
             const float wDiff      = wBase * exp(-w_l);
             const float wSpec      = wBase * w_r;
-            const float wDiffIndir = wBase;
+            const float wDiffIndir = wBase * exp(-w_l_indir);
 
 
             outDiff += diffColor_q * wDiff;
