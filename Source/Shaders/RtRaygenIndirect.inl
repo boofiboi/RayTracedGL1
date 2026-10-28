@@ -210,7 +210,7 @@ float getDiffuseWeight( float roughness )
 #define TEMPORAL_SAMPLES_INDIR    1
 #define TEMPORAL_RADIUS_INDIR_MAX 2.0
 
-#define SPATIAL_SAMPLES_INDIR 6
+#define SPATIAL_SAMPLES_INDIR 8
 #define SPATIAL_RADIUS_INDIR  mix( 8.0, 32.0, clamp( globalUniform.renderHeight / 1080.0, 0.0, 1.0 ) ) 
 
 #define DEBUG_TRACE_BIAS_CORRECT_RAY 0

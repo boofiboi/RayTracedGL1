@@ -339,7 +339,7 @@ void main()
             diffHistoryLength *= pow(1.0 - antilagAlpha_Diff, 10);
             diffHistoryLength = clamp(diffHistoryLength + 1.0, 1.0, 256.0);
 
-            const float minAlpha = 0.01;
+            const float minAlpha = 0.004;
             float alphaColor   = max(minAlpha, 1.0 / diffHistoryLength);
             float alphaMoments = max(minAlpha, 1.0 / diffHistoryLength);
 
@@ -356,7 +356,7 @@ void main()
             indirHistoryLength *= pow(1.0 - antilagAlpha_Indir, 10);
             indirHistoryLength = clamp(indirHistoryLength + 1.0, 1.0, 256.0);
 
-            const float minAlpha = 0.01;
+            const float minAlpha = 0.004;
             float alphaColor = max(minAlpha, 1.0 / indirHistoryLength);
 
             alphaColor = mix(alphaColor, 1.0, antilagAlpha_Indir);
