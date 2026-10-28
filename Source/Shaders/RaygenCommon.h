@@ -552,6 +552,11 @@ Reservoir selectLight_Direct(const ivec2 pix, uint seed, const Surface surf, con
 
             if (selected_curFrame != UINT32_MAX && selected_curFrame != LIGHT_INDEX_NONE)
             {
+                if (initReservoir.selected != LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET && selected_curFrame == LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET)
+                {
+                    continue;
+                }
+
                 temporalTargetPdf_curSurf = targetPdfForLightSample(selected_curFrame, surf, pointRnd);
                 temporal.selected = selected_curFrame;
             }
@@ -582,6 +587,11 @@ Reservoir selectLight_Direct(const ivec2 pix, uint seed, const Surface surf, con
         }
 
         Reservoir spatial = imageLoadReservoirInitial(pp);
+
+        if (initReservoir.selected != LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET && spatial.selected == LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET)
+        {
+            continue;
+        }
 
         float rnd = rnd16(seed, salt++);
         updateCombinedReservoir(
@@ -735,10 +745,7 @@ vec3 processDirectIllumination( uint          seed,
     );
 
     #if SHIPPING_HACK
-    if( reservoir.selected != LIGHT_ARRAY_DIRECTIONAL_LIGHT_OFFSET )
-    {
-        out_diffuse = clamp( out_diffuse, vec3( 0 ), vec3( 20 ) );
-    }
+    out_diffuse = clamp( out_diffuse, vec3( 0 ), vec3( 20 ) );
     #endif
 
     return out_diffuse;
