@@ -28,6 +28,7 @@
 #include "CmdLabel.h"
 #include "HaltonSequence.h"
 #include "RenderResolutionHelper.h"
+#include "Utils.h"
 
 
 #ifdef RG_USE_NVIDIA_DLSS
@@ -608,15 +609,17 @@ bool RTGL1::DLSS::ValidateDlssgFeature( VkCommandBuffer cmd,
         return false;
     }
 
+    VkFormat unormFormat = Utils::ToUnorm( backBufferFormat );
+
     if( prevDlssgFeatureValues.width == width && prevDlssgFeatureValues.height == height &&
-        prevDlssgFeatureValues.format == backBufferFormat && pDlssgFeature != nullptr )
+        prevDlssgFeatureValues.format == unormFormat && pDlssgFeature != nullptr )
     {
         return true;
     }
 
     prevDlssgFeatureValues.width  = width;
     prevDlssgFeatureValues.height = height;
-    prevDlssgFeatureValues.format = backBufferFormat;
+    prevDlssgFeatureValues.format = unormFormat;
 
     if( pDlssgFeature != nullptr )
     {
@@ -626,7 +629,7 @@ bool RTGL1::DLSS::ValidateDlssgFeature( VkCommandBuffer cmd,
     NVSDK_NGX_DLSSG_Create_Params dlssgParams = {
         .Width                    = width,
         .Height                   = height,
-        .NativeBackbufferFormat   = static_cast< unsigned int >( backBufferFormat ),
+        .NativeBackbufferFormat   = static_cast< unsigned int >( unormFormat ),
         .RenderWidth              = width,
         .RenderHeight             = height,
         .DynamicResolutionScaling = false,
@@ -674,6 +677,8 @@ bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
         return false;
     }
 
+    VkFormat unormFormat = Utils::ToUnorm( backBufferFormat );
+
     VkImageSubresourceRange colorRange = {
         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
         .baseMipLevel   = 0,
@@ -682,19 +687,19 @@ bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
         .layerCount     = 1,
     };
 
-    VkImageView backbufferView = GetOrCreateView( backbuffer, backBufferFormat, VK_IMAGE_ASPECT_COLOR_BIT );
-    VkImageView outputInterpView = GetOrCreateView( outputInterp, backBufferFormat, VK_IMAGE_ASPECT_COLOR_BIT );
+    VkImageView backbufferView = GetOrCreateView( backbuffer, unormFormat, VK_IMAGE_ASPECT_COLOR_BIT );
+    VkImageView outputInterpView = GetOrCreateView( outputInterp, unormFormat, VK_IMAGE_ASPECT_COLOR_BIT );
 
     NVSDK_NGX_Resource_VK backbufferRes = NVSDK_NGX_Create_ImageView_Resource_VK(
-        backbufferView, backbuffer, colorRange, backBufferFormat, upscaledWidth, upscaledHeight, false );
+        backbufferView, backbuffer, colorRange, unormFormat, upscaledWidth, upscaledHeight, false );
     NVSDK_NGX_Resource_VK outputInterpRes = NVSDK_NGX_Create_ImageView_Resource_VK(
-        outputInterpView, outputInterp, colorRange, backBufferFormat, upscaledWidth, upscaledHeight, true );
+        outputInterpView, outputInterp, colorRange, unormFormat, upscaledWidth, upscaledHeight, true );
     NVSDK_NGX_Resource_VK depthRes = NVSDK_NGX_Create_ImageView_Resource_VK(
         depthView, depth, colorRange, VK_FORMAT_R32_SFLOAT, renderWidth, renderHeight, false );
     NVSDK_NGX_Resource_VK mvecsRes = NVSDK_NGX_Create_ImageView_Resource_VK(
         mvecsView, mvecs, colorRange, VK_FORMAT_R16G16_SFLOAT, renderWidth, renderHeight, false );
     NVSDK_NGX_Resource_VK hudlessRes = ( hudless != VK_NULL_HANDLE && hudlessView != VK_NULL_HANDLE ) ? NVSDK_NGX_Create_ImageView_Resource_VK(
-        hudlessView, hudless, colorRange, backBufferFormat, upscaledWidth, upscaledHeight, false ) : NVSDK_NGX_Resource_VK{};
+        hudlessView, hudless, colorRange, unormFormat, upscaledWidth, upscaledHeight, false ) : NVSDK_NGX_Resource_VK{};
 
     NVSDK_NGX_VK_DLSSG_Eval_Params evalParams = {
         .pBackbuffer        = &backbufferRes,
