@@ -726,6 +726,7 @@ void RTGL1::VulkanDevice::CreateInstance( const RgInstanceCreateInfo& info )
 
         if( !isSupported )
         {
+            debug::Warning( "DLSS: Required Vulkan instance extension '{}' is not supported by driver", n );
             continue;
         }
 
@@ -958,6 +959,7 @@ void RTGL1::VulkanDevice::CreateDevice()
 
         if( !isSupported )
         {
+            debug::Warning( "DLSS: Required Vulkan device extension '{}' is not supported by driver", n );
             continue;
         }
 

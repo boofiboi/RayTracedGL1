@@ -20,6 +20,7 @@
 
 #include "DLSS.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <regex>
 
@@ -70,6 +71,33 @@ RTGL1::DLSS::DLSS( VkInstance       _instance,
     }
 }
 
+static const char* GetNgxResultString( NVSDK_NGX_Result result )
+{
+    switch( result )
+    {
+        case NVSDK_NGX_Result_Success: return "Success";
+        case NVSDK_NGX_Result_FAIL_FeatureNotSupported: return "Feature not supported (NVIDIA RTX GPU required)";
+        case NVSDK_NGX_Result_FAIL_PlatformError: return "Platform error (graphics API, driver, or OS error)";
+        case NVSDK_NGX_Result_FAIL_FeatureAlreadyExists: return "Feature already exists";
+        case NVSDK_NGX_Result_FAIL_FeatureNotFound: return "Feature not found (nvngx_dlss.dll missing or unable to load)";
+        case NVSDK_NGX_Result_FAIL_InvalidParameter: return "Invalid parameter";
+        case NVSDK_NGX_Result_FAIL_ScratchBufferTooSmall: return "Scratch buffer too small";
+        case NVSDK_NGX_Result_FAIL_NotInitialized: return "Not initialized";
+        case NVSDK_NGX_Result_FAIL_UnsupportedInputFormat: return "Unsupported input format";
+        case NVSDK_NGX_Result_FAIL_RWFlagMissing: return "RW flag missing";
+        case NVSDK_NGX_Result_FAIL_MissingInput: return "Missing input";
+        case NVSDK_NGX_Result_FAIL_UnableToInitializeFeature: return "Unable to initialize feature (nvngx_dlss.dll missing or driver incompatible)";
+        case NVSDK_NGX_Result_FAIL_OutOfDate: return "Out of date (NVIDIA driver update required)";
+        case NVSDK_NGX_Result_FAIL_OutOfGPUMemory: return "Out of GPU memory";
+        case NVSDK_NGX_Result_FAIL_UnsupportedFormat: return "Unsupported format";
+        case NVSDK_NGX_Result_FAIL_UnableToWriteToAppDataPath: return "Unable to write to application data path";
+        case NVSDK_NGX_Result_FAIL_UnsupportedParameter: return "Unsupported parameter";
+        case NVSDK_NGX_Result_FAIL_Denied: return "Denied by NVIDIA driver";
+        case NVSDK_NGX_Result_FAIL_NotImplemented: return "Not implemented";
+        default: return "Unknown NGX error";
+    }
+}
+
 static std::wstring GetFolderPath()
 {
     #if defined( _WIN32 )
@@ -100,21 +128,109 @@ static std::wstring GetFolderPath()
     return curFolderPath.substr( 0, p );
 }
 
+#if defined( _WIN32 )
+static std::wstring GetDllFolderPath()
+{
+    HMODULE hModule = NULL;
+    if( GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast< LPCWSTR >( &GetFolderPath ),
+            &hModule ) )
+    {
+        wchar_t modPath[ MAX_PATH ];
+        if( GetModuleFileNameW( hModule, modPath, MAX_PATH ) )
+        {
+            std::wstring curFolderPath = modPath;
+            auto         p             = curFolderPath.find_last_of( L"\\/" );
+            if( p != std::wstring::npos )
+            {
+                return curFolderPath.substr( 0, p );
+            }
+        }
+    }
+    return {};
+}
+#endif
+
 bool RTGL1::DLSS::TryInit( VkInstance       instance,
                            VkDevice         device,
                            VkPhysicalDevice physDevice,
                            const char*      pAppGuid,
                            bool             enableDebug )
 {
+    VkPhysicalDeviceProperties devProps{};
+    vkGetPhysicalDeviceProperties( physDevice, &devProps );
+
+    if( devProps.vendorID != 0x10DE )
+    {
+        debug::Warning( "DLSS: Disabled - GPU is not NVIDIA (detected: {}, vendor ID 0x{:04X})",
+                        devProps.deviceName,
+                        devProps.vendorID );
+        return false;
+    }
+
     NVSDK_NGX_Result r;
 
-    std::wstring   dllPath0  = GetFolderPath();
-    std::wstring   dllPath1  = GetFolderPath() + ( enableDebug ? L"/dev/" : L"/rel/" );
-    const wchar_t* dllPaths[] = { dllPath0.c_str(), dllPath1.c_str() };
+    std::vector< std::wstring > searchDirs;
+    auto addSearchDir = [ &searchDirs ]( const std::wstring& dir ) {
+        if( !dir.empty() && std::find( searchDirs.begin(), searchDirs.end(), dir ) == searchDirs.end() )
+        {
+            searchDirs.push_back( dir );
+        }
+    };
+
+#if defined( _WIN32 )
+    std::wstring dllFolder = GetDllFolderPath();
+    if( !dllFolder.empty() )
+    {
+        addSearchDir( dllFolder );
+        addSearchDir( dllFolder + ( enableDebug ? L"/dev" : L"/rel" ) );
+    }
+#endif
+
+    std::wstring appFolder = GetFolderPath();
+    if( !appFolder.empty() )
+    {
+        addSearchDir( appFolder );
+        addSearchDir( appFolder + L"/rt_bin" );
+        addSearchDir( appFolder + ( enableDebug ? L"/dev" : L"/rel" ) );
+        addSearchDir( appFolder + L"/rt_bin" + ( enableDebug ? L"/dev" : L"/rel" ) );
+    }
+
+    bool dllFound = false;
+    for( const auto& dir : searchDirs )
+    {
+        std::filesystem::path p( dir );
+        p /= "nvngx_dlss.dll";
+        std::error_code ec;
+        if( std::filesystem::exists( p, ec ) )
+        {
+            dllFound = true;
+            debug::Info( "DLSS: Found nvngx_dlss.dll at: {}", p.string() );
+            break;
+        }
+    }
+
+    if( !dllFound )
+    {
+        debug::Warning( "DLSS: nvngx_dlss.dll not found in search paths" );
+        for( const auto& dir : searchDirs )
+        {
+            std::filesystem::path p( dir );
+            debug::Warning( "DLSS:   checked: {}", p.string() );
+        }
+    }
+
+    std::vector< const wchar_t* > dllPaths;
+    dllPaths.reserve( searchDirs.size() );
+    for( const auto& dir : searchDirs )
+    {
+        dllPaths.push_back( dir.c_str() );
+    }
 
     NVSDK_NGX_PathListInfo pathsInfo = {
-        .Path   = dllPaths,
-        .Length = 2,
+        .Path   = dllPaths.data(),
+        .Length = static_cast< uint32_t >( dllPaths.size() ),
     };
 
     NVSDK_NGX_FeatureCommonInfo commonInfo = {
@@ -148,15 +264,11 @@ bool RTGL1::DLSS::TryInit( VkInstance       instance,
     }
 
     auto dataPath = L"DLSSTemp/";
-    if( enableDebug )
+    std::error_code ecDataPath;
+    std::filesystem::create_directories( dataPath, ecDataPath );
+    if( ecDataPath )
     {
-        std::error_code err;
-        std::filesystem::create_directory( dataPath, err );
-        if( err )
-        {
-            debug::Warning( "Failed to create DLSSTemp directory. create_directory error: {}",
-                            err.message() );
-        }
+        debug::Warning( "Failed to create DLSSTemp directory: {}", ecDataPath.message() );
     }
 
     r = NVSDK_NGX_VULKAN_Init_with_ProjectID( pAppGuid,
@@ -172,16 +284,18 @@ bool RTGL1::DLSS::TryInit( VkInstance       instance,
 
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_Init_with_ProjectID fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_Init_with_ProjectID failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
         return false;
     }
 
     r = NVSDK_NGX_VULKAN_GetCapabilityParameters( &pParams );
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_GetCapabilityParameters fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_GetCapabilityParameters failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
 
         NVSDK_NGX_VULKAN_Shutdown1( device );
         pParams = nullptr;
@@ -196,6 +310,7 @@ bool RTGL1::DLSS::CheckSupport() const
 {
     if( !isInitialized || pParams == nullptr )
     {
+        debug::Warning( "DLSS: CheckSupport failed - not initialized or parameters null" );
         return false;
     }
 
@@ -214,41 +329,46 @@ bool RTGL1::DLSS::CheckSupport() const
     {
         if( needsUpdatedDriver )
         {
-            debug::Warning( "DLSS: Can't load: Outdated driver. Min driver version: {}",
-                            minDriverVersionMinor );
+            debug::Warning( "DLSS: Outdated NVIDIA driver. Minimum required driver version: {}.{}",
+                            minDriverVersionMajor, minDriverVersionMinor );
             return false;
         }
         else
         {
-            debug::Verbose( "DLSS: Reported Min driver version: {}", minDriverVersionMinor );
+            debug::Info( "DLSS: Minimum driver check passed (min required: {}.{})", minDriverVersionMajor, minDriverVersionMinor );
         }
     }
     else
     {
-        debug::Warning( "DLSS: Minimum driver version was not reported" );
+        debug::Warning( "DLSS: Minimum driver version was not reported by NGX" );
     }
 
-
     int              isDlssSupported = 0;
-    NVSDK_NGX_Result featureInitResult;
+    NVSDK_NGX_Result featureInitResult = NVSDK_NGX_Result_Success;
     NVSDK_NGX_Result r;
 
     r = pParams->Get( NVSDK_NGX_Parameter_SuperSampling_Available, &isDlssSupported );
     if( NVSDK_NGX_FAILED( r ) || !isDlssSupported )
     {
-        // more details about what failed (per feature init result)
         r = NVSDK_NGX_Parameter_GetI( pParams,
                                       NVSDK_NGX_Parameter_SuperSampling_FeatureInitResult,
-                                      ( int* )&featureInitResult );
+                                      reinterpret_cast< int* >( &featureInitResult ) );
         if( NVSDK_NGX_SUCCEED( r ) )
         {
-            debug::Warning( "DLSS: Not available on this hardware/platform. FeatureInitResult={}",
-                            static_cast< int >( featureInitResult ) );
+            debug::Warning( "DLSS: SuperSampling not available on this GPU/platform: {} (0x{:08X})",
+                            GetNgxResultString( featureInitResult ),
+                            static_cast< uint32_t >( featureInitResult ) );
+        }
+        else
+        {
+            debug::Warning( "DLSS: SuperSampling_Available query returned {} (supported={})",
+                            GetNgxResultString( r ), isDlssSupported );
         }
 
         return false;
     }
 
+    debug::Info( "DLSS: SuperSampling (DLSS 2) is supported and ready" );
     return true;
 }
 
@@ -268,7 +388,9 @@ void RTGL1::DLSS::DestroyDlssFeature()
 
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_ReleaseFeature fail: {}", static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_ReleaseFeature failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
     }
 }
 
@@ -283,7 +405,9 @@ void RTGL1::DLSS::DestroyDlssgFeature()
 
         if( NVSDK_NGX_FAILED( r ) )
         {
-            debug::Warning( "DLSS-G: NVSDK_NGX_VULKAN_ReleaseFeature fail: {}", static_cast< int >( r ) );
+            debug::Warning( "DLSS-G: NVSDK_NGX_VULKAN_ReleaseFeature failed: {} (0x{:08X})",
+                            GetNgxResultString( r ),
+                            static_cast< uint32_t >( r ) );
         }
     }
 
@@ -463,7 +587,9 @@ bool RTGL1::DLSS::ValidateDlssFeature( VkCommandBuffer               cmd,
         cmd, creationNodeMask, visibilityNodeMask, &pDlssFeature, pParams, &dlssParams );
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NGX_VULKAN_CREATE_DLSS_EXT fail: {}", static_cast< int >( r ) );
+        debug::Warning( "DLSS: NGX_VULKAN_CREATE_DLSS_EXT failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
 
         pDlssFeature = nullptr;
         return false;
@@ -513,7 +639,9 @@ bool RTGL1::DLSS::ValidateDlssgFeature( VkCommandBuffer cmd,
         cmd, creationNodeMask, visibilityNodeMask, &pDlssgFeature, pParams, &dlssgParams );
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS-G: NGX_VK_CREATE_DLSSG fail: {}", static_cast< int >( r ) );
+        debug::Warning( "DLSS-G: NGX_VK_CREATE_DLSSG failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
         pDlssgFeature = nullptr;
         return false;
     }
@@ -620,7 +748,9 @@ bool RTGL1::DLSS::EvaluateDlssg( VkCommandBuffer cmd,
         cmd, pDlssgFeature, pParams, &evalParams, &optParams );
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS-G: NGX_VK_EVALUATE_DLSSG fail: {}", static_cast< int >( r ) );
+        debug::Warning( "DLSS-G: NGX_VK_EVALUATE_DLSSG failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
         return false;
     }
 
@@ -736,7 +866,9 @@ RTGL1::FramebufferImageIndex RTGL1::DLSS::Apply(
 
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NGX_VULKAN_EVALUATE_DLSS_EXT fail: {}", static_cast< int >( r ) );
+        debug::Warning( "DLSS: NGX_VULKAN_EVALUATE_DLSS_EXT failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
     }
 
     return outputImage;
@@ -777,7 +909,9 @@ void RTGL1::DLSS::GetOptimalSettings( uint32_t               userWidth,
                                                         &dummy );
     if( NVSDK_NGX_FAILED( r ) )
     {
-        debug::Warning( "DLSS: NGX_DLSS_GET_OPTIMAL_SETTINGS fail: {}", static_cast< int >( r ) );
+        debug::Warning( "DLSS: NGX_DLSS_GET_OPTIMAL_SETTINGS failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
     }
 }
 
@@ -792,8 +926,9 @@ std::vector< const char* > RTGL1::DLSS::GetDlssVulkanInstanceExtensions()
         &instanceExtCount, &ppInstanceExts, &deviceExtCount, &ppDeviceExts );
     if( !NVSDK_NGX_SUCCEED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
     }
 
     std::vector< const char* > v;
@@ -817,8 +952,9 @@ std::vector< const char* > RTGL1::DLSS::GetDlssVulkanDeviceExtensions()
         &instanceExtCount, &ppInstanceExts, &deviceExtCount, &ppDeviceExts );
     if( !NVSDK_NGX_SUCCEED( r ) )
     {
-        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions fail: {}",
-                        static_cast< int >( r ) );
+        debug::Warning( "DLSS: NVSDK_NGX_VULKAN_RequiredExtensions failed: {} (0x{:08X})",
+                        GetNgxResultString( r ),
+                        static_cast< uint32_t >( r ) );
     }
 
     std::vector< const char* > v;
@@ -853,6 +989,7 @@ RTGL1::DLSS::DLSS( VkInstance       _instance,
     , prevDlssFeatureValues{}
     , prevDlssgFeatureValues{}
 {
+    debug::Warning( "DLSS: Library was built without DLSS support (RG_WITH_NVIDIA_DLSS was OFF)" );
 }
 RTGL1::DLSS::~DLSS() {}
 
