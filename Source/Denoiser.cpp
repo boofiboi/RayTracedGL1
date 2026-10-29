@@ -36,8 +36,10 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
 #endif
 {
 #ifdef RG_USE_NVIDIA_NRD
-    reblurSettings.maxAccumulatedFrameNum = 14;
+    reblurSettings.maxAccumulatedFrameNum = 32;
     reblurSettings.maxFastAccumulatedFrameNum = 4;
+    reblurSettings.maxBlurRadius = 30.0f;
+    reblurSettings.minBlurRadius = 10.0f;
     reblurSettings.diffusePrepassBlurRadius = 0.0f;
     reblurSettings.specularPrepassBlurRadius = 15.0f;
     reblurSettings.antilagSettings.luminanceSigmaScale = 1.0f;
@@ -45,6 +47,7 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
     reblurSettings.fastHistoryClampingSigmaScale = 1.2f;
     reblurSettings.fireflySuppressorMinRelativeScale = 1.5f;
     reblurSettings.enableAntiFirefly = true;
+    reblurSettings.usePrepassOnlyForSpecularMotionEstimation = true;
 
     relaxSettings.diffusePrepassBlurRadius = 0.0f;
     relaxSettings.specularPrepassBlurRadius = 15.0f;

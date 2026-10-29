@@ -190,7 +190,7 @@ bool testSurfaceForReuseIndirect(
     const vec3 curNormal, const vec3 otherNormal)
 {
     const float DepthThreshold = 0.05;
-    const float NormalThreshold = 0.5;
+    const float NormalThreshold = 0.85;
 
     return 
         testPixInRenderArea(otherPix, curChRenderArea) &&
