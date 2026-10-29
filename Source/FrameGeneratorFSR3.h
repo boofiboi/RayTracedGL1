@@ -105,8 +105,6 @@ private:
 #ifdef RG_USE_AMD_FSR3
     void CreateFgContext( uint32_t displayWidth, uint32_t displayHeight );
     void DestroyFgContext();
-    void CreateHudlessImages( uint32_t width, uint32_t height );
-    void DestroyHudlessImages();
 
     VkDevice                           device;
     VkPhysicalDevice                   physDevice;
@@ -129,10 +127,6 @@ private:
     bool                               swapchainHandleAlive{ false };
 
     std::atomic< bool >                pendingReset{ false };
-
-    VkImage                            hudlessImages[ MAX_FRAMES_IN_FLIGHT ]{};
-    VkImageView                        hudlessViews[ MAX_FRAMES_IN_FLIGHT ]{};
-    VkDeviceMemory                     hudlessMemories[ MAX_FRAMES_IN_FLIGHT ]{};
 
     std::shared_ptr< class DLSS >      dlss;
     bool                               isDlssGActive{ false };

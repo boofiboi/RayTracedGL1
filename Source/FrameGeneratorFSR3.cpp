@@ -82,8 +82,6 @@ RTGL1::FrameGeneratorFSR3::~FrameGeneratorFSR3()
         ffxDestroyContext( &swapchainContext, nullptr );
         swapchainContext = nullptr;
     }
-
-    DestroyHudlessImages();
 }
 
 bool RTGL1::FrameGeneratorFSR3::IsAvailable() const
@@ -112,7 +110,6 @@ void RTGL1::FrameGeneratorFSR3::OnFramebuffersSizeChange( const ResolutionState&
     vkDeviceWaitIdle( device );
 
     DestroyFgContext();
-    CreateHudlessImages( resolutionState.upscaledWidth, resolutionState.upscaledHeight );
     CreateFgContext( resolutionState.upscaledWidth, resolutionState.upscaledHeight );
 }
 
@@ -124,14 +121,9 @@ void RTGL1::FrameGeneratorFSR3::CreateFgContext( uint32_t displayWidth, uint32_t
     backendDesc.vkPhysicalDevice       = physDevice;
     backendDesc.vkDeviceProcAddr       = vkGetDeviceProcAddr;
 
-    ffxCreateContextDescFrameGenerationHudless hudlessDesc = {};
-    hudlessDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
-    hudlessDesc.header.pNext              = &backendDesc.header;
-    hudlessDesc.hudlessBackBufferFormat   = ffxApiGetSurfaceFormatVK( backBufferFormat );
-
     ffxCreateContextDescFrameGeneration createFg = {};
     createFg.header.type     = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
-    createFg.header.pNext    = &hudlessDesc.header;
+    createFg.header.pNext    = &backendDesc.header;
     createFg.flags           = FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT;
     createFg.displaySize     = { displayWidth, displayHeight };
     createFg.maxRenderSize   = { displayWidth, displayHeight };
@@ -170,80 +162,6 @@ void RTGL1::FrameGeneratorFSR3::DestroyFgContext()
 
         ffxDestroyContext( &fgContext, nullptr );
         fgContext = nullptr;
-    }
-}
-
-void RTGL1::FrameGeneratorFSR3::CreateHudlessImages( uint32_t width, uint32_t height )
-{
-    DestroyHudlessImages();
-
-    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
-    {
-        VkImageCreateInfo imageInfo = {
-            .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .imageType     = VK_IMAGE_TYPE_2D,
-            .format        = backBufferFormat,
-            .extent        = { width, height, 1 },
-            .mipLevels     = 1,
-            .arrayLayers   = 1,
-            .samples       = VK_SAMPLE_COUNT_1_BIT,
-            .tiling        = VK_IMAGE_TILING_OPTIMAL,
-            .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                  VK_IMAGE_USAGE_STORAGE_BIT,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        };
-
-        VkResult r = vkCreateImage( device, &imageInfo, nullptr, &hudlessImages[ i ] );
-        VK_CHECKERROR( r );
-
-        VkMemoryRequirements memReqs = {};
-        vkGetImageMemoryRequirements( device, hudlessImages[ i ], &memReqs );
-
-        hudlessMemories[ i ] = allocator->AllocDedicated( memReqs,
-                                                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                          MemoryAllocator::AllocType::DEFAULT,
-                                                          "FSR3 FG HUD-less Image" );
-
-        r = vkBindImageMemory( device, hudlessImages[ i ], hudlessMemories[ i ], 0 );
-        VK_CHECKERROR( r );
-
-        VkImageViewCreateInfo viewInfo = {
-            .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image    = hudlessImages[ i ],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format   = backBufferFormat,
-            .subresourceRange = {
-                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = 0,
-                .layerCount     = 1,
-            },
-        };
-        r = vkCreateImageView( device, &viewInfo, nullptr, &hudlessViews[ i ] );
-        VK_CHECKERROR( r );
-    }
-}
-
-void RTGL1::FrameGeneratorFSR3::DestroyHudlessImages()
-{
-    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
-    {
-        if( hudlessViews[ i ] != VK_NULL_HANDLE )
-        {
-            vkDestroyImageView( device, hudlessViews[ i ], nullptr );
-            hudlessViews[ i ] = VK_NULL_HANDLE;
-        }
-        if( hudlessImages[ i ] != VK_NULL_HANDLE )
-        {
-            vkDestroyImage( device, hudlessImages[ i ], nullptr );
-            hudlessImages[ i ] = VK_NULL_HANDLE;
-        }
-        if( hudlessMemories[ i ] != VK_NULL_HANDLE )
-        {
-            MemoryAllocator::FreeDedicated( device, hudlessMemories[ i ] );
-            hudlessMemories[ i ] = VK_NULL_HANDLE;
-        }
     }
 }
 
@@ -531,86 +449,6 @@ void RTGL1::FrameGeneratorFSR3::CaptureHudless( VkCommandBuffer cmd,
                                                 uint32_t        width,
                                                 uint32_t        height )
 {
-    if( hudlessImages[ frameIndex ] == VK_NULL_HANDLE )
-    {
-        return;
-    }
-
-    VkImageMemoryBarrier2 barriers[ 2 ] = {};
-
-    barriers[ 0 ] = {
-        .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask  = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-        .srcAccessMask = VK_ACCESS_2_NONE,
-        .dstStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,
-        .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .image         = hudlessImages[ frameIndex ],
-        .subresourceRange = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        },
-    };
-
-    barriers[ 1 ] = {
-        .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT,
-        .dstStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,
-        .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout     = VK_IMAGE_LAYOUT_GENERAL,
-        .newLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .image         = srcImage,
-        .subresourceRange = {
-            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        },
-    };
-
-    VkDependencyInfo dep = {
-        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = 2,
-        .pImageMemoryBarriers    = barriers,
-    };
-    svkCmdPipelineBarrier2KHR( cmd, &dep );
-
-    VkImageBlit blitRegion = {
-        .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .srcOffsets     = { { 0, 0, 0 }, { (int32_t)width, (int32_t)height, 1 } },
-        .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-        .dstOffsets     = { { 0, 0, 0 }, { (int32_t)width, (int32_t)height, 1 } },
-    };
-    vkCmdBlitImage( cmd,
-                    srcImage,
-                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                    hudlessImages[ frameIndex ],
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    1,
-                    &blitRegion,
-                    VK_FILTER_NEAREST );
-
-    barriers[ 0 ].srcStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT;
-    barriers[ 0 ].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    barriers[ 0 ].dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-    barriers[ 0 ].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-    barriers[ 0 ].oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barriers[ 0 ].newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    barriers[ 1 ].srcStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT;
-    barriers[ 1 ].srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-    barriers[ 1 ].dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-    barriers[ 1 ].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-    barriers[ 1 ].oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barriers[ 1 ].newLayout     = VK_IMAGE_LAYOUT_GENERAL;
-
-    svkCmdPipelineBarrier2KHR( cmd, &dep );
 }
 
 void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
@@ -635,27 +473,6 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
     if( !fgContext || !swapchainContext )
     {
         return;
-    }
-
-    FfxApiResource hudlessRes = {};
-    if( frameGenEnabled && hudlessImages[ frameIndex ] != VK_NULL_HANDLE )
-    {
-        VkImageCreateInfo hudlessInfo = {
-            .sType       = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .imageType   = VK_IMAGE_TYPE_2D,
-            .format      = backBufferFormat,
-            .extent      = { width, height, 1 },
-            .mipLevels   = 1,
-            .arrayLayers = 1,
-            .samples     = VK_SAMPLE_COUNT_1_BIT,
-            .tiling      = VK_IMAGE_TILING_OPTIMAL,
-            .usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                      VK_IMAGE_USAGE_STORAGE_BIT,
-        };
-        hudlessRes = ffxApiGetResourceVK(
-            (void*)hudlessImages[ frameIndex ],
-            ffxApiGetImageResourceDescriptionVK( hudlessImages[ frameIndex ], hudlessInfo, 0 ),
-            FFX_API_RESOURCE_STATE_COMPUTE_READ );
     }
 
     ffxConfigureDescFrameGeneration configDesc  = {};
@@ -707,7 +524,7 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
     configDesc.frameGenerationCallbackUserContext = this;
     configDesc.frameGenerationEnabled             = frameGenEnabled;
     configDesc.allowAsyncWorkloads                = true;
-    configDesc.HUDLessColor                       = hudlessRes;
+    configDesc.HUDLessColor                       = {};
     configDesc.flags                              = 0;
     configDesc.onlyPresentGenerated               = false;
     configDesc.generationRect                     = { 0, 0, (int32_t)width, (int32_t)height };

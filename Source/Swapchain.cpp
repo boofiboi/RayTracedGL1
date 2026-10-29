@@ -230,7 +230,7 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
 {
     VkExtent2D requestedExtent = GetOptimalExtent();
 
-    bool currentFg = ( fgHooks && fgHooks->IsActive() );
+    bool currentFg = ( fgHooks != nullptr );
 
     if( requestedExtent != surfaceExtent || requestedVsync != isVsync || currentFg != isFrameGenActive )
     {
@@ -507,7 +507,7 @@ void RTGL1::Swapchain::OnQueuePresent( VkResult queuePresentResult )
 
 bool RTGL1::Swapchain::TryRecreate( const VkExtent2D& newExtent, bool vsync )
 {
-    bool currentFg = ( fgHooks && fgHooks->IsActive() );
+    bool currentFg = ( fgHooks != nullptr );
     if( surfaceExtent == newExtent && isVsync == vsync && isFrameGenActive == currentFg )
     {
         return false;
@@ -528,7 +528,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
 {
     this->isVsync          = vsync;
     this->surfaceExtent    = { newWidth, newHeight };
-    this->isFrameGenActive = ( fgHooks && fgHooks->IsActive() );
+    this->isFrameGenActive = ( fgHooks != nullptr );
 
     const VkSurfaceCapabilitiesKHR& surfCapabilities = GetCapabilities();
 
