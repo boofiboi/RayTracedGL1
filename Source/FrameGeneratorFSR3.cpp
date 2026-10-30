@@ -272,7 +272,7 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
 
     ffxCreateContextDescFrameGenerationSwapChainModeVK modeDesc = {};
     modeDesc.header.type          = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_MODE_VK;
-    modeDesc.composeOnPresentQueue = false;
+    modeDesc.composeOnPresentQueue = true;
 
     ffxCreateContextDescFrameGenerationSwapChainVK createDesc = {};
     createDesc.header.type     = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;

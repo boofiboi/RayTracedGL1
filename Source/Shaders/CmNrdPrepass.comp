@@ -22,7 +22,7 @@ vec3 linearToYCoCg(vec3 c)
 float getReblurNormHitDist(float hitDist, float viewZ, float roughness)
 {
     float smc = (1.0 - exp2(-200.0 * roughness * roughness)) * sqrt(clamp(roughness, 0.0, 1.0));
-    float f = (3.0 + viewZ * 0.1) * mix(20.0, 1.0, smc);
+    float f = (120.0 + viewZ * 0.1) * mix(20.0, 1.0, smc);
     return clamp(hitDist / max(f, 1e-4), 0.0, 1.0);
 }
 
@@ -42,7 +42,9 @@ void main()
     float roughness = texelFetch(framebufMetallicRoughness_Sampler, cbp, 0).g;
 
     float depth = texelFetch(framebufDepthWorld_Sampler, cbp, 0).r;
-    float viewZ = isSky ? 100000.0 : max(depth, 0.01);
+    vec3 worldPos = texelFetch(framebufSurfacePosition_Sampler, cbp, 0).xyz;
+    float viewZ = isSky ? 1000000.0
+                    : max(abs((globalUniform.view * vec4(worldPos, 1.0)).z), 0.01);
 
     vec4 viewDirRay = texelFetch(framebufViewDirection_Sampler, cbp, 0);
     float hitDist = max(viewDirRay.w, 0.0);
