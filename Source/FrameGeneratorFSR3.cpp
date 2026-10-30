@@ -55,14 +55,12 @@ RTGL1::FrameGeneratorFSR3::FrameGeneratorFSR3( VkDevice                         
                                                VkPhysicalDevice                   _physDevice,
                                                std::shared_ptr< MemoryAllocator > _allocator,
                                                std::shared_ptr< Queues >          _queues,
-                                               VkFormat                           _backBufferFormat,
-                                               float                              _worldScale )
+                                               VkFormat                           _backBufferFormat )
     : device( _device )
     , physDevice( _physDevice )
     , allocator( std::move( _allocator ) )
     , queues( std::move( _queues ) )
     , backBufferFormat( _backBufferFormat )
-    , worldScale( _worldScale <= 0.0f ? 1.0f : _worldScale )
 {
 }
 
@@ -490,7 +488,7 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     prepareDesc.cameraNear        = nearPlane;
     prepareDesc.cameraFar         = farPlane;
     prepareDesc.cameraFovAngleVertical = fovVerticalRad;
-    prepareDesc.viewSpaceToMetersFactor = worldScale;
+    prepareDesc.viewSpaceToMetersFactor = 1.0f;
     prepareDesc.depth             = depthRes;
     prepareDesc.motionVectors     = motionRes;
 
@@ -726,8 +724,7 @@ RTGL1::FrameGeneratorFSR3::FrameGeneratorFSR3( VkDevice                         
                                                VkPhysicalDevice                   _physDevice,
                                                std::shared_ptr< MemoryAllocator > _allocator,
                                                std::shared_ptr< Queues >          _queues,
-                                               VkFormat                           _backBufferFormat,
-                                               float                              _worldScale )
+                                               VkFormat                           _backBufferFormat )
 {
 }
 

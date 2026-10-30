@@ -112,8 +112,6 @@ private:
     bool                                               requestedVsync;
     VkExtent2D                                         surfaceExtent;
     bool                                               isVsync;
-    bool                                               hasImmediate;
-    bool                                               isFrameGenActive;
 
     VkSwapchainKHR                                     swapchain;
     std::vector< VkImage >                             swapchainImages;

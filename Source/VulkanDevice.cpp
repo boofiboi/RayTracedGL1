@@ -45,7 +45,7 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
             device, frameFences[ frameIndex ], outOfFrameFences[ frameIndex ] );
     }
 
-    swapchain->RequestVsync( vsync );
+    swapchain->RequestVsync( vsync || frameGenerationActive );
     swapchain->AcquireImage( imageAvailableSemaphores[ frameIndex ] );
 
     VkSemaphore semaphoreToWaitOnSubmit = imageAvailableSemaphores[ frameIndex ];
@@ -728,6 +728,56 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         }
     }
 
+    if( frameGenerator )
+    {
+        const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
+
+        const bool isDlssActive = renderResolution.IsNvDlssEnabled();
+        const bool fgSupported  = frameGenerator->IsAvailable() &&
+                                  ( isDlssActive ? ( nvDlss && nvDlss->IsDlssgAvailable() ) : true );
+
+        frameGenerationActive = fgSupported && params.enableFrameGeneration;
+
+        const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
+        double timeDelta = std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 );
+
+        if( isFgActive && !isDlssActive )
+        {
+            auto [ accumImage, accumView, accumFormat, accumSz ] =
+                framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
+
+            frameGenerator->CaptureHudless( cmd,
+                                            frameIndex,
+                                            accumImage,
+                                            renderResolution.UpscaledWidth(),
+                                            renderResolution.UpscaledHeight() );
+        }
+
+        frameGenerator->ConfigureFrame( swapchain->GetHandle(),
+                                        frameIndex,
+                                        renderResolution.UpscaledWidth(),
+                                        renderResolution.UpscaledHeight(),
+                                        frameId,
+                                        isFgActive,
+                                        isDlssActive );
+
+        if( isFgActive )
+        {
+            frameGenerator->PrepareFrame( cmd,
+                                          frameIndex,
+                                          framebuffers,
+                                          renderResolution,
+                                          jitter,
+                                          timeDelta,
+                                          drawInfo.cameraNear,
+                                          drawInfo.cameraFar,
+                                          drawInfo.fovYRadians,
+                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame || upscaleTechniqueChanged,
+                                          uniform->GetData()->view,
+                                          frameId );
+        }
+    }
+
     if( !drawInfo.disableRasterization )
     {
         framebuffers->BarrierOne( cmd, frameIndex, accum, RTGL1::Framebuffers::BarrierType::Storage );
@@ -760,43 +810,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         }
     }
 
-    if( frameGenerator )
-    {
-        const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
-
-        const bool isDlssActive = renderResolution.IsNvDlssEnabled();
-        const bool fgSupported  = frameGenerator->IsAvailable() &&
-                                  ( isDlssActive ? ( nvDlss && nvDlss->IsDlssgAvailable() ) : true );
-
-        frameGenerationActive = fgSupported && params.enableFrameGeneration;
-
-        const bool isFgActive = frameGenerationActive && !drawInfo.presentPrevFrame;
-        double timeDelta = std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 );
-
-        frameGenerator->ConfigureFrame( swapchain->GetHandle(),
-                                        frameIndex,
-                                        renderResolution.UpscaledWidth(),
-                                        renderResolution.UpscaledHeight(),
-                                        frameId,
-                                        isFgActive,
-                                        isDlssActive );
-
-        if( isFgActive )
-        {
-            frameGenerator->PrepareFrame( cmd,
-                                          frameIndex,
-                                          framebuffers,
-                                          renderResolution,
-                                          jitter,
-                                          timeDelta,
-                                          drawInfo.cameraNear,
-                                          drawInfo.cameraFar,
-                                          drawInfo.fovYRadians,
-                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame || upscaleTechniqueChanged,
-                                          uniform->GetData()->view,
-                                          frameId );
-        }
-    }
+    
 
     // blit result image to present on a surface
     framebuffers->PresentToSwapchain(

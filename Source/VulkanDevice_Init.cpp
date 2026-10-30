@@ -435,8 +435,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
             physDevice->Get(),
             memAllocator,
             queues,
-            swapchain->GetSurfaceFormat(),
-            info->worldScale );
+            swapchain->GetSurfaceFormat() );
 
         frameGenerator->SetDlss( nvDlss );
 

@@ -60,8 +60,6 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
     , requestedVsync( true )
     , surfaceExtent{ UINT32_MAX, UINT32_MAX }
     , isVsync( true )
-    , hasImmediate( false )
-    , isFrameGenActive( false )
     , swapchain( VK_NULL_HANDLE )
     , currentSwapchainIndex( UINT32_MAX )
     , cachedCapabilities{}
@@ -122,7 +120,7 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
         VK_CHECKERROR( r );
 
         bool hasMailbox   = false;
-        bool hasImmediateMode = false;
+        bool hasImmediate = false;
 
         for( auto p : presentModes )
         {
@@ -133,7 +131,7 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
 
             if( p == VK_PRESENT_MODE_IMMEDIATE_KHR )
             {
-                hasImmediateMode = true;
+                hasImmediate = true;
             }
 
             if( p == VK_PRESENT_MODE_FIFO_RELAXED_KHR )
@@ -141,8 +139,6 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
                 presentModeVsync = p;
             }
         }
-
-        hasImmediate = hasImmediateMode;
 
         if( hasMailbox )
         {
@@ -230,9 +226,7 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
 {
     VkExtent2D requestedExtent = GetOptimalExtent();
 
-    bool currentFg = ( fgHooks && fgHooks->IsActive() );
-
-    if( requestedExtent != surfaceExtent || requestedVsync != isVsync || currentFg != isFrameGenActive )
+    if( requestedExtent != surfaceExtent || requestedVsync != isVsync )
     {
         TryRecreate( requestedExtent, requestedVsync );
     }
@@ -507,8 +501,7 @@ void RTGL1::Swapchain::OnQueuePresent( VkResult queuePresentResult )
 
 bool RTGL1::Swapchain::TryRecreate( const VkExtent2D& newExtent, bool vsync )
 {
-    bool currentFg = ( fgHooks && fgHooks->IsActive() );
-    if( surfaceExtent == newExtent && isVsync == vsync && isFrameGenActive == currentFg )
+    if( surfaceExtent == newExtent && isVsync == vsync )
     {
         return false;
     }
@@ -526,9 +519,8 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
                                bool           vsync,
                                VkSwapchainKHR oldSwapchain )
 {
-    this->isVsync          = vsync;
-    this->surfaceExtent    = { newWidth, newHeight };
-    this->isFrameGenActive = ( fgHooks && fgHooks->IsActive() );
+    this->isVsync       = vsync;
+    this->surfaceExtent = { newWidth, newHeight };
 
     const VkSurfaceCapabilitiesKHR& surfCapabilities = GetCapabilities();
 
@@ -570,7 +562,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform     = surfCapabilities.currentTransform,
         .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode      = vsync ? presentModeVsync : ( isFrameGenActive ? ( hasImmediate ? VK_PRESENT_MODE_IMMEDIATE_KHR : presentModeVsync ) : presentModeImmediate ),
+        .presentMode      = vsync ? presentModeVsync : presentModeImmediate,
         .clipped          = VK_FALSE,
         .oldSwapchain     = oldSwapchain,
     };

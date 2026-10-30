@@ -42,8 +42,7 @@ public:
                         VkPhysicalDevice                   physDevice,
                         std::shared_ptr< MemoryAllocator > allocator,
                         std::shared_ptr< Queues >          queues,
-                        VkFormat                           backBufferFormat,
-                        float                              worldScale );
+                        VkFormat                           backBufferFormat );
     ~FrameGeneratorFSR3() override;
 
     FrameGeneratorFSR3( const FrameGeneratorFSR3& other )                = delete;
@@ -113,7 +112,6 @@ private:
     std::shared_ptr< MemoryAllocator > allocator;
     std::shared_ptr< Queues >          queues;
     VkFormat                           backBufferFormat;
-    float                              worldScale{ 1.0f };
 
     ffxContext                         fgContext{ nullptr };
     ffxContext                         swapchainContext{ nullptr };
