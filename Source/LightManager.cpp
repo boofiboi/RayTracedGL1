@@ -390,14 +390,26 @@ void RTGL1::LightManager::Add( uint32_t frameIndex, const RgSphericalLightUpload
         return;
     }
 
+    float mult = CalculateLightStyle( info, lightstyles );
+    if( mult <= 0.0f )
+    {
+        return;
+    }
+
     AddInternal( frameIndex,
                  info.uniqueID,
-                 EncodeAsSphereLight( info, CalculateLightStyle( info, lightstyles ) ) );
+                 EncodeAsSphereLight( info, mult ) );
 }
 
 void RTGL1::LightManager::Add( uint32_t frameIndex, const RgPolygonalLightUploadInfo& info )
 {
     if( IsLightColorTooDim( info ) )
+    {
+        return;
+    }
+
+    float mult = CalculateLightStyle( info, lightstyles );
+    if( mult <= 0.0f )
     {
         return;
     }
@@ -410,8 +422,7 @@ void RTGL1::LightManager::Add( uint32_t frameIndex, const RgPolygonalLightUpload
 
     AddInternal( frameIndex,
                  info.uniqueID,
-                 EncodeAsTriangleLight(
-                     info, unnormalizedNormal, CalculateLightStyle( info, lightstyles ) ) );
+                 EncodeAsTriangleLight( info, unnormalizedNormal, mult ) );
 }
 
 void RTGL1::LightManager::Add( uint32_t frameIndex, const RgSpotLightUploadInfo& info )
@@ -421,9 +432,15 @@ void RTGL1::LightManager::Add( uint32_t frameIndex, const RgSpotLightUploadInfo&
         return;
     }
 
+    float mult = CalculateLightStyle( info, lightstyles );
+    if( mult <= 0.0f )
+    {
+        return;
+    }
+
     AddInternal( frameIndex,
                  info.uniqueID,
-                 EncodeAsSpotLight( info, CalculateLightStyle( info, lightstyles ) ) );
+                 EncodeAsSpotLight( info, mult ) );
 }
 
 void RTGL1::LightManager::Add( uint32_t frameIndex, const RgDirectionalLightUploadInfo& info )
@@ -444,9 +461,15 @@ void RTGL1::LightManager::Add( uint32_t frameIndex, const RgDirectionalLightUplo
         return;
     }
 
+    float mult = CalculateLightStyle( info, lightstyles );
+    if( mult <= 0.0f )
+    {
+        return;
+    }
+
     AddInternal( frameIndex,
                  info.uniqueID,
-                 EncodeAsDirectionalLight( info, CalculateLightStyle( info, lightstyles ) ) );
+                 EncodeAsDirectionalLight( info, mult ) );
 }
 
 void RTGL1::LightManager::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameIndex )
