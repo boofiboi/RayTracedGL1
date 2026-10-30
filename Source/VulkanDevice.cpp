@@ -1239,6 +1239,10 @@ void RTGL1::VulkanDevice::UploadLensFlare( const RgLensFlareUploadInfo* pInfo )
             return;
         }
     }
+    else if( pInfo->pTextureName && strstr( pInfo->pTextureName, "muzzleflash" ) )
+    {
+        emisMult = 1.5f;
+    }
 
     rasterizer->UploadLensFlare(
         currentFrameState.GetFrameIndex(), *pInfo, emisMult, *textureManager );
