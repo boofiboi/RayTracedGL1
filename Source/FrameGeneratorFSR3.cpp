@@ -497,21 +497,18 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     {
         cameraInfo.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_CAMERAINFO;
         cameraInfo.cameraRight[ 0 ]   = pView[ 0 ];
-        cameraInfo.cameraRight[ 1 ]   = pView[ 4 ];
-        cameraInfo.cameraRight[ 2 ]   = pView[ 8 ];
-        cameraInfo.cameraUp[ 0 ]      = pView[ 1 ];
+        cameraInfo.cameraRight[ 1 ]   = pView[ 1 ];
+        cameraInfo.cameraRight[ 2 ]   = pView[ 2 ];
+        cameraInfo.cameraUp[ 0 ]      = pView[ 4 ];
         cameraInfo.cameraUp[ 1 ]      = pView[ 5 ];
-        cameraInfo.cameraUp[ 2 ]      = pView[ 9 ];
-        cameraInfo.cameraForward[ 0 ] = -pView[ 2 ];
-        cameraInfo.cameraForward[ 1 ] = -pView[ 6 ];
+        cameraInfo.cameraUp[ 2 ]      = pView[ 6 ];
+        cameraInfo.cameraForward[ 0 ] = -pView[ 8 ];
+        cameraInfo.cameraForward[ 1 ] = -pView[ 9 ];
         cameraInfo.cameraForward[ 2 ] = -pView[ 10 ];
 
-        const float tx = pView[ 12 ];
-        const float ty = pView[ 13 ];
-        const float tz = pView[ 14 ];
-        cameraInfo.cameraPosition[ 0 ] = -( pView[ 0 ] * tx + pView[ 1 ] * ty + pView[ 2 ] * tz );
-        cameraInfo.cameraPosition[ 1 ] = -( pView[ 4 ] * tx + pView[ 5 ] * ty + pView[ 6 ] * tz );
-        cameraInfo.cameraPosition[ 2 ] = -( pView[ 8 ] * tx + pView[ 9 ] * ty + pView[ 10 ] * tz );
+        cameraInfo.cameraPosition[ 0 ] = pView[ 12 ];
+        cameraInfo.cameraPosition[ 1 ] = pView[ 13 ];
+        cameraInfo.cameraPosition[ 2 ] = pView[ 14 ];
 
         prepareDesc.header.pNext = &cameraInfo.header;
     }

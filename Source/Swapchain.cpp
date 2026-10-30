@@ -308,7 +308,12 @@ void RTGL1::Swapchain::BlitForPresent( VkCommandBuffer cmd,
                                1 };
 
     VkImage       swapchainImage       = swapchainImages[ currentSwapchainIndex ];
-    VkImageLayout swapchainImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkImageLayout swapchainImageLayout = ( fgHooks && fgHooks->IsActive() )
+                                              ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                              : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkAccessFlags swapchainAccessMask  = ( fgHooks && fgHooks->IsActive() )
+                                              ? VK_ACCESS_SHADER_READ_BIT
+                                              : 0;
 
     // set layout for blit
     Utils::BarrierImage( cmd,
@@ -322,7 +327,7 @@ void RTGL1::Swapchain::BlitForPresent( VkCommandBuffer cmd,
                          swapchainImage,
                          0,
                          VK_ACCESS_TRANSFER_WRITE_BIT,
-                         swapchainImageLayout,
+                         VK_IMAGE_LAYOUT_UNDEFINED,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL );
 
     vkCmdBlitImage( cmd,
@@ -345,7 +350,7 @@ void RTGL1::Swapchain::BlitForPresent( VkCommandBuffer cmd,
     Utils::BarrierImage( cmd,
                          swapchainImage,
                          VK_ACCESS_TRANSFER_WRITE_BIT,
-                         0,
+                         swapchainAccessMask,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                          swapchainImageLayout );
 }
@@ -357,6 +362,13 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
 
     VkImage dst = swapchainImages[ currentSwapchainIndex ];
 
+    VkImageLayout swapchainImageLayout = ( fgHooks && fgHooks->IsActive() )
+                                              ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                              : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkAccessFlags swapchainAccessMask  = ( fgHooks && fgHooks->IsActive() )
+                                              ? VK_ACCESS_SHADER_READ_BIT
+                                              : 0;
+
     {
         VkImageMemoryBarrier2 bs[] = {
             {
@@ -366,7 +378,7 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
                 .srcAccessMask       = VK_ACCESS_2_NONE,
                 .dstStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
                 .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-                .oldLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .oldLayout           = swapchainImageLayout,
                 .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -384,7 +396,7 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
                 .srcAccessMask       = VK_ACCESS_2_NONE,
                 .dstStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
                 .dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                .oldLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .oldLayout           = swapchainImageLayout,
                 .newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -442,9 +454,9 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
                 .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
                 .dstStageMask        = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-                .dstAccessMask       = VK_ACCESS_2_NONE,
+                .dstAccessMask       = static_cast< VkAccessFlags2 >( swapchainAccessMask ),
                 .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout           = swapchainImageLayout,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .image               = src,
@@ -460,9 +472,9 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
                 .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 .dstStageMask        = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-                .dstAccessMask       = VK_ACCESS_2_NONE,
+                .dstAccessMask       = static_cast< VkAccessFlags2 >( swapchainAccessMask ),
                 .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout           = swapchainImageLayout,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .image               = dst,
@@ -543,7 +555,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
     assert( swapchainImages.empty() );
     assert( swapchainViews.empty() );
 
-    uint32_t imageCount = std::max( 3U, surfCapabilities.minImageCount );
+    uint32_t imageCount = std::max( 4U, surfCapabilities.minImageCount );
     if( surfCapabilities.maxImageCount > 0 )
     {
         imageCount = std::min( imageCount, surfCapabilities.maxImageCount );

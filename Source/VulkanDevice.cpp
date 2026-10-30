@@ -773,7 +773,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                           drawInfo.cameraFar,
                                           drawInfo.fovYRadians,
                                           params.resetUpscalerHistory || drawInfo.presentPrevFrame || upscaleTechniqueChanged,
-                                          uniform->GetData()->view,
+                                          uniform->GetData()->invView,
                                           frameId );
         }
     }
