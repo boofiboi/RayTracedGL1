@@ -1,105 +1,195 @@
-// Copyright (c) 2022 Sultim Tsyrendashiev
-// 
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-
-// from https://github.com/libretro/glsl-shaders
-
-
 #version 460
 
 #include "EfSimple.inl"
 
-const mat3 yiq2rgb_mat = mat3(
-   1.0, 0.956, 0.6210,
-   1.0, -0.2720, -0.6474,
-   1.0, -1.1060, 1.7046);
+#define hardScan     -8.0
+#define hardPix      -3.0
+#define warpX         0.031
+#define warpY         0.041
+#define maskDark      0.5
+#define maskLight     1.5
+#define shadowMask    3.0
+#define brightBoost   1.0
+#define hardBloomPix -1.5
+#define hardBloomScan -2.0
+#define bloomAmount   0.15
+#define shape         2.0
 
-vec3 yiq2rgb(vec3 yiq)
+vec3 FetchBilinear(vec2 uv)
 {
-   return yiq * yiq2rgb_mat;
+    ivec2 sz = effect_getFramebufSize();
+    vec2 fpos = uv * vec2(sz) - 0.5;
+    ivec2 i = ivec2(floor(fpos));
+    vec2 f = fpos - vec2(i);
+    vec3 s00 = effect_loadFromSource(clamp(i,               ivec2(0), sz - 1));
+    vec3 s10 = effect_loadFromSource(clamp(i + ivec2(1, 0), ivec2(0), sz - 1));
+    vec3 s01 = effect_loadFromSource(clamp(i + ivec2(0, 1), ivec2(0), sz - 1));
+    vec3 s11 = effect_loadFromSource(clamp(i + ivec2(1, 1), ivec2(0), sz - 1));
+    return mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
 }
 
-#define NTSC_CRT_GAMMA 2.4
-#define NTSC_MONITOR_GAMMA 2.0
-
-#define TAPS 32
-const float luma_filter[TAPS + 1] = float[TAPS + 1](
-  -0.000174844,  -0.000205844,  -0.000149453,  -0.000051693,
-   0.000000000,  -0.000066171,  -0.000245058,  -0.000432928,   
-  -0.000472644,  -0.000252236,   0.000198929,   0.000687058, 
-   0.000944112,   0.000803467,   0.000363199,   0.000013422,   
-   0.000253402,   0.001339461,   0.002932972,   0.003983485,
-   0.003026683,  -0.001102056,  -0.008373026,  -0.016897700,   
-  -0.022914480,  -0.021642347,  -0.008863273,   0.017271957,   
-   0.054921920,   0.098342579,   0.139044281,   0.168055832,  
-   0.178571429);
-
-const float chroma_filter[TAPS + 1] = float[TAPS + 1](
-   0.001384762,   0.001678312,   0.002021715,   0.002420562,
-   0.002880460,   0.003406879,   0.004004985,   0.004679445,
-   0.005434218,   0.006272332,   0.007195654,   0.008204665,
-   0.009298238,   0.010473450,   0.011725413,   0.013047155,
-   0.014429548,   0.015861306,   0.017329037,   0.018817382,
-   0.020309220,   0.021785952,   0.023227857,   0.024614500,
-   0.025925203,   0.027139546,   0.028237893,   0.029201910,
-   0.030015081,   0.030663170,   0.031134640,   0.031420995,
-   0.031517031);
-
-
-vec3 fetchOffset(ivec2 pix, int xoffset) 
+vec2 Warp(vec2 pos)
 {
-    if (pix.x + xoffset < 0 || pix.x + xoffset >= effect_getFramebufSize().x)
-    {
-        return vec3(0.0);
-    }
-
-    return decodeYiqFromStorage(effect_loadFromSource(pix + ivec2(xoffset, 0)));
+    pos = pos * 2.0 - 1.0;
+    pos *= vec2(1.0 + (pos.y * pos.y) * warpX, 1.0 + (pos.x * pos.x) * warpY);
+    return pos * 0.5 + 0.5;
 }
 
-vec3 decode(ivec2 pix)
+float ToLinear1(float c)
 {
-	vec3 signal = vec3(0.0);
+    return (c <= 0.04045) ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
+}
 
-	for (int i = 0; i < TAPS; i++)
-	{
-		signal += 
-            (fetchOffset(pix, i - TAPS) + fetchOffset(pix, TAPS - i)) * 
-            vec3(luma_filter[i], chroma_filter[i], chroma_filter[i]);
-	}
+vec3 ToLinear(vec3 c)
+{
+    return vec3(ToLinear1(c.r), ToLinear1(c.g), ToLinear1(c.b));
+}
 
-	signal += 
-        fetchOffset(pix, 0) * 
-        vec3(luma_filter[TAPS], chroma_filter[TAPS], chroma_filter[TAPS]);
+float ToSrgb1(float c)
+{
+    return (c < 0.0031308) ? c * 12.92 : 1.055 * pow(c, 0.41666) - 0.055;
+}
 
-    vec3 rgb = yiq2rgb(signal);
-    return pow(rgb, vec3(NTSC_CRT_GAMMA / NTSC_MONITOR_GAMMA));
+vec3 ToSrgb(vec3 c)
+{
+    return vec3(ToSrgb1(c.r), ToSrgb1(c.g), ToSrgb1(c.b));
+}
+
+vec3 Fetch(vec2 uv, vec2 off)
+{
+    ivec2 sz = effect_getFramebufSize();
+    vec2 d = vec2(1.0) / vec2(sz);
+    uv += off * d;
+    return ToLinear(brightBoost * FetchBilinear(clamp(uv, vec2(0.0), vec2(1.0))));
+}
+
+vec2 Dist(vec2 uv)
+{
+    ivec2 sz = effect_getFramebufSize();
+    vec2 pos = uv * vec2(sz);
+    return -((pos - floor(pos)) - vec2(0.5));
+}
+
+float Gaus(float pos, float scale)
+{
+    return exp2(scale * pow(abs(pos), shape));
+}
+
+vec3 Horz3(vec2 uv, float off)
+{
+    vec3 b   = Fetch(uv, vec2(-1.0, off));
+    vec3 c   = Fetch(uv, vec2( 0.0, off));
+    vec3 d   = Fetch(uv, vec2( 1.0, off));
+    float dst = Dist(uv).x;
+    float wb = Gaus(dst - 1.0, hardPix);
+    float wc = Gaus(dst + 0.0, hardPix);
+    float wd = Gaus(dst + 1.0, hardPix);
+    return (b * wb + c * wc + d * wd) / (wb + wc + wd);
+}
+
+vec3 Horz5(vec2 uv, float off)
+{
+    vec3 a   = Fetch(uv, vec2(-2.0, off));
+    vec3 b   = Fetch(uv, vec2(-1.0, off));
+    vec3 c   = Fetch(uv, vec2( 0.0, off));
+    vec3 d   = Fetch(uv, vec2( 1.0, off));
+    vec3 e   = Fetch(uv, vec2( 2.0, off));
+    float dst = Dist(uv).x;
+    float wa = Gaus(dst - 2.0, hardPix);
+    float wb = Gaus(dst - 1.0, hardPix);
+    float wc = Gaus(dst + 0.0, hardPix);
+    float wd = Gaus(dst + 1.0, hardPix);
+    float we = Gaus(dst + 2.0, hardPix);
+    return (a * wa + b * wb + c * wc + d * wd + e * we) / (wa + wb + wc + wd + we);
+}
+
+vec3 Horz7(vec2 uv, float off)
+{
+    vec3 a   = Fetch(uv, vec2(-3.0, off));
+    vec3 b   = Fetch(uv, vec2(-2.0, off));
+    vec3 c   = Fetch(uv, vec2(-1.0, off));
+    vec3 d   = Fetch(uv, vec2( 0.0, off));
+    vec3 e   = Fetch(uv, vec2( 1.0, off));
+    vec3 f   = Fetch(uv, vec2( 2.0, off));
+    vec3 g   = Fetch(uv, vec2( 3.0, off));
+    float dst = Dist(uv).x;
+    float wa = Gaus(dst - 3.0, hardBloomPix);
+    float wb = Gaus(dst - 2.0, hardBloomPix);
+    float wc = Gaus(dst - 1.0, hardBloomPix);
+    float wd = Gaus(dst + 0.0, hardBloomPix);
+    float we = Gaus(dst + 1.0, hardBloomPix);
+    float wf = Gaus(dst + 2.0, hardBloomPix);
+    float wg = Gaus(dst + 3.0, hardBloomPix);
+    return (a * wa + b * wb + c * wc + d * wd + e * we + f * wf + g * wg) / (wa + wb + wc + wd + we + wf + wg);
+}
+
+float Scan(vec2 uv, float off)
+{
+    return Gaus(Dist(uv).y + off, hardScan);
+}
+
+float BloomScan(vec2 uv, float off)
+{
+    return Gaus(Dist(uv).y + off, hardBloomScan);
+}
+
+vec3 Tri(vec2 uv)
+{
+    vec3 a  = Horz3(uv, -1.0);
+    vec3 b  = Horz5(uv,  0.0);
+    vec3 c  = Horz3(uv,  1.0);
+    float wa = Scan(uv, -1.0);
+    float wb = Scan(uv,  0.0);
+    float wc = Scan(uv,  1.0);
+    return a * wa + b * wb + c * wc;
+}
+
+vec3 Bloom(vec2 uv)
+{
+    vec3 a  = Horz5(uv, -2.0);
+    vec3 b  = Horz7(uv, -1.0);
+    vec3 c  = Horz7(uv,  0.0);
+    vec3 d  = Horz7(uv,  1.0);
+    vec3 e  = Horz5(uv,  2.0);
+    float wa = BloomScan(uv, -2.0);
+    float wb = BloomScan(uv, -1.0);
+    float wc = BloomScan(uv,  0.0);
+    float wd = BloomScan(uv,  1.0);
+    float we = BloomScan(uv,  2.0);
+    return a * wa + b * wb + c * wc + d * wd + e * we;
+}
+
+vec3 Mask(vec2 fragCoord)
+{
+    vec3 mask = vec3(maskDark);
+    fragCoord.x += fragCoord.y * 3.0;
+    fragCoord.x  = fract(fragCoord.x * 0.166666666);
+    if      (fragCoord.x < 0.333) mask.r = maskLight;
+    else if (fragCoord.x < 0.666) mask.g = maskLight;
+    else                          mask.b = maskLight;
+    return mask;
 }
 
 void main()
 {
     const ivec2 pix = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-    
+
     if (!effect_isPixValid(pix))
     {
         return;
     }
-    
-    effect_storeToTarget(decode(pix), pix);
+
+    vec2 uv = effect_getFramebufUV(pix);
+    vec2 warped = Warp(uv);
+
+    if (warped.x < 0.0 || warped.x > 1.0 || warped.y < 0.0 || warped.y > 1.0)
+    {
+        effect_storeToTarget(vec3(0.0), pix);
+        return;
+    }
+
+    vec3 color = Tri(warped);
+    color += Bloom(warped) * bloomAmount;
+    color *= Mask(vec2(pix));
+    effect_storeToTarget(ToSrgb(color), pix);
 }

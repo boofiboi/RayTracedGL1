@@ -221,16 +221,6 @@ struct EffectHueShift final : public EffectSimple<EffectHueShift_PushConst>
 struct EffectCRT_PushConst
 {};
 
-struct EffectCrtDemodulateEncode final : public EffectSimple<EffectCRT_PushConst>
-{
-    RTGL1_EFFECT_SIMPLE_INHERIT_CONSTRUCTOR(EffectCrtDemodulateEncode, "EffectCrtDemodulateEncode")
-
-    bool Setup(const CommonnlyUsedEffectArguments &args)
-    {
-        return EffectSimple::Setup(args, true, 0, 0);
-    }
-};
-
 struct EffectCrtDecode final : public EffectSimple<EffectCRT_PushConst>
 {
     RTGL1_EFFECT_SIMPLE_INHERIT_CONSTRUCTOR(EffectCrtDecode, "EffectCrtDecode")

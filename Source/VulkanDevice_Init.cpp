@@ -481,7 +481,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     effectColorTint           = CONSTRUCT_SIMPLE_EFFECT( EffectColorTint );
     effectTeleport            = CONSTRUCT_SIMPLE_EFFECT( EffectTeleport );
     effectNightVision         = CONSTRUCT_SIMPLE_EFFECT( EffectNightVision );
-    effectCrtDemodulateEncode = CONSTRUCT_SIMPLE_EFFECT( EffectCrtDemodulateEncode );
     effectCrtDecode           = CONSTRUCT_SIMPLE_EFFECT( EffectCrtDecode );
 #undef SIMPLE_EFFECT_CONSTRUCTOR_PARAMS
 
@@ -507,7 +506,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     shaderManager->Subscribe( effectColorTint );
     shaderManager->Subscribe( effectTeleport );
     shaderManager->Subscribe( effectNightVision );
-    shaderManager->Subscribe( effectCrtDemodulateEncode );
     shaderManager->Subscribe( effectCrtDecode );
 
     framebuffers->Subscribe( rasterizer );
@@ -533,7 +531,6 @@ RTGL1::VulkanDevice::~VulkanDevice()
     vkDeviceWaitIdle( device );
 
     effectCrtDecode.reset();
-    effectCrtDemodulateEncode.reset();
     effectTeleport.reset();
     effectNightVision.reset();
     effectColorTint.reset();

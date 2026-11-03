@@ -95,7 +95,6 @@ static ShaderModuleDefinition G_SHADERS[] =
     { "EffectTeleport",             "EfTeleport.comp.spv"                   },
     { "EffectNightVision",          "EfNightVision.comp.spv"                },
     { "EffectHueShift",             "EfHueShift.comp.spv"                   },
-    { "EffectCrtDemodulateEncode",  "EfCrtDemodulateEncode.comp.spv"        },
     { "EffectCrtDecode",            "EfCrtDecode.comp.spv"                  },
 };
 

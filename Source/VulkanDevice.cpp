@@ -802,9 +802,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         }
         if( postef.pCRT != nullptr && postef.pCRT->isActive )
         {
-            effectCrtDemodulateEncode->Setup( args );
-            accum = effectCrtDemodulateEncode->Apply( args, accum );
-
             effectCrtDecode->Setup( args );
             accum = effectCrtDecode->Apply( args, accum );
         }
