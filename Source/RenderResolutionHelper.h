@@ -206,7 +206,7 @@ public:
         return IsCASInsideFSR3() ? false : sharpenTechnique != RG_RENDER_SHARPEN_TECHNIQUE_NONE;
     }
     RgRenderSharpenTechnique GetSharpeningTechnique() const { return sharpenTechnique; }
-    float                    GetSharpeningIntensity() const { return 0.2f; }
+    float                    GetSharpeningIntensity() const { return 1.0f; }
 
     VkFilter                 GetBlitFilter() const
     {
