@@ -46,7 +46,8 @@ void main()
 
     vec2 centered = effect_getCenteredFromPix(pix);
     float r2 = dot(centered, centered);
-    vec2 distorted = centered * (1.0 + 0.05 * r2 * push.custom.vignetteIntensity);
+    float distScale = 1.0 + 0.1 * push.custom.vignetteIntensity;
+    vec2 distorted = (centered / distScale) * (1.0 + 0.05 * r2 * push.custom.vignetteIntensity);
     ivec2 samplePix = effect_getPixFromCentered(distorted);
 
     vec3 srcColor = effect_loadFromSource(samplePix);
