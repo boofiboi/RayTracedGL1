@@ -410,7 +410,7 @@ void RTGL1::SceneImportExport::PrepareForFrame()
     }
 }
 
-void RTGL1::SceneImportExport::CheckForNewScene( std::string_view    mapName,
+bool RTGL1::SceneImportExport::CheckForNewScene( std::string_view    mapName,
                                                  VkCommandBuffer     cmd,
                                                  uint32_t            frameIndex,
                                                  Scene&              scene,
@@ -424,7 +424,6 @@ void RTGL1::SceneImportExport::CheckForNewScene( std::string_view    mapName,
 
         currentMap = mapName;
 
-        // before importer, as it relies on texture properties
         textureMeta.RereadFromFiles( GetImportMapName() );
 
         {
@@ -434,7 +433,9 @@ void RTGL1::SceneImportExport::CheckForNewScene( std::string_view    mapName,
             scene.NewScene( cmd, frameIndex, staticScene, textureManager, textureMeta );
         }
         debug::Verbose( "New scene is ready" );
+        return true;
     }
+    return false;
 }
 
 void RTGL1::SceneImportExport::TryExport( TextureManager& textureManager )

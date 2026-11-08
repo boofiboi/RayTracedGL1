@@ -345,11 +345,12 @@ void main()
 
     vec2 motionCurToPrev;
     float motionDepthLinearCurToPrev;
+    float motionViewZ;
     vec2 gradDepth;
     float firstHitDepthNDC;
     float firstHitDepthLinear;
     vec3 screenEmission;
-    const ShHitInfo h = getHitInfoPrimaryRay(primaryPayload, cameraOrigin, cameraRayDirAX, cameraRayDirAY, motionCurToPrev, motionDepthLinearCurToPrev, gradDepth, firstHitDepthNDC, firstHitDepthLinear, screenEmission);
+    const ShHitInfo h = getHitInfoPrimaryRay(primaryPayload, cameraOrigin, cameraRayDirAX, cameraRayDirAY, motionCurToPrev, motionDepthLinearCurToPrev, motionViewZ, gradDepth, firstHitDepthNDC, firstHitDepthLinear, screenEmission);
 
 
     vec3 throughput = vec3(1.0);
@@ -390,7 +391,7 @@ void main()
     // save info for rasterization and upscalers (FSR/DLSS), but only about primary surface,
     // as reflections/refraction only may be losely represented via rasterization
     imageStore(framebufDepthNdc,            getRegularPixFromCheckerboardPix(pix), vec4(clamp(firstHitDepthNDC, 0.0, 1.0)));
-    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), 0.0, 0.0));
+    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), motionViewZ, 0.0));
     imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(0.0));
 }
 #endif
@@ -445,6 +446,7 @@ void main()
     const vec3  motionBuf                   = texelFetch(framebufMotion_Sampler, pix, 0).rgb;
     vec2        motionCurToPrev             = motionBuf.rg;
     float       motionDepthLinearCurToPrev  = motionBuf.b;
+    float       motionViewZ                 = 0.0;
     float       firstHitDepthLinear         = texelFetch(framebufDepthWorld_Sampler, pix, 0).r;
     vec3        screenEmission              = texelFetch(framebufScreenEmisRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
     vec3        fogAccum                    = texelFetch(framebufAcidFogRT_Sampler, getRegularPixFromCheckerboardPix(pix), 0).rgb;
@@ -644,7 +646,7 @@ void main()
             rayOrigin, rayDir, cameraRayDir, 
             virtualPos, 
             rayLen, 
-            motionCurToPrev, motionDepthLinearCurToPrev,
+            motionCurToPrev, motionDepthLinearCurToPrev, motionViewZ,
             scrEmis
         );
 
@@ -678,7 +680,7 @@ void main()
     imageStore(framebufVisibilityBuffer,    pix, packVisibilityBuffer(currentPayload));
     imageStore(framebufViewDirection,       pix, vec4(rayDir, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, wasSplit ? 1.0 : -1.0));
-    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), 0.0, 0.0));
+    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), motionViewZ, 0.0));
     imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(UPSCALER_REACTIVITY_REFLREFR));
 }
 #endif

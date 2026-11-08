@@ -141,7 +141,7 @@ public:
     SceneImportExport& operator=( SceneImportExport&& other ) noexcept = delete;
 
     void PrepareForFrame();
-    void CheckForNewScene( std::string_view    mapName,
+    bool CheckForNewScene( std::string_view    mapName,
                            VkCommandBuffer     cmd,
                            uint32_t            frameIndex,
                            Scene&              scene,

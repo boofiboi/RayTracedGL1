@@ -36,16 +36,18 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
 #endif
 {
 #ifdef RG_USE_NVIDIA_NRD
-    reblurSettings.maxAccumulatedFrameNum = 24;
-    reblurSettings.maxFastAccumulatedFrameNum = 4;
+    reblurSettings.maxAccumulatedFrameNum = 30;
+    reblurSettings.maxFastAccumulatedFrameNum = 6;
     reblurSettings.diffusePrepassBlurRadius = 0.0f;
     reblurSettings.specularPrepassBlurRadius = 15.0f;
-    reblurSettings.antilagSettings.luminanceSigmaScale = 1.0f;
-    reblurSettings.antilagSettings.luminanceSensitivity = 1.0f;
-    reblurSettings.fastHistoryClampingSigmaScale = 1.5f;
+    reblurSettings.antilagSettings.luminanceSigmaScale = 2.0f;
+    reblurSettings.antilagSettings.luminanceSensitivity = 3.0f;
+    reblurSettings.fastHistoryClampingSigmaScale = 2.0f;
     reblurSettings.fireflySuppressorMinRelativeScale = 1.5f;
     reblurSettings.enableAntiFirefly = true;
     reblurSettings.hitDistanceParameters.A = 3.0f / 0.025f;
+    reblurSettings.hitDistanceParameters.B = 0.1f;
+    reblurSettings.hitDistanceParameters.C = 20.0f;
 
     relaxSettings.diffusePrepassBlurRadius = 0.0f;
     relaxSettings.specularPrepassBlurRadius = 15.0f;
@@ -285,7 +287,7 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
 
         commonSettings.motionVectorScale[ 0 ] = 1.0f;
         commonSettings.motionVectorScale[ 1 ] = 1.0f;
-        commonSettings.motionVectorScale[ 2 ] = 0.0f;
+        commonSettings.motionVectorScale[ 2 ] = 1.0f;
         commonSettings.isMotionVectorInWorldSpace = false;
 
         commonSettings.frameIndex = uniform->GetData()->frameId;

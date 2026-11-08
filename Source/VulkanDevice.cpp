@@ -120,12 +120,15 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
                                 ( devmode && devmode->ignoreExternalGeometry ) );
 
     {
-        sceneImportExport->CheckForNewScene( Utils::SafeCstr( info.pMapName ),
-                                             cmd,
-                                             frameIndex,
-                                             *scene,
-                                             *textureManager,
-                                             *textureMetaManager );
+        if( sceneImportExport->CheckForNewScene( Utils::SafeCstr( info.pMapName ),
+                                                 cmd,
+                                                 frameIndex,
+                                                 *scene,
+                                                 *textureManager,
+                                                 *textureMetaManager ) )
+        {
+            forceHistoryReset = true;
+        }
         scene->SubmitStaticLights(
             frameIndex,
             *lightManager,
@@ -162,6 +165,17 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
         gu->cameraPosition[ 0 ] = gu->invView[ 12 ];
         gu->cameraPosition[ 1 ] = gu->invView[ 13 ];
         gu->cameraPosition[ 2 ] = gu->invView[ 14 ];
+
+        if( frameId > 0 )
+        {
+            float dx = gu->cameraPosition[ 0 ] - gu->cameraPositionPrev[ 0 ];
+            float dy = gu->cameraPosition[ 1 ] - gu->cameraPositionPrev[ 1 ];
+            float dz = gu->cameraPosition[ 2 ] - gu->cameraPositionPrev[ 2 ];
+            if( dx * dx + dy * dy + dz * dz > 1000.0f * 1000.0f )
+            {
+                forceHistoryReset = true;
+            }
+        }
     }
 
     {
@@ -587,7 +601,8 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         pathTracer->TraceVolumetric( params );
 
         bool resetHistory =
-            AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo ).resetUpscalerHistory;
+            AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo ).resetUpscalerHistory ||
+            forceHistoryReset;
         denoiser->Denoise( cmd, frameIndex, uniform, jitter, resetHistory );
         volumetric->ProcessScattering(
             cmd, frameIndex, *uniform, *blueNoise, *framebuffers, volumetricMaxHistoryLen );
@@ -635,8 +650,9 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         upscaleTechniqueChanged = ( prevUpscaleTechnique != renderResolution.GetUpscaleTechnique() );
         prevUpscaleTechnique    = renderResolution.GetUpscaleTechnique();
 
-        const bool resetUpscaler = params.resetUpscalerHistory || forceUpscalerReset || upscaleTechniqueChanged;
+        const bool resetUpscaler = params.resetUpscalerHistory || forceUpscalerReset || forceHistoryReset || upscaleTechniqueChanged;
         forceUpscalerReset       = drawInfo.presentPrevFrame;
+        forceHistoryReset        = false;
 
         // upscale finalized image
         if( IUpscaler* activeUpscaler = GetActiveUpscaler() )

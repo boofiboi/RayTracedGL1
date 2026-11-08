@@ -826,7 +826,7 @@ FRAMEBUFFERS = {
     "UpscaledPong"                      : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_IS_ATTACHMENT | FRAMEBUF_FLAGS_UPSCALED_SIZE | FRAMEBUF_FLAGS_USAGE_TRANSFER),  #       src for WipeEffectSource 
 
     # for upscalers
-    "MotionDlss"                        : (TYPE_FLOAT16,    COMPONENT_RG,   0),
+    "MotionDlss"                        : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "Reactivity"                        : (TYPE_UNORM8,     COMPONENT_R,    FRAMEBUF_FLAGS_IS_ATTACHMENT),
 
     "AccumHistoryLength"                : (TYPE_FLOAT16,    COMPONENT_RGBA, FRAMEBUF_FLAGS_STORE_PREV),

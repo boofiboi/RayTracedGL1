@@ -525,7 +525,7 @@ layout(set = DESC_SET_FRAMEBUFFERS, binding = 24, r11f_g11f_b10f) uniform image2
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 25, r11f_g11f_b10f) uniform image2D framebufUpscaledPong;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 26, rg16f) uniform image2D framebufMotionDlss;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 26, rgba16f) uniform image2D framebufMotionDlss;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 27, r8) uniform image2D framebufReactivity;
 #endif

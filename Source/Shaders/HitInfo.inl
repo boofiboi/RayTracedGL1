@@ -204,7 +204,7 @@ vec3 intersectRayTriangle(const mat3 positions, const vec3 orig, const vec3 dir)
 ShHitInfo getHitInfoPrimaryRay(
     const ShPayload pl, 
     const vec3 rayOrigin, const vec3 rayDirAX, const vec3 rayDirAY, 
-    out vec2 motion, out float motionDepthLinear, 
+    out vec2 motion, out float motionDepthLinear, out float motionViewZ,
     out vec2 gradDepth, out float depthNDC, out float depthLinear,
     out vec3 emission)
 
@@ -215,7 +215,7 @@ ShHitInfo getHitInfoWithRayCone_ReflectionRefraction(
     const vec3 rayOrigin, const vec3 rayDir, const vec3 viewDir,
     in out vec3 virtualPosForMotion,
     out float rayLen,
-    out vec2 motion, out float motionDepthLinear,
+    out vec2 motion, out float motionDepthLinear, out float motionViewZ,
     out vec3 emission)
 
 #elif defined(HITINFO_INL_INDIR)
@@ -328,6 +328,11 @@ ShHitInfo getHitInfoBounce(
     motionDepthLinear = length(viewSpacePosPrev.xyz) - depthLinear;
 #elif defined(HITINFO_INL_RFL)
     motionDepthLinear = length(viewSpacePosPrev.xyz) - length(viewSpacePosCur.xyz);
+#endif 
+
+
+#if defined(HITINFO_INL_PRIM) || defined(HITINFO_INL_RFL)
+    motionViewZ = abs(viewSpacePosPrev.z) - abs(viewSpacePosCur.z);
 #endif 
 
 

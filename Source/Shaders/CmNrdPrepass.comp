@@ -23,7 +23,7 @@ float getReblurNormHitDist(float hitDist, float viewZ, float roughness)
 {
     float smc = (1.0 - exp2(-200.0 * roughness * roughness)) * sqrt(clamp(roughness, 0.0, 1.0));
     float f = (120.0 + viewZ * 0.1) * mix(20.0, 1.0, smc);
-    return clamp(hitDist / max(f, 1e-4), 0.0, 1.0);
+    return clamp(max(hitDist / max(f, 1e-4), 1e-4), 1e-4, 1.0);
 }
 
 void main()
@@ -40,6 +40,16 @@ void main()
     bool isSky = isSkyPix(cbp);
     vec3 normal = texelFetchNormal(cbp);
     float roughness = texelFetch(framebufMetallicRoughness_Sampler, cbp, 0).g;
+
+    if(isSky || dot(normal, normal) < 1e-4)
+    {
+        normal = vec3(0.0, 0.0, 1.0);
+        roughness = 1.0;
+    }
+    else
+    {
+        normal = normalize(normal);
+    }
 
     float depth = texelFetch(framebufDepthWorld_Sampler, cbp, 0).r;
     vec3 worldPos = texelFetch(framebufSurfacePosition_Sampler, cbp, 0).xyz;
