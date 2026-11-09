@@ -251,9 +251,8 @@ private:
     ScratchImmediate                  scratchImmediate;
     std::unique_ptr< FolderObserver > observer;
 
-    // TODO: remove; used to not allocate on each call
-    std::vector< PositionNormal >        tempStorageInit;
-    std::vector< RgSpotLightUploadInfo > tempStorageLights;
+    std::vector< PositionNormal >             tempStorageInit;
+    std::vector< RgSphericalLightUploadInfo > tempStorageLights;
 
     std::unique_ptr< Devmode > devmode;
 

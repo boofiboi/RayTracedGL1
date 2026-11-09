@@ -663,6 +663,12 @@ typedef struct RgDrawFrameTexturesParams
     float           minRoughness;
 } RgDrawFrameTexturesParams;
 
+typedef enum RgDenoiserMode
+{
+    RG_DENOISER_MODE_REBLUR = 0,
+    RG_DENOISER_MODE_RELAX  = 1,
+} RgDenoiserMode;
+
 typedef struct RgDrawFrameIlluminationParams
 {
     RgStructureType sType;
@@ -697,6 +703,7 @@ typedef struct RgDrawFrameIlluminationParams
     uint64_t*       lightUniqueIdIgnoreFirstPersonViewerShadows;
     uint32_t        lightstyleValuesCount;
     const float*    pLightstyleValues;
+    RgDenoiserMode  denoiserMode;
 } RgDrawFrameIlluminationParams;
 
 typedef struct RgDrawFrameVolumetricParams

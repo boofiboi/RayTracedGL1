@@ -430,13 +430,14 @@ void main()
         directDist = 0.0;
     }
 
+    const vec3 demodIndir = demodulateSpecular( specular, surf.specularColor );
     const vec3 direct = texelFetchUnfilteredSpecular( pix );
-    float hitDist = ( getLuminance( direct ) < getLuminance( specular ) && indirHitDist > 0.0 ) ? indirHitDist : directDist;
+    float hitDist = ( ( getLuminance( direct ) < getLuminance( demodIndir ) || directDist >= 9000.0 ) && indirHitDist > 0.0 ) ? indirHitDist : directDist;
 
     imageStore( framebufViewDirection, pix, vec4( -surf.toViewerDir, hitDist ) );
 
     imageStoreUnfilteredSpecular( pix,
-                                  direct + demodulateSpecular( specular, surf.specularColor ) );
+                                  direct + demodIndir );
 
     imageStoreUnfilteredIndir( pix, diffuse );
 }

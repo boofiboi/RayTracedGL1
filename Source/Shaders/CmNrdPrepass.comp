@@ -58,7 +58,7 @@ void main()
 
     vec4 viewDirRay = texelFetch(framebufViewDirection_Sampler, cbp, 0);
     float hitDist = max(viewDirRay.w, 0.0);
-    if(hitDist <= 0.0 || isnan(hitDist) || isinf(hitDist))
+    if(hitDist <= 0.0 || isnan(hitDist) || isinf(hitDist) || hitDist >= 9000.0)
     {
         hitDist = depth;
     }

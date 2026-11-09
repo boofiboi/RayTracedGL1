@@ -1103,15 +1103,11 @@ private:
 };
 
 
-void MakeLightsForPrimitive( const RgMeshInfo&                     mesh,
-                             const RgMeshPrimitiveInfo&            prim,
-                             const RgEditorAttachedLightInfo&      lightInfo,
-                             float                                 oneGameUnitInMeters,
-                             std::vector< RTGL1::PositionNormal >& initial,
-                             std::vector< RgSpotLightUploadInfo >& result )
+void ExtractPrimitiveLightPositions( const RgMeshInfo&                     mesh,
+                                     const RgMeshPrimitiveInfo&            prim,
+                                     std::vector< RTGL1::PositionNormal >& initial )
 {
     assert( initial.empty() );
-    assert( result.empty() );
 
     constexpr auto toFloat3 = []( const float( &ptr )[ 3 ] ) {
         return RgFloat3D{ RG_ACCESS_VEC3( ptr ) };
@@ -1228,20 +1224,35 @@ void MakeLightsForPrimitive( const RgMeshInfo&                     mesh,
         }
     }
     flushAccum();
+#endif
+}
 
+void MakeLightsForPrimitive( const RgMeshInfo&                     mesh,
+                             const RgMeshPrimitiveInfo&            prim,
+                             const RgEditorAttachedLightInfo&      lightInfo,
+                             float                                 oneGameUnitInMeters,
+                             std::vector< RTGL1::PositionNormal >& initial,
+                             std::vector< RgSpotLightUploadInfo >& result )
+{
+    assert( initial.empty() );
+    assert( result.empty() );
+
+    ExtractPrimitiveLightPositions( mesh, prim, initial );
+
+#if POLYLIGHT_AS_SPHERE
     for( const auto& [ position, normal ] : initial )
     {
         float offset = 0.1f / oneGameUnitInMeters;
 
         result.emplace_back( RgSpotLightUploadInfo{
-            .uniqueID     = 0, /* ignored */
+            .uniqueID     = 0,
             .isExportable = true,
             .extra        = {},
             .color        = lightInfo.color,
             .intensity    = lightInfo.intensity,
             .position     = position + normal * offset,
             .direction    = normal,
-            .radius       = 0.1f, /* ignored */
+            .radius       = 0.05f / oneGameUnitInMeters,
             .angleOuter   = RTGL1::Utils::DegToRad( 89 ),
             .angleInner   = RTGL1::Utils::DegToRad( 75 ),
         } );
@@ -1390,23 +1401,34 @@ void RTGL1::GltfExporter::AddPrimitiveLights( const RgMeshInfo&          mesh,
 }
 
 void RTGL1::GltfExporter::MakeLightsForPrimitiveDynamic(
-    const RgMeshInfo&                     mesh,
-    const RgMeshPrimitiveInfo&            primitive,
-    float                                 oneGameUnitInMeters,
-    std::vector< PositionNormal >&        tempStorage,
-    std::vector< RgSpotLightUploadInfo >& resultStorage )
+    const RgMeshInfo&                          mesh,
+    const RgMeshPrimitiveInfo&                 primitive,
+    float                                      oneGameUnitInMeters,
+    std::vector< PositionNormal >&             tempStorage,
+    std::vector< RgSphericalLightUploadInfo >& resultStorage )
 {
     assert( tempStorage.empty() );
     assert( resultStorage.empty() );
 
     if( primitive.pEditorInfo && primitive.pEditorInfo->attachedLightExists )
     {
-        MakeLightsForPrimitive( mesh,
-                                primitive,
-                                primitive.pEditorInfo->attachedLight,
-                                oneGameUnitInMeters,
-                                tempStorage,
-                                resultStorage );
+        ExtractPrimitiveLightPositions( mesh, primitive, tempStorage );
+
+        float radius = 0.05f / oneGameUnitInMeters;
+        float offset = 0.05f / oneGameUnitInMeters;
+
+        for( const auto& [ position, normal ] : tempStorage )
+        {
+            resultStorage.emplace_back( RgSphericalLightUploadInfo{
+                .uniqueID     = 0,
+                .isExportable = false,
+                .extra        = {},
+                .color        = primitive.pEditorInfo->attachedLight.color,
+                .intensity    = primitive.pEditorInfo->attachedLight.intensity,
+                .position     = position + normal * offset,
+                .radius       = radius,
+            } );
+        }
     }
 }
 

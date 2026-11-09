@@ -38,8 +38,8 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
 #ifdef RG_USE_NVIDIA_NRD
     reblurSettings.maxAccumulatedFrameNum = 30;
     reblurSettings.maxFastAccumulatedFrameNum = 6;
-    reblurSettings.diffusePrepassBlurRadius = 0.0f;
-    reblurSettings.specularPrepassBlurRadius = 15.0f;
+    reblurSettings.diffusePrepassBlurRadius = 30.0f;
+    reblurSettings.specularPrepassBlurRadius = 50.0f;
     reblurSettings.antilagSettings.luminanceSigmaScale = 2.0f;
     reblurSettings.antilagSettings.luminanceSensitivity = 3.0f;
     reblurSettings.fastHistoryClampingSigmaScale = 2.0f;
@@ -49,8 +49,17 @@ RTGL1::Denoiser::Denoiser( VkInstance _instance,
     reblurSettings.hitDistanceParameters.B = 0.1f;
     reblurSettings.hitDistanceParameters.C = 20.0f;
 
-    relaxSettings.diffusePrepassBlurRadius = 0.0f;
-    relaxSettings.specularPrepassBlurRadius = 15.0f;
+    relaxSettings.diffusePrepassBlurRadius = 30.0f;
+    relaxSettings.specularPrepassBlurRadius = 50.0f;
+    relaxSettings.diffuseMaxAccumulatedFrameNum = 30;
+    relaxSettings.specularMaxAccumulatedFrameNum = 45;
+    relaxSettings.diffuseMaxFastAccumulatedFrameNum = 6;
+    relaxSettings.specularMaxFastAccumulatedFrameNum = 6;
+    relaxSettings.atrousIterationNum = 5;
+    relaxSettings.specularLobeAngleSlack = 0.35f;
+    relaxSettings.roughnessEdgeStoppingRelaxation = 1.0f;
+    relaxSettings.normalEdgeStoppingRelaxation = 0.3f;
+    relaxSettings.luminanceEdgeStoppingRelaxation = 0.5f;
     relaxSettings.antilagSettings.accelerationAmount = 0.8f;
     relaxSettings.antilagSettings.spatialSigmaScale = 2.0f;
     relaxSettings.antilagSettings.resetAmount = 0.8f;

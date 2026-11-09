@@ -258,6 +258,7 @@ void RTGL1::VulkanDevice::Dev_Draw() const
             const char* methodNames[] = { "ReBLUR", "RELAX" };
             if( ImGui::Combo( "Method", &currentMethod, methodNames, static_cast< int >( std::size( methodNames ) ) ) )
             {
+                modifiers.denoiserMode = static_cast< RgDenoiserMode >( currentMethod );
                 denoiser->SetMethod( static_cast< NrdDenoiserMethod >( currentMethod ) );
             }
 
@@ -283,6 +284,7 @@ void RTGL1::VulkanDevice::Dev_Draw() const
                 ImGui::SliderInt( "Atrous Iteration Count", reinterpret_cast< int* >( &s.atrousIterationNum ), 1, 8 );
                 ImGui::SliderFloat( "Diffuse Prepass Blur Radius", &s.diffusePrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
                 ImGui::SliderFloat( "Specular Prepass Blur Radius", &s.specularPrepassBlurRadius, 0.0f, 100.0f, "%.1f" );
+                ImGui::SliderFloat( "Specular Lobe Angle Slack", &s.specularLobeAngleSlack, 0.0f, 1.0f, "%.2f" );
             }
             ImGui::TreePop();
         }
@@ -996,6 +998,7 @@ void RTGL1::VulkanDevice::Dev_Override( DrawFrameInfoCopy& copy ) const
             dst_illum.indirectDiffuseSensitivityToChange =
                 modifiers.indirectDiffuseSensitivityToChange;
             dst_illum.specularSensitivityToChange = modifiers.specularSensitivityToChange;
+            dst_illum.denoiserMode                = modifiers.denoiserMode;
         }
         {
             dst_tnmp.disableEyeAdaptation = modifiers.disableEyeAdaptation;
@@ -1054,6 +1057,7 @@ void RTGL1::VulkanDevice::Dev_Override( DrawFrameInfoCopy& copy ) const
             modifiers.indirectDiffuseSensitivityToChange =
                 src_illum.indirectDiffuseSensitivityToChange;
             modifiers.specularSensitivityToChange = src_illum.specularSensitivityToChange;
+            modifiers.denoiserMode                = src_illum.denoiserMode;
         }
         {
             modifiers.disableEyeAdaptation = src_tnmp.disableEyeAdaptation;

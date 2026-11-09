@@ -66,6 +66,7 @@ namespace detail
             .lightUniqueIdIgnoreFirstPersonViewerShadows = nullptr,
             .lightstyleValuesCount                       = 0,
             .pLightstyleValues                           = nullptr,
+            .denoiserMode                                = RG_DENOISER_MODE_REBLUR,
         };
     };
 

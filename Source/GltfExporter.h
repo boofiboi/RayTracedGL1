@@ -83,13 +83,12 @@ public:
                              const TextureManager&        textureManager,
                              bool                         overwriteExisting = true );
 
-    // TODO: allocators, to not pass references
     static void MakeLightsForPrimitiveDynamic(
-        const RgMeshInfo&                     mesh,
-        const RgMeshPrimitiveInfo&            primitive,
-        float                                 oneGameUnitInMeters,
-        std::vector< PositionNormal >&        tempStorage,
-        std::vector< RgSpotLightUploadInfo >& resultStorage );
+        const RgMeshInfo&                          mesh,
+        const RgMeshPrimitiveInfo&                 primitive,
+        float                                      oneGameUnitInMeters,
+        std::vector< PositionNormal >&             tempStorage,
+        std::vector< RgSphericalLightUploadInfo >& resultStorage );
 
 private:
     MeshesToTheirPrimitives     scene;

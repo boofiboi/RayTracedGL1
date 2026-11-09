@@ -59,6 +59,7 @@ struct Devmode
         float directDiffuseSensitivityToChange;
         float indirectDiffuseSensitivityToChange;
         float specularSensitivityToChange;
+        RgDenoiserMode denoiserMode;
 
         bool  disableEyeAdaptation;
         float ev100Min;

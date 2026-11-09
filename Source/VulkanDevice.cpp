@@ -307,6 +307,8 @@ void RTGL1::VulkanDevice::FillUniform( RTGL1::ShGlobalUniform* gu,
         gu->gradientMultIndirect =
             std::clamp( params.indirectDiffuseSensitivityToChange, 0.0f, 1.0f );
         gu->gradientMultSpecular = std::clamp( params.specularSensitivityToChange, 0.0f, 1.0f );
+
+        denoiser->SetMethod( params.denoiserMode == RG_DENOISER_MODE_RELAX ? NrdDenoiserMethod::Relax : NrdDenoiserMethod::Reblur );
     }
 
     {
@@ -1165,6 +1167,7 @@ void RTGL1::VulkanDevice::UploadMeshPrimitive( const RgMeshInfo*          pMesh,
 
                 uint64_t hashBase = 0;
 
+                hashBase = hashCombine( hashBase, pMesh->uniqueObjectID );
                 hashBase = hashCombine( hashBase,
                                         std::string_view( Utils::SafeCstr( prim.pTextureName ) ) );
                 hashBase = hashCombine( hashBase,
@@ -1175,10 +1178,9 @@ void RTGL1::VulkanDevice::UploadMeshPrimitive( const RgMeshInfo*          pMesh,
 
                 for( auto& l : tempStorageLights )
                 {
-                    // TODO: change ID; hope that there's no collision
                     uint64_t h32 = hashCombine( hashBase, counter ) % UINT32_MAX;
 
-                    l.uniqueID = h32 << 16ull;
+                    l.uniqueID = ( h32 + 1 ) << 16ull;
                     l.isExportable = false;
 
                     UploadLight( &l );

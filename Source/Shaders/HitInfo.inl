@@ -408,7 +408,11 @@ ShHitInfo getHitInfoBounce(
         h.roughness = tr.roughnessDefault;
         h.metallic  = tr.metallicDefault;
     }
-    h.roughness = max( h.roughness, max( globalUniform.minRoughness, MIN_GGX_ROUGHNESS ) );
+    h.roughness = max( h.roughness, max( globalUniform.minRoughness, 0.03 ) );
+    if( ( instCustomIndex & INSTANCE_CUSTOM_INDEX_FLAG_FIRST_PERSON ) != 0 )
+    {
+        h.roughness = max( h.roughness, 0.06 );
+    }
 
 
     if( tr.emissiveTexture != MATERIAL_NO_TEXTURE )

@@ -31,6 +31,10 @@ Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning 
 
 nVidia NRD denoiser replacing SVGF Atrous.
 
+DLSS 4.5 support with its accompanying frame gen
+
+Lottes CRT shader replacing the old, ugly "NTSC scanline" emulating shader
+
 ## Build
 
 
