@@ -9,11 +9,16 @@
 .vscode/
 
 Build/
-Bin/
+/Bin/
+/bin/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Source/FSR3/bin/
+Source/FSR3/sdk/**/bin/
+Source/FSR3/bin/*
+!Source/FSR3/bin/shaders/
+Source/FSR3/bin/shaders/*
+!Source/FSR3/bin/shaders/vk/
 Source/FSR3/ffx-api/bin/
 Source/External/DLSS
 # slop
