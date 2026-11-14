@@ -673,7 +673,7 @@ FfxErrorCode ffxConfigureFrameInterpolationSwapchainVK(FfxSwapchain gameSwapChai
         switch (key)
         {
             case FFX_FI_SWAPCHAIN_CONFIGURE_KEY_WAITCALLBACK:
-                pSwapChainVK->setWaitCallback(static_cast<FfxWaitCallbackFunc>(valuePtr));
+                pSwapChainVK->setWaitCallback(reinterpret_cast<FfxWaitCallbackFunc>(valuePtr));
             break;
             case FFX_FI_SWAPCHAIN_CONFIGURE_KEY_FRAMEPACINGTUNING:
                 if (valuePtr != nullptr)
@@ -1008,7 +1008,6 @@ DWORD WINAPI copyAndPresent_presenterThread(LPVOID pParam)
                             SubmissionSemaphores toSignal;
                             SubmissionSemaphores toWait;
                             toWait.add(presenter->compositionSemaphore, frameInfo.presentIndex);  // composition to finish
-                            toSignal.add(presenter->frameRenderedSemaphores[imageIndex]);  // frame ready for present. Not a timeline semaphore
 
                             // no image was acquired, just skip everything and signal the appropriate semaphores
 
@@ -1029,6 +1028,7 @@ DWORD WINAPI copyAndPresent_presenterThread(LPVOID pParam)
 
                             if (res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR)
                             {
+                                toSignal.add(presenter->frameRenderedSemaphores[imageIndex]);
                                 toWait.add(imageAvailableSemaphore);  // swapchain image to be available
 
                                 auto presentCommandList = presenter->commandPool.get(presenter->device, presenter->presentQueue, "presentCommandList");
@@ -1151,7 +1151,6 @@ DWORD WINAPI composeAndPresent_presenterThread(LPVOID pParam)
                         if (frameInfo.doPresent)
                         {
                             SubmissionSemaphores toSignal;
-                            toSignal.add(presenter->frameRenderedSemaphores[0]);  // not a timeline semaphore
 
                             // signal replacement buffer availability
                             // this is the last present of this entry
@@ -1176,6 +1175,7 @@ DWORD WINAPI composeAndPresent_presenterThread(LPVOID pParam)
 
                             if (res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR)
                             {
+                                toSignal.add(presenter->frameRenderedSemaphores[realSwapchainImageIndex]);
                                 toWait.add(acquireSemaphore);
 
                                 res = compositeSwapChainFrame(presenter,
@@ -1191,7 +1191,7 @@ DWORD WINAPI composeAndPresent_presenterThread(LPVOID pParam)
                                 waitForPerformanceCount(previousPresentQpc + frameInfo.presentQpcDelta);
                                 QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&previousPresentQpc));
 
-                                res = presentToSwapChain(presenter, realSwapchainImageIndex);
+                                res = presentToSwapChain(presenter, realSwapchainImageIndex, realSwapchainImageIndex);
                                 // VK_SUBOPTIMAL_KHR & VK_ERROR_OUT_OF_DATE_KHR: the swapchain has been recreated
                                 FFX_ASSERT_MESSAGE_FORMAT(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR || res == VK_ERROR_OUT_OF_DATE_KHR,
                                                           "presentToSwapChain failed with error %d",
@@ -1386,8 +1386,10 @@ struct SwapchainCreationInfo
 
     VkImageCompressionControlEXT             imageCompressionControl;
     VkImageFormatListCreateInfo              imageFormatList;
+#ifdef _WIN32
     VkSurfaceFullScreenExclusiveInfoEXT      surfaceFullScreenExclusive;
     VkSurfaceFullScreenExclusiveWin32InfoEXT surfaceFullScreenExclusiveWin32;
+#endif
     VkSwapchainCounterCreateInfoEXT          swapchainCounter;
     VkSwapchainDisplayNativeHdrCreateInfoAMD swapchainDisplayNativeHdr;
     VkSwapchainPresentModesCreateInfoEXT     swapchainPresentModes;
@@ -1428,14 +1430,16 @@ VkResult getRealSwapchainCreateInfo(const VkSwapchainCreateInfoKHR* pCreateInfo,
         case VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO:
             FFX_USE_PNEXT_AS_IS(imageFormatList, VkImageFormatListCreateInfo);
             break;
+#ifdef _WIN32
         case VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_INFO_EXT:
             realSwapchainCreateInfo.surfaceFullScreenExclusive       = *reinterpret_cast<const VkSurfaceFullScreenExclusiveInfoEXT*>(pCurrent);
-            realSwapchainCreateInfo.surfaceFullScreenExclusive.pNext = const_cast<void*>(realSwapchainCreateInfo.swapchain.pNext);  // because pNext is void* instead of const void* in vulkan header
+            realSwapchainCreateInfo.surfaceFullScreenExclusive.pNext = const_cast<void*>(realSwapchainCreateInfo.swapchain.pNext);
             realSwapchainCreateInfo.swapchain.pNext                  = &realSwapchainCreateInfo.surfaceFullScreenExclusive;
             break;
         case VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_WIN32_INFO_EXT:
             FFX_USE_PNEXT_AS_IS(surfaceFullScreenExclusiveWin32, VkSurfaceFullScreenExclusiveWin32InfoEXT);
             break;
+#endif
         case VK_STRUCTURE_TYPE_SWAPCHAIN_COUNTER_CREATE_INFO_EXT:
             FFX_USE_PNEXT_AS_IS(swapchainCounter, VkSwapchainCounterCreateInfoEXT);
             break;

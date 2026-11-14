@@ -39,6 +39,7 @@
     #include <nvsdk_ngx_helpers_dlssg_vk.h>
 
     #if __linux__
+        #include <dlfcn.h>
         #include <unistd.h>
         #include <linux/limits.h>
     #endif
@@ -151,6 +152,23 @@ static std::wstring GetDllFolderPath()
     }
     return {};
 }
+#elif defined( __linux__ )
+static std::wstring GetDllFolderPath()
+{
+    Dl_info dlInfo{};
+    if( dladdr( reinterpret_cast< void* >( &GetFolderPath ), &dlInfo ) && dlInfo.dli_fname )
+    {
+        wchar_t modPath[ PATH_MAX ]{};
+        std::mbstowcs( modPath, dlInfo.dli_fname, PATH_MAX );
+        std::wstring curFolderPath = modPath;
+        auto         p             = curFolderPath.find_last_of( L'/' );
+        if( p != std::wstring::npos )
+        {
+            return curFolderPath.substr( 0, p );
+        }
+    }
+    return {};
+}
 #endif
 
 bool RTGL1::DLSS::TryInit( VkInstance       instance,
@@ -180,7 +198,7 @@ bool RTGL1::DLSS::TryInit( VkInstance       instance,
         }
     };
 
-#if defined( _WIN32 )
+#if defined( _WIN32 ) || defined( __linux__ )
     std::wstring dllFolder = GetDllFolderPath();
     if( !dllFolder.empty() )
     {
@@ -201,15 +219,31 @@ bool RTGL1::DLSS::TryInit( VkInstance       instance,
     bool dllFound = false;
     for( const auto& dir : searchDirs )
     {
-        std::filesystem::path p( dir );
-        p /= "nvngx_dlss.dll";
         std::error_code ec;
+#if defined( _WIN32 )
+        std::filesystem::path p = std::filesystem::path( dir ) / "nvngx_dlss.dll";
         if( std::filesystem::exists( p, ec ) )
         {
             dllFound = true;
             debug::Info( "DLSS: Found nvngx_dlss.dll at: {}", p.string() );
             break;
         }
+#else
+        for( const char* libName : { "libnvidia-ngx-dlss.so.310.9.16", "libnvidia-ngx-dlss.so" } )
+        {
+            std::filesystem::path p = std::filesystem::path( dir ) / libName;
+            if( std::filesystem::exists( p, ec ) )
+            {
+                dllFound = true;
+                debug::Info( "DLSS: Found {} at: {}", libName, p.string() );
+                break;
+            }
+        }
+        if( dllFound )
+        {
+            break;
+        }
+#endif
     }
 
     if( !dllFound )

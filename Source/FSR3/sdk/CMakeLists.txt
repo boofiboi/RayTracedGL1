@@ -88,6 +88,8 @@ elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "arm64" OR CMAKE_EXE_LINKER_FLAGS STREQ
     set(FFX_PLATFORM_NAME arm64)
 elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "arm64ec" OR CMAKE_EXE_LINKER_FLAGS STREQUAL "/machine:ARM64EC")
 	set(FFX_PLATFORM_NAME arm64ec)
+elseif(NOT WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+	set(FFX_PLATFORM_NAME x64)
 else()
     message(FATAL_ERROR "Unsupported target platform \"${CMAKE_GENERATOR_PLATFORM}\"")
 endif()
@@ -115,8 +117,9 @@ endif()
 # Set configuration types based on what we are building for
 if (NOT FFX_CUSTOM_API)
 
-	# Embed PDBs in the debug versions of the libs
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Z7 /Od")
+	if (MSVC)
+		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Z7 /Od")
+	endif()
     
 	# Write debug, profile, and release versions of the static libs to the /bin folder as they are uniquely named	
 	set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_HOME_DIRECTORY}/bin/ffx_sdk/)

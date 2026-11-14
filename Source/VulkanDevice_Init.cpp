@@ -96,7 +96,7 @@ VkSurfaceKHR GetSurfaceFromUser( VkInstance instance, const RgInstanceCreateInfo
         wlInfo.display                       = info.pWaylandSurfaceCreateInfo->display;
         wlInfo.surface                       = info.pWaylandSurfaceCreateInfo->surface;
 
-        r = ( instance, &wlInfo, nullptr, &surface );
+        r = vkCreateWaylandSurfaceKHR( instance, &wlInfo, nullptr, &surface );
         VK_CHECKERROR( r );
 
         return surface;
@@ -681,30 +681,44 @@ void RTGL1::VulkanDevice::CreateInstance( const RgInstanceCreateInfo& info )
         }
     }
 
-    std::vector extensions = {
+    auto isExtSupported = [ &supportedInstanceExtensions ]( const char* name ) {
+        return std::ranges::any_of( std::as_const( supportedInstanceExtensions ),
+                                    [ name ]( const VkExtensionProperties& ext ) {
+                                        return std::strcmp( ext.extensionName, name ) == 0;
+                                    } );
+    };
+
+    std::vector< const char* > extensions = {
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
         VK_KHR_SURFACE_EXTENSION_NAME,
+    };
+
+    auto addSurfaceExtIfSupported = [ &extensions, &isExtSupported ]( const char* name ) {
+        if( isExtSupported( name ) )
+        {
+            extensions.push_back( name );
+        }
+    };
 
 #ifdef RG_USE_SURFACE_WIN32
-        VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-#endif // RG_USE_SURFACE_WIN32
+    addSurfaceExtIfSupported( VK_KHR_WIN32_SURFACE_EXTENSION_NAME );
+#endif
 
 #ifdef RG_USE_SURFACE_METAL
-        VK_EXT_METAL_SURFACE_EXTENSION_NAME,
-#endif // RG_USE_SURFACE_METAL
+    addSurfaceExtIfSupported( VK_EXT_METAL_SURFACE_EXTENSION_NAME );
+#endif
 
 #ifdef RG_USE_SURFACE_WAYLAND
-        VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
-#endif // RG_USE_SURFACE_WAYLAND
+    addSurfaceExtIfSupported( VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME );
+#endif
 
 #ifdef RG_USE_SURFACE_XCB
-        VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-#endif // RG_USE_SURFACE_XCB
+    addSurfaceExtIfSupported( VK_KHR_XCB_SURFACE_EXTENSION_NAME );
+#endif
 
 #ifdef RG_USE_SURFACE_XLIB
-        VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
-#endif // RG_USE_SURFACE_XLIB
-    };
+    addSurfaceExtIfSupported( VK_KHR_XLIB_SURFACE_EXTENSION_NAME );
+#endif
 
     if( libconfig.vulkanValidation )
     {
@@ -899,6 +913,7 @@ void RTGL1::VulkanDevice::CreateDevice()
         .shaderSampledImageArrayNonUniformIndexing  = 1,
         .shaderStorageBufferArrayNonUniformIndexing = 1,
         .runtimeDescriptorArray                     = 1,
+        .timelineSemaphore                          = 1,
         .bufferDeviceAddress                        = 1,
     };
 

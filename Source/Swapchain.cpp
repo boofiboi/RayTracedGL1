@@ -21,6 +21,7 @@
 #include "Swapchain.h"
 
 #include <algorithm>
+#include <thread>
 #include <utility>
 
 #include "FrameGenerator.h"
@@ -57,9 +58,15 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
     , surfaceFormat{}
     , presentModeVsync( VK_PRESENT_MODE_FIFO_KHR )
     , presentModeImmediate( VK_PRESENT_MODE_FIFO_KHR )
+    , currentPresentMode( VK_PRESENT_MODE_FIFO_KHR )
+    , hasMailbox( false )
+    , hasImmediate( false )
     , requestedVsync( true )
+    , requestedFrameGen( false )
+    , requestedExtent{ 0, 0 }
     , surfaceExtent{ UINT32_MAX, UINT32_MAX }
     , isVsync( true )
+    , isFrameGen( false )
     , swapchain( VK_NULL_HANDLE )
     , currentSwapchainIndex( UINT32_MAX )
     , cachedCapabilities{}
@@ -118,9 +125,6 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
         r = vkGetPhysicalDeviceSurfacePresentModesKHR(
             physDevice, surface, &presentModeCount, presentModes.data() );
         VK_CHECKERROR( r );
-
-        bool hasMailbox   = false;
-        bool hasImmediate = false;
 
         for( auto p : presentModes )
         {
@@ -210,10 +214,28 @@ VkExtent2D RTGL1::Swapchain::GetOptimalExtent() const
     if( surfCapabilities.currentExtent.width == UINT32_MAX ||
         surfCapabilities.currentExtent.height == UINT32_MAX )
     {
-        return surfCapabilities.maxImageExtent;
+        if( IsNullExtent( requestedExtent ) )
+        {
+            throw RgException( RG_RESULT_WRONG_FUNCTION_CALL,
+                               "Surface has 0 extent. Prevent calling RTGL1 functions in that case" );
+        }
+
+        return VkExtent2D{
+            std::clamp( requestedExtent.width,
+                        surfCapabilities.minImageExtent.width,
+                        surfCapabilities.maxImageExtent.width ),
+            std::clamp( requestedExtent.height,
+                        surfCapabilities.minImageExtent.height,
+                        surfCapabilities.maxImageExtent.height ),
+        };
     }
 
     return surfCapabilities.currentExtent;
+}
+
+void RTGL1::Swapchain::RequestExtent( uint32_t width, uint32_t height )
+{
+    requestedExtent = { width, height };
 }
 
 bool RTGL1::Swapchain::RequestVsync( bool enable )
@@ -222,13 +244,35 @@ bool RTGL1::Swapchain::RequestVsync( bool enable )
     return requestedVsync != isVsync;
 }
 
+bool RTGL1::Swapchain::RequestFrameGeneration( bool enable )
+{
+    requestedFrameGen = enable;
+    return requestedFrameGen != isFrameGen;
+}
+
+VkPresentModeKHR RTGL1::Swapchain::GetTargetPresentMode( bool vsync, bool frameGen ) const
+{
+    if( vsync )
+    {
+        return presentModeVsync;
+    }
+
+    if( frameGen && hasImmediate )
+    {
+        return VK_PRESENT_MODE_IMMEDIATE_KHR;
+    }
+
+    return presentModeImmediate;
+}
+
 void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
 {
     VkExtent2D requestedExtent = GetOptimalExtent();
 
-    if( requestedExtent != surfaceExtent || requestedVsync != isVsync )
+    if( requestedExtent != surfaceExtent ||
+        GetTargetPresentMode( requestedVsync, requestedFrameGen ) != currentPresentMode )
     {
-        TryRecreate( requestedExtent, requestedVsync );
+        TryRecreate( requestedExtent, requestedVsync, requestedFrameGen );
     }
 
     uint32_t recreateAttempts = 0;
@@ -258,10 +302,15 @@ void RTGL1::Swapchain::AcquireImage( VkSemaphore imageAvailableSemaphore )
         {
             break;
         }
+        else if( r == VK_NOT_READY || r == VK_TIMEOUT )
+        {
+            std::this_thread::yield();
+            continue;
+        }
         else if( r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR )
         {
             InvalidateCapabilities();
-            TryRecreate( GetOptimalExtent(), requestedVsync );
+            TryRecreate( GetOptimalExtent(), requestedVsync, requestedFrameGen );
 
             if( ++recreateAttempts > 16 )
             {
@@ -507,21 +556,24 @@ void RTGL1::Swapchain::OnQueuePresent( VkResult queuePresentResult )
     if( queuePresentResult == VK_ERROR_OUT_OF_DATE_KHR || queuePresentResult == VK_SUBOPTIMAL_KHR )
     {
         InvalidateCapabilities();
-        TryRecreate( GetOptimalExtent(), requestedVsync );
+        TryRecreate( GetOptimalExtent(), requestedVsync, requestedFrameGen );
     }
 }
 
-bool RTGL1::Swapchain::TryRecreate( const VkExtent2D& newExtent, bool vsync )
+bool RTGL1::Swapchain::TryRecreate( const VkExtent2D& newExtent, bool vsync, bool frameGen )
 {
-    if( surfaceExtent == newExtent && isVsync == vsync )
+    const VkPresentModeKHR targetPresentMode = GetTargetPresentMode( vsync, frameGen );
+    if( surfaceExtent == newExtent && currentPresentMode == targetPresentMode )
     {
+        isVsync    = vsync;
+        isFrameGen = frameGen;
         return false;
     }
 
     cmdManager->WaitDeviceIdle();
 
     VkSwapchainKHR old = DestroyWithoutSwapchain();
-    Create( newExtent.width, newExtent.height, vsync, old );
+    Create( newExtent.width, newExtent.height, vsync, frameGen, old );
 
     return true;
 }
@@ -529,10 +581,13 @@ bool RTGL1::Swapchain::TryRecreate( const VkExtent2D& newExtent, bool vsync )
 void RTGL1::Swapchain::Create( uint32_t       newWidth,
                                uint32_t       newHeight,
                                bool           vsync,
+                               bool           frameGen,
                                VkSwapchainKHR oldSwapchain )
 {
-    this->isVsync       = vsync;
-    this->surfaceExtent = { newWidth, newHeight };
+    this->isVsync            = vsync;
+    this->isFrameGen         = frameGen;
+    this->surfaceExtent      = { newWidth, newHeight };
+    this->currentPresentMode = GetTargetPresentMode( vsync, frameGen );
 
     const VkSurfaceCapabilitiesKHR& surfCapabilities = GetCapabilities();
 
@@ -574,7 +629,7 @@ void RTGL1::Swapchain::Create( uint32_t       newWidth,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform     = surfCapabilities.currentTransform,
         .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode      = vsync ? presentModeVsync : presentModeImmediate,
+        .presentMode      = currentPresentMode,
         .clipped          = VK_FALSE,
         .oldSwapchain     = oldSwapchain,
     };
@@ -688,9 +743,8 @@ VkSwapchainKHR RTGL1::Swapchain::DestroyWithoutSwapchain()
     VkSwapchainKHR old = swapchain;
     swapchain          = VK_NULL_HANDLE;
 
-    if( fgHooks )
+    if( fgHooks && fgHooks->IsActive() )
     {
-        // the frame generator owns the (hijacked) swapchain handle
         fgHooks->DestroySwapchain( old );
         old = VK_NULL_HANDLE;
     }

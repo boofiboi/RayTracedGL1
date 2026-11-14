@@ -63,7 +63,8 @@ public:
     bool IsMinimized() const { return isMinimized; }
 
 private:
-    VkDevice device;
+    VkInstance instance;
+    VkDevice   device;
 
     GLFWwindow*                  customWindow;
     VkSurfaceKHR                 customSurface;

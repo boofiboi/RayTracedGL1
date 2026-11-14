@@ -150,7 +150,7 @@ uint getNewRayMedia(int i, uint prevMedia, uint geometryInstanceFlags, float rou
     // if camera is inside some media, and the first hit is the surface
     // of the same media, then the ray exits it to vacuum
     // (e.g. looking at the water surface from underwater)
-    if (i == 0 && prevMedia != MEDIA_TYPE_VACUUM && hitMedia == prevMedia)
+    if (prevMedia != MEDIA_TYPE_VACUUM && hitMedia == prevMedia)
     {
        return MEDIA_TYPE_VACUUM;
     }

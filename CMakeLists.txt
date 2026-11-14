@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(RayTracedGL1 CXX C)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE )
 
@@ -125,11 +126,17 @@ set(KTXSources
 
 option(RG_WITH_EXPORTS          "Compile library for export"                ON)
 
-option(RG_WITH_SURFACE_WIN32 "Build with Win32 VkSurfaceKHR support" ON)
+if (WIN32)
+    option(RG_WITH_SURFACE_WIN32    "Build with Win32 VkSurfaceKHR support"   ON)
+    option(RG_WITH_SURFACE_WAYLAND  "Build with Wayland VkSurfaceKHR support" OFF)
+    option(RG_WITH_SURFACE_XLIB     "Build with Xlib VkSurfaceKHR support"    OFF)
+else()
+    option(RG_WITH_SURFACE_WIN32    "Build with Win32 VkSurfaceKHR support"   OFF)
+    option(RG_WITH_SURFACE_WAYLAND  "Build with Wayland VkSurfaceKHR support" ON)
+    option(RG_WITH_SURFACE_XLIB     "Build with Xlib VkSurfaceKHR support"    ON)
+endif()
 option(RG_WITH_SURFACE_METAL    "Build with Metal VkSurfaceKHR support"     OFF)
-option(RG_WITH_SURFACE_WAYLAND  "Build with Wayland VkSurfaceKHR support"   OFF)
 option(RG_WITH_SURFACE_XCB      "Build with Xcb VkSurfaceKHR support"       OFF)
-option(RG_WITH_SURFACE_XLIB     "Build with Xlib VkSurfaceKHR support"      OFF)
 
 option(RG_WITH_NVIDIA_DLSS      "Build RTGL1 with Nvidia DLSS"              ON)
 option(RG_WITH_IMGUI            "Build RTGL1 with ImGui debug windows"      ON)
@@ -153,28 +160,18 @@ endif()
 if (RG_WITH_SURFACE_WIN32 OR RG_USE_SURFACE_WIN32)
     message(STATUS "RG_WITH_SURFACE_WIN32 enabled")
     add_definitions(-DNOMINMAX)
-    add_definitions(-DRG_USE_SURFACE_WIN32)
-    add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
 endif()
 if (RG_WITH_SURFACE_METAL)
     message(STATUS "RG_WITH_SURFACE_METAL enabled")
-    add_definitions(-DRG_USE_SURFACE_METAL)
-    add_definitions(-DVK_USE_PLATFORM_METAL_EXT)
 endif()
 if (RG_WITH_SURFACE_WAYLAND)
     message(STATUS "RG_WITH_SURFACE_WAYLAND enabled")
-    add_definitions(-DRG_USE_SURFACE_WAYLAND)
-    add_definitions(-DVK_USE_PLATFORM_WAYLAND_KHR)
 endif()
 if (RG_WITH_SURFACE_XCB)
     message(STATUS "RG_WITH_SURFACE_XCB enabled")
-    add_definitions(-DRG_USE_SURFACE_XCB)
-    add_definitions(-DVK_USE_PLATFORM_XCB_KHR)
 endif()
 if (RG_WITH_SURFACE_XLIB)
     message(STATUS "RG_WITH_SURFACE_XLIB enabled")
-    add_definitions(-DRG_USE_SURFACE_XLIB)
-    add_definitions(-DVK_USE_PLATFORM_XLIB_KHR)
 endif()
 
 
@@ -211,6 +208,22 @@ add_library(RayTracedGL1 SHARED
     ${KTXSources}
     ${PublicHeaders}
 )
+
+if (RG_WITH_SURFACE_WIN32 OR RG_USE_SURFACE_WIN32)
+    target_compile_definitions(RayTracedGL1 PUBLIC RG_USE_SURFACE_WIN32 VK_USE_PLATFORM_WIN32_KHR)
+endif()
+if (RG_WITH_SURFACE_METAL)
+    target_compile_definitions(RayTracedGL1 PUBLIC RG_USE_SURFACE_METAL VK_USE_PLATFORM_METAL_EXT)
+endif()
+if (RG_WITH_SURFACE_WAYLAND)
+    target_compile_definitions(RayTracedGL1 PUBLIC RG_USE_SURFACE_WAYLAND VK_USE_PLATFORM_WAYLAND_KHR)
+endif()
+if (RG_WITH_SURFACE_XCB)
+    target_compile_definitions(RayTracedGL1 PUBLIC RG_USE_SURFACE_XCB VK_USE_PLATFORM_XCB_KHR)
+endif()
+if (RG_WITH_SURFACE_XLIB)
+    target_compile_definitions(RayTracedGL1 PUBLIC RG_USE_SURFACE_XLIB VK_USE_PLATFORM_XLIB_KHR)
+endif()
 
 # KTX
 target_include_directories(RayTracedGL1 PRIVATE "Source/KTX/include")
@@ -270,6 +283,18 @@ if (RG_WITH_NVIDIA_DLSS)
         else()
             target_link_libraries(RayTracedGL1 PRIVATE "${DLSS_SDK_DIR}/lib/Linux_x86_64/libnvsdk_ngx.a")
             target_link_libraries(RayTracedGL1 PRIVATE ${CMAKE_DL_LIBS})
+            if (EXISTS "${DLSS_SDK_DIR}/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.310.9.16")
+                add_custom_command(TARGET RayTracedGL1 POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLSS_SDK_DIR}/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.310.9.16"
+                        "$<TARGET_FILE_DIR:RayTracedGL1>"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLSS_SDK_DIR}/lib/Linux_x86_64/rel/libnvidia-ngx-dlssd.so.310.9.16"
+                        "$<TARGET_FILE_DIR:RayTracedGL1>"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${DLSS_SDK_DIR}/lib/Linux_x86_64/rel/libnvidia-ngx-dlssg.so.310.9.16"
+                        "$<TARGET_FILE_DIR:RayTracedGL1>")
+            endif()
         endif()
     else()
         message(FATAL_ERROR 
@@ -297,6 +322,10 @@ if (RG_WITH_AMD_FSR3)
     add_subdirectory(Source/FSR3/ffx-api)
     target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include" "Source/FSR3/ffx-api/include")
     target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_vk_x64 amd_fidelityfx_vk)
+    add_custom_command(TARGET RayTracedGL1 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:amd_fidelityfx_vk>"
+            "$<TARGET_FILE_DIR:RayTracedGL1>")
 endif()
 
 if (RG_WITH_NVIDIA_NRD)
@@ -310,6 +339,13 @@ if (RG_WITH_NVIDIA_NRD)
     set(NRD_EMBEDS_DXIL_SHADERS OFF CACHE BOOL "" FORCE)
     set(NRD_EMBEDS_DXBC_SHADERS OFF CACHE BOOL "" FORCE)
     add_subdirectory(Source/External/NRD)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        foreach(nri_target NRI NRI_Shared NRI_VK NRI_Validation NRI_NONE)
+            if (TARGET ${nri_target})
+                target_compile_options(${nri_target} PRIVATE -Wno-error=maybe-uninitialized -Wno-error=uninitialized)
+            endif()
+        endforeach()
+    endif()
     target_include_directories(RayTracedGL1 PRIVATE 
         "Source/External/NRD/Include" 
         "Source/External/NRD/Integration"
@@ -348,6 +384,10 @@ endif()
 if (MSVC)
     target_compile_options(RayTracedGL1 PRIVATE /Zi /arch:AVX2 /fp:fast)
     target_link_options(RayTracedGL1 PRIVATE /DEBUG /OPT:REF /OPT:ICF)
+elseif (UNIX AND NOT APPLE)
+    target_compile_options(RayTracedGL1 PRIVATE -mavx2 -mfma -mf16c -fno-math-errno)
+    target_link_libraries(RayTracedGL1 PRIVATE ${CMAKE_DL_LIBS} pthread)
+    set_target_properties(RayTracedGL1 PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
 endif()
 
 if (RG_WITH_SHADERS)

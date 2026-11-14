@@ -77,7 +77,7 @@ struct InternalFgContext
 uint64_t ffxProvider_FrameGeneration::GetId() const
 {
     // FG, version from header
-    return 0xF600'0000ui64 << 32u | (FFX_SDK_MAKE_VERSION(FFX_FRAMEINTERPOLATION_VERSION_MAJOR, FFX_FRAMEINTERPOLATION_VERSION_MINOR, FFX_FRAMEINTERPOLATION_VERSION_PATCH) & 0xFFFF'FFFF);
+    return 0xF600'0000ull << 32u | (FFX_SDK_MAKE_VERSION(FFX_FRAMEINTERPOLATION_VERSION_MAJOR, FFX_FRAMEINTERPOLATION_VERSION_MINOR, FFX_FRAMEINTERPOLATION_VERSION_PATCH) & 0xFFFF'FFFF);
 }
 
 const char* ffxProvider_FrameGeneration::GetVersionName() const
@@ -137,6 +137,8 @@ ffxReturnCode_t ffxProvider_FrameGeneration::CreateContext(ffxContext* context, 
             // set up optical flow resources
             FfxOpticalflowSharedResourceDescriptions ofResourceDescs = {};
             TRY2(ffxOpticalflowGetSharedResourceDescriptions(&internal_context->ofContext, &ofResourceDescs));
+            ofResourceDescs.opticalFlowVector.resourceDescription.flags = (FfxResourceFlags)(ofResourceDescs.opticalFlowVector.resourceDescription.flags | FFX_RESOURCE_FLAGS_CONCURRENT);
+            ofResourceDescs.opticalFlowSCD.resourceDescription.flags = (FfxResourceFlags)(ofResourceDescs.opticalFlowSCD.resourceDescription.flags | FFX_RESOURCE_FLAGS_CONCURRENT);
 
             TRY2(internal_context->backendInterfaceShared.fpCreateResource(&internal_context->backendInterfaceShared, &ofResourceDescs.opticalFlowVector, internal_context->effectContextIdShared, &internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR]));
             TRY2(internal_context->backendInterfaceShared.fpCreateResource(&internal_context->backendInterfaceShared, &ofResourceDescs.opticalFlowSCD, internal_context->effectContextIdShared, &internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCD_OUTPUT]));
@@ -150,7 +152,8 @@ ffxReturnCode_t ffxProvider_FrameGeneration::CreateContext(ffxContext* context, 
             for (FfxUInt32 i = 0; i < 2; i++)
             {
                 FfxCreateResourceDescription dilD = fiResourceDescs.dilatedDepth;
-                swprintf(Name, 255, L"%s%d", fiResourceDescs.dilatedDepth.name, i);
+                dilD.resourceDescription.flags = (FfxResourceFlags)(dilD.resourceDescription.flags | FFX_RESOURCE_FLAGS_CONCURRENT);
+                swprintf(Name, 255, L"%ls%d", fiResourceDescs.dilatedDepth.name, i);
                 dilD.name = Name;
                 TRY2(internal_context->backendInterfaceShared.fpCreateResource(
                     &internal_context->backendInterfaceShared,
@@ -159,7 +162,8 @@ ffxReturnCode_t ffxProvider_FrameGeneration::CreateContext(ffxContext* context, 
                     &internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_DILATED_DEPTH_0 + (i * FFX_FSR3_RESOURCE_IDENTIFIER_UPSCALED_COUNT)]));
 
                 FfxCreateResourceDescription dilMVs = fiResourceDescs.dilatedMotionVectors;
-                swprintf(Name, 255, L"%s%d", fiResourceDescs.dilatedMotionVectors.name, i);
+                dilMVs.resourceDescription.flags = (FfxResourceFlags)(dilMVs.resourceDescription.flags | FFX_RESOURCE_FLAGS_CONCURRENT);
+                swprintf(Name, 255, L"%ls%d", fiResourceDescs.dilatedMotionVectors.name, i);
                 dilMVs.name = Name;
                 TRY2(internal_context->backendInterfaceShared.fpCreateResource(
                     &internal_context->backendInterfaceShared,
@@ -168,7 +172,8 @@ ffxReturnCode_t ffxProvider_FrameGeneration::CreateContext(ffxContext* context, 
                     &internal_context->sharedResources[FFX_FSR3_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS_0 + (i * FFX_FSR3_RESOURCE_IDENTIFIER_UPSCALED_COUNT)]));
 
                 FfxCreateResourceDescription recND = fiResourceDescs.reconstructedPrevNearestDepth;
-                swprintf(Name, 255, L"%s%d", fiResourceDescs.reconstructedPrevNearestDepth.name, i);
+                recND.resourceDescription.flags = (FfxResourceFlags)(recND.resourceDescription.flags | FFX_RESOURCE_FLAGS_CONCURRENT);
+                swprintf(Name, 255, L"%ls%d", fiResourceDescs.reconstructedPrevNearestDepth.name, i);
                 recND.name = Name;
                 TRY2(internal_context->backendInterfaceShared.fpCreateResource(
                     &internal_context->backendInterfaceShared,

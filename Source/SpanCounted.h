@@ -68,6 +68,9 @@ private:
     size_type count{ 0 };
 };
 
+template< class T, size_t Extent >
+span_counted( std::span< T, Extent > ) -> span_counted< T, Extent >;
+
 
 struct byte_subspan
 {

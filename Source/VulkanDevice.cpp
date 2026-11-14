@@ -45,7 +45,9 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
             device, frameFences[ frameIndex ], outOfFrameFences[ frameIndex ] );
     }
 
+    swapchain->RequestExtent( info.surfaceSize.width, info.surfaceSize.height );
     swapchain->RequestVsync( vsync );
+    swapchain->RequestFrameGeneration( frameGenerationActive );
     swapchain->AcquireImage( imageAvailableSemaphores[ frameIndex ] );
 
     VkSemaphore semaphoreToWaitOnSubmit = imageAvailableSemaphores[ frameIndex ];

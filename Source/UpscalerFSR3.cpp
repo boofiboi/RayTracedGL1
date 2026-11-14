@@ -92,14 +92,18 @@ void RTGL1::UpscalerFSR3::DestroyContextAndResources()
 
 void RTGL1::UpscalerFSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
 {
-    // a previous frame may still be in flight and referencing context internals
+    if( resolutionState.upscaledWidth == 0 || resolutionState.upscaledHeight == 0 )
+    {
+        DestroyContextAndResources();
+        return;
+    }
+
     vkDeviceWaitIdle( device );
 
     DestroyContextAndResources();
 
     FfxFsr3UpscalerContextDescription contextDesc = {
-        .flags = FFX_FSR3UPSCALER_ENABLE_HIGH_DYNAMIC_RANGE |
-                 FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE,
+        .flags          = 0,
         .maxRenderSize  = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .maxUpscaleSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .fpMessage      = nullptr,
@@ -348,7 +352,7 @@ RgFloat2D RTGL1::UpscalerFSR3::GetJitter( const ResolutionState& resolutionState
 
 bool RTGL1::UpscalerFSR3::IsAvailable() const
 {
-    return true;
+    return !contextFailed;
 }
 
 #else

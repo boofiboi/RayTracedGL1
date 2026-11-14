@@ -194,7 +194,8 @@ RTGL1::DebugWindows::DebugWindows( VkInstance                               _ins
                                    uint32_t                                 _queueFamiy,
                                    VkQueue                                  _queue,
                                    std::shared_ptr< CommandBufferManager >& _cmdManager )
-    : device( _device )
+    : instance( _instance )
+    , device( _device )
     , customWindow( CreateGLFWWindow() )
     , customSurface( VK_NULL_HANDLE )
     , swapchainImageAvailable{}
@@ -276,6 +277,14 @@ RTGL1::DebugWindows::~DebugWindows()
         vkDestroyFramebuffer( device, f, nullptr );
     }
 
+    customSwapchain.reset();
+
+    if( customSurface != VK_NULL_HANDLE )
+    {
+        vkDestroySurfaceKHR( instance, customSurface, nullptr );
+        customSurface = VK_NULL_HANDLE;
+    }
+
     glfwDestroyWindow( customWindow );
     glfwTerminate();
 }
@@ -301,6 +310,16 @@ bool RTGL1::DebugWindows::PrepareForFrame( uint32_t frameIndex )
         return true;
     }
 
+    int fbWidth  = 0;
+    int fbHeight = 0;
+    glfwGetFramebufferSize( customWindow, &fbWidth, &fbHeight );
+    if( fbWidth <= 0 || fbHeight <= 0 )
+    {
+        isMinimized = true;
+        return true;
+    }
+
+    customSwapchain->RequestExtent( uint32_t( fbWidth ), uint32_t( fbHeight ) );
     customSwapchain->RequestVsync( false );
     customSwapchain->AcquireImage( swapchainImageAvailable[ frameIndex ] );
 

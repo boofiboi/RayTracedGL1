@@ -917,7 +917,7 @@ private:
     static float LuminousFluxToCandela( float lumens )
     {
         // to lumens per steradian
-        return lumens / ( 4 * float( RTGL1::Utils::M_PI ) );
+        return lumens / ( 4 * float( RTGL1::Utils::Pi ) );
     }
 
     static cgltf_light MakeLight( const RgDirectionalLightUploadInfo& sun )

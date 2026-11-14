@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 namespace RTGL1
@@ -41,7 +43,7 @@ inline FileType MakeFileType( const std::filesystem::path& p )
     // 2 allocations...
     auto ext = p.extension().string();
 
-    std::ranges::transform( ext, ext.begin(), []( unsigned char c ) { return std::tolower( c ); } );
+    std::transform( ext.begin(), ext.end(), ext.begin(), []( unsigned char c ) { return std::tolower( c ); } );
 
     if( ext == ".gltf" )
     {

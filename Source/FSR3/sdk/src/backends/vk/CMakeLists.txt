@@ -419,6 +419,10 @@ source_group("private_shaders" FILES ${PRIVATE_SHADERS})
 source_group("public_shaders"  FILES ${PUBLIC_SHADERS})
 
 get_filename_component(FFX_PASS_SHADER_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/../shaders/vk ABSOLUTE)
+if (NOT (CMAKE_HOST_WIN32 AND EXISTS "${FFX_SC_EXECUTABLE}"))
+    get_filename_component(FFX_PRECOMPILED_SHADERS_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../../../bin/shaders/vk ABSOLUTE)
+    target_include_directories(ffx_backend_vk_${FFX_PLATFORM_NAME} PUBLIC ${FFX_PRECOMPILED_SHADERS_PATH})
+endif()
 
 target_include_directories(ffx_backend_vk_${FFX_PLATFORM_NAME} PUBLIC ${FFX_INCLUDE_PATH})
 target_include_directories(ffx_backend_vk_${FFX_PLATFORM_NAME} PUBLIC ${FFX_LIB_PATH})
@@ -556,13 +560,13 @@ if (FFX_CLASSIFIER OR FFX_ALL)
     include (CMakeShadersClassifier.txt)
 endif()
 
-add_custom_target(ffx_shader_permutations_vk DEPENDS ${FFX_SC_PERMUTATION_OUTPUTS})
-add_dependencies(${FFX_SC_DEPENDENT_TARGET} ffx_shader_permutations_vk)
+if (CMAKE_HOST_WIN32 AND EXISTS "${FFX_SC_EXECUTABLE}")
+    add_custom_target(ffx_shader_permutations_vk DEPENDS ${FFX_SC_PERMUTATION_OUTPUTS})
+    add_dependencies(${FFX_SC_DEPENDENT_TARGET} ffx_shader_permutations_vk)
 
-# Make sure shader builds are a dependency of the backend
-add_dependencies(ffx_backend_vk_${FFX_PLATFORM_NAME} ffx_shader_permutations_vk)
+    add_dependencies(ffx_backend_vk_${FFX_PLATFORM_NAME} ffx_shader_permutations_vk)
+    set_target_properties(ffx_shader_permutations_vk PROPERTIES FOLDER Backends)
+endif()
 
-# Add to solution folder.
 set_target_properties(ffx_backend_vk_${FFX_PLATFORM_NAME} PROPERTIES FOLDER Backends)
-set_target_properties(ffx_shader_permutations_vk PROPERTIES FOLDER Backends)
 

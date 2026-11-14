@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -80,15 +80,87 @@ jobs:
           name: RayTracedGL1-Artifact
           path: artifact_rtgl1
 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download DLSS SDK
+        uses: actions/checkout@v4
+        with:
+          repository: NVIDIA/DLSS
+          path: Source/External/DLSS
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Linux Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libwayland-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1.7.0
+        with:
+          version: 1.3.296.0
+          use-cache: true
+
+      - name: Compile Shaders
+        run: |
+          cd Source/Shaders
+          python3 GenerateShaders.py
+
+      - name: Configure CMake
+        run: |
+          cmake -B Build/linux-x64-Release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRG_WITH_SURFACE_WIN32=OFF \
+            -DRG_WITH_SURFACE_WAYLAND=ON \
+            -DRG_WITH_SURFACE_XLIB=ON \
+            -DRG_WITH_AMD_FSR3=ON \
+            -DRG_WITH_NVIDIA_NRD=ON \
+            -DRG_WITH_SHADERS=OFF \
+            -DRG_WITH_EXAMPLES=OFF
+
+      - name: Build
+        run: |
+          cmake --build Build/linux-x64-Release --parallel
+
+      - name: Prepare Artifact
+        run: |
+          mkdir -p artifact_rtgl1/Include/RTGL1
+          mkdir -p artifact_rtgl1/Build/linux-x64-Release
+          mkdir -p artifact_rtgl1/bin
+          mkdir -p artifact_rtgl1/Build/shaders
+
+          cp -f Include/RTGL1/RTGL1.h artifact_rtgl1/Include/RTGL1/RTGL1.h
+          cp -f Build/linux-x64-Release/libRayTracedGL1.so artifact_rtgl1/Build/linux-x64-Release/
+          cp -f Build/linux-x64-Release/libNRI.so artifact_rtgl1/Build/linux-x64-Release/
+          cp -f Build/linux-x64-Release/libamd_fidelityfx_vk.so artifact_rtgl1/Build/linux-x64-Release/
+          if [ -d Source/External/DLSS/lib/Linux_x86_64/rel ]; then
+            cp -f Source/External/DLSS/lib/Linux_x86_64/rel/*.so* artifact_rtgl1/Build/linux-x64-Release/
+          fi
+          cp -f bin/libamd_fidelityfx_vk.so artifact_rtgl1/bin/
+          cp -f Build/shaders/*.spv artifact_rtgl1/Build/shaders/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RayTracedGL1-Artifact-Linux
+          path: artifact_rtgl1
+
+  trigger-xash-rt:
+    needs: [ build-windows, build-linux ]
+    if: github.ref == 'refs/heads/hl1' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
       - name: Trigger xash-rt workflow
-        if: github.ref == 'refs/heads/hl1' && github.event_name == 'push'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          try {
-            gh workflow run rt.yml --repo boofiboi/xash-rt --ref master -f rtgl1_run_id=${{ github.run_id }}
-            Write-Host "Successfully triggered xash-rt workflow with run ID ${{ github.run_id }}."
-          } catch {
-            Write-Host "Could not trigger xash-rt workflow: $_"
-          }
+          gh workflow run rt.yml --repo boofiboi/xash-rt --ref master -f rtgl1_run_id=${{ github.run_id }} || echo "Could not trigger xash-rt workflow"

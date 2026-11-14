@@ -107,7 +107,7 @@ def main():
     if "-rebuild" in sys.argv or "--rebuild" in sys.argv or "-r" in sys.argv or "--r" in sys.argv:
         forceRebuild = True
     if "-gencomm" in sys.argv or "--gencomm" in sys.argv or "-g" in sys.argv or "--g" in sys.argv:
-        subprocess.run(["python", "../Generated/GenerateShaderCommon.py", "--path", "../Generated/"])
+        subprocess.run([sys.executable, "../Generated/GenerateShaderCommon.py", "--path", "../Generated/"])
     if "-psout" in sys.argv or "--psout" in sys.argv or "-ps" in sys.argv or "--ps" in sys.argv:
         powerShellOutput = True
 

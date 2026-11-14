@@ -47,6 +47,8 @@ public:
     Swapchain& operator=( Swapchain&& other ) noexcept = delete;
 
     bool       RequestVsync( bool enable );
+    bool       RequestFrameGeneration( bool enable );
+    void       RequestExtent( uint32_t width, uint32_t height );
 
     void       AcquireImage( VkSemaphore imageAvailableSemaphore );
     VkResult   Present( VkQueue queue, const VkPresentInfoKHR* pPresentInfo );
@@ -86,11 +88,13 @@ private:
     const VkSurfaceCapabilitiesKHR& GetCapabilities() const;
     void                            InvalidateCapabilities() const;
 
-    bool           TryRecreate( const VkExtent2D& newExtent, bool vsync );
+    VkPresentModeKHR GetTargetPresentMode( bool vsync, bool frameGen ) const;
+    bool             TryRecreate( const VkExtent2D& newExtent, bool vsync, bool frameGen );
 
     void           Create( uint32_t       newWidth,
                            uint32_t       newHeight,
                            bool           vsync,
+                           bool           frameGen,
                            VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE );
     void           Destroy();
     VkSwapchainKHR DestroyWithoutSwapchain();
@@ -108,10 +112,16 @@ private:
     VkSurfaceFormatKHR                                 surfaceFormat;
     VkPresentModeKHR                                   presentModeVsync;
     VkPresentModeKHR                                   presentModeImmediate;
+    VkPresentModeKHR                                   currentPresentMode;
+    bool                                               hasMailbox;
+    bool                                               hasImmediate;
 
     bool                                               requestedVsync;
+    bool                                               requestedFrameGen;
+    VkExtent2D                                         requestedExtent;
     VkExtent2D                                         surfaceExtent;
     bool                                               isVsync;
+    bool                                               isFrameGen;
 
     VkSwapchainKHR                                     swapchain;
     std::vector< VkImage >                             swapchainImages;

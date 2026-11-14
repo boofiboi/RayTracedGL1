@@ -23,6 +23,9 @@
 #pragma once
 
 #include <FidelityFX/host/ffx_types.h>
+#if __cplusplus >= 202002L
+#include <bit>
+#endif
 
 /// @defgroup Utils Utilities
 /// Utility Macros used by the FidelityFX SDK

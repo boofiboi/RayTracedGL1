@@ -34,6 +34,57 @@
 
 namespace
 {
+void BarrierDepthAndMotion( VkCommandBuffer cmd,
+                            VkImage         depthImage,
+                            VkImage         motionImage,
+                            bool            toShaderRead )
+{
+    VkImageMemoryBarrier2 barriers[ 2 ] = {};
+    VkImage               images[ 2 ]   = { depthImage, motionImage };
+
+    for( uint32_t i = 0; i < 2; i++ )
+    {
+        barriers[ i ] = {
+            .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask  = toShaderRead
+                                 ? ( VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR |
+                                     VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT )
+                                 : VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            .srcAccessMask = toShaderRead
+                                 ? ( VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT )
+                                 : VK_ACCESS_2_SHADER_READ_BIT,
+            .dstStageMask  = toShaderRead
+                                 ? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+                                 : ( VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR |
+                                     VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT ),
+            .dstAccessMask = toShaderRead
+                                 ? VK_ACCESS_2_SHADER_READ_BIT
+                                 : ( VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT ),
+            .oldLayout     = toShaderRead ? VK_IMAGE_LAYOUT_GENERAL
+                                          : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .newLayout     = toShaderRead ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                          : VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = images[ i ],
+            .subresourceRange    = {
+                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 0,
+                .layerCount     = 1,
+            },
+        };
+    }
+
+    VkDependencyInfo dep = {
+        .sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 2,
+        .pImageMemoryBarriers    = barriers,
+    };
+    RTGL1::svkCmdPipelineBarrier2KHR( cmd, &dep );
+}
+
 ffxReturnCode_t SafeCreateFfxContext( ffxContext* context, ffxCreateContextDescHeader* header )
 {
 #if defined( _MSC_VER )
@@ -96,7 +147,7 @@ RTGL1::IFrameGeneratorSwapchain* RTGL1::FrameGeneratorFSR3::GetSwapchainHooks()
 
 bool RTGL1::FrameGeneratorFSR3::IsActive() const
 {
-    return swapchainContext != nullptr;
+    return swapchainContext != nullptr && swapchainHandleAlive;
 }
 
 void RTGL1::FrameGeneratorFSR3::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
@@ -175,7 +226,12 @@ void RTGL1::FrameGeneratorFSR3::CreateHudlessImages( uint32_t width, uint32_t he
 {
     DestroyHudlessImages();
 
-    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    const uint32_t graphicsFamily = queues->GetIndexGraphics();
+    const uint32_t computeFamily  = queues->GetIndexCompute();
+    const uint32_t queueFamilies[ 2 ] = { graphicsFamily, computeFamily };
+    const bool     useConcurrent      = graphicsFamily != computeFamily;
+
+    for( uint32_t i = 0; i < HUDLESS_IMAGE_COUNT; i++ )
     {
         VkImageCreateInfo imageInfo = {
             .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -186,8 +242,10 @@ void RTGL1::FrameGeneratorFSR3::CreateHudlessImages( uint32_t width, uint32_t he
             .arrayLayers   = 1,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .tiling        = VK_IMAGE_TILING_OPTIMAL,
-            .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                  VK_IMAGE_USAGE_STORAGE_BIT,
+            .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .sharingMode   = useConcurrent ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = useConcurrent ? 2u : 0u,
+            .pQueueFamilyIndices   = useConcurrent ? queueFamilies : nullptr,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         };
 
@@ -221,11 +279,14 @@ void RTGL1::FrameGeneratorFSR3::CreateHudlessImages( uint32_t width, uint32_t he
         r = vkCreateImageView( device, &viewInfo, nullptr, &hudlessViews[ i ] );
         VK_CHECKERROR( r );
     }
+
+    currentHudlessIndex      = 0;
+    lastCapturedHudlessIndex = 0;
 }
 
 void RTGL1::FrameGeneratorFSR3::DestroyHudlessImages()
 {
-    for( uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ )
+    for( uint32_t i = 0; i < HUDLESS_IMAGE_COUNT; i++ )
     {
         if( hudlessViews[ i ] != VK_NULL_HANDLE )
         {
@@ -513,7 +574,12 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
         prepareDesc.header.pNext = &cameraInfo.header;
     }
 
+    BarrierDepthAndMotion( cmd, depthImage, motionImage, true );
+
     ffxReturnCode_t ret = ffxDispatch( &fgContext, &prepareDesc.header );
+
+    BarrierDepthAndMotion( cmd, depthImage, motionImage, false );
+
     if( ret != FFX_API_RETURN_OK )
     {
         debug::Warning( "FSR3 FG: ffxDispatch (prepare) failed, code {}", static_cast< int >( ret ) );
@@ -526,10 +592,14 @@ void RTGL1::FrameGeneratorFSR3::CaptureHudless( VkCommandBuffer cmd,
                                                 uint32_t        width,
                                                 uint32_t        height )
 {
-    if( hudlessImages[ frameIndex ] == VK_NULL_HANDLE )
+    const uint32_t imgIdx = currentHudlessIndex;
+    if( hudlessImages[ imgIdx ] == VK_NULL_HANDLE )
     {
         return;
     }
+
+    lastCapturedHudlessIndex = imgIdx;
+    currentHudlessIndex      = ( imgIdx + 1 ) % HUDLESS_IMAGE_COUNT;
 
     VkImageMemoryBarrier2 barriers[ 2 ] = {};
 
@@ -541,7 +611,7 @@ void RTGL1::FrameGeneratorFSR3::CaptureHudless( VkCommandBuffer cmd,
         .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
         .oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .image         = hudlessImages[ frameIndex ],
+        .image         = hudlessImages[ imgIdx ],
         .subresourceRange = {
             .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel   = 0,
@@ -585,7 +655,7 @@ void RTGL1::FrameGeneratorFSR3::CaptureHudless( VkCommandBuffer cmd,
     vkCmdBlitImage( cmd,
                     srcImage,
                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                    hudlessImages[ frameIndex ],
+                    hudlessImages[ imgIdx ],
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     1,
                     &blitRegion,
@@ -633,7 +703,8 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
     }
 
     FfxApiResource hudlessRes = {};
-    if( frameGenEnabled && hudlessImages[ frameIndex ] != VK_NULL_HANDLE )
+    VkImage        hudlessImg = hudlessImages[ lastCapturedHudlessIndex ];
+    if( frameGenEnabled && hudlessImg != VK_NULL_HANDLE )
     {
         VkImageCreateInfo hudlessInfo = {
             .sType       = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -644,12 +715,11 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
             .arrayLayers = 1,
             .samples     = VK_SAMPLE_COUNT_1_BIT,
             .tiling      = VK_IMAGE_TILING_OPTIMAL,
-            .usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                      VK_IMAGE_USAGE_STORAGE_BIT,
+            .usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         };
         hudlessRes = ffxApiGetResourceVK(
-            (void*)hudlessImages[ frameIndex ],
-            ffxApiGetImageResourceDescriptionVK( hudlessImages[ frameIndex ], hudlessInfo, 0 ),
+            (void*)hudlessImg,
+            ffxApiGetImageResourceDescriptionVK( hudlessImg, hudlessInfo, 0 ),
             FFX_API_RESOURCE_STATE_COMPUTE_READ );
     }
 

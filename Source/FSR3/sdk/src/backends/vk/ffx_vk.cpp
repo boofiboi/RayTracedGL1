@@ -26,11 +26,11 @@
 #include <FidelityFX/host/backends/vk/ffx_vk.h>
 #include <ffx_shader_blobs.h>
 #include <ffx_breadcrumbs_list.h>
+#include <cmath>
+#include <new>
 
 #ifdef _WIN32
 #include <windows.h>
-#else
-#include <codecvt>  // this is deprecated so it's just a fallback solution
 #endif  // _WIN32
 
 #include <vulkan/vulkan.h>
@@ -112,6 +112,16 @@ static inline void safeGetPhysicalDeviceFeatures(VkPhysicalDevice physicalDevice
         pfn(physicalDevice, pFeatures);
     else
         vkGetPhysicalDeviceFeatures(physicalDevice, pFeatures);
+}
+
+static inline void safeGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, uint32_t* pQueueFamilyPropertyCount, VkQueueFamilyProperties* pQueueFamilyProperties)
+{
+    if (!physicalDevice || !pQueueFamilyPropertyCount) return;
+    PFN_vkGetPhysicalDeviceQueueFamilyProperties pfn = (PFN_vkGetPhysicalDeviceQueueFamilyProperties)vkGetInstanceProcAddr(nullptr, "vkGetPhysicalDeviceQueueFamilyProperties");
+    if (pfn)
+        pfn(physicalDevice, pQueueFamilyPropertyCount, pQueueFamilyProperties);
+    else
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, pQueueFamilyPropertyCount, pQueueFamilyProperties);
 }
 
 #define MAX_PIPELINE_USAGE_PER_FRAME      (10) // Required to make sure passes that are called more than once per-frame don't have their descriptors overwritten.
@@ -349,7 +359,7 @@ FFX_API size_t ffxGetScratchMemorySizeVK(VkPhysicalDevice physicalDevice, size_t
     uint32_t contextArraySize = FFX_ALIGN_UP(maxContexts * sizeof(BackendContext_VK::EffectContext), sizeof(uint32_t));
     
     return FFX_ALIGN_UP(sizeof(BackendContext_VK) + extensionPropArraySize + gpuJobDescArraySize + resourceViewArraySize + stagingRingBufferArraySize +
-                            pipelineArraySize + resourceArraySize + contextArraySize,
+                            pipelineArraySize + resourceArraySize + contextArraySize + alignof(BackendContext_VK::EffectContext),
                         sizeof(uint64_t));
 }
 
@@ -1184,15 +1194,27 @@ void ConvertUTF16ToUTF8(const wchar_t* inputName, char* outputBuffer, size_t out
 #else
 void ConvertUTF8ToUTF16(const char* inputName, wchar_t* outputBuffer, size_t outputLen)
 {
-    memset(outputBuffer, 0, outputLen * sizeof(wchar_t));
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
-    wcscpy_s(outputBuffer, outputLen, converter.from_bytes(inputName).c_str());
+    if (!outputBuffer || outputLen == 0)
+        return;
+    size_t i = 0;
+    if (inputName)
+    {
+        for (; i + 1 < outputLen && inputName[i] != '\0'; ++i)
+            outputBuffer[i] = static_cast<wchar_t>(static_cast<unsigned char>(inputName[i]));
+    }
+    outputBuffer[i] = L'\0';
 }
 void ConvertUTF16ToUTF8(const wchar_t* inputName, char* outputBuffer, size_t outputLen)
 {
-    memset(outputBuffer, 0, outputLen * sizeof(char));
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
-    strcpy_s(outputBuffer, outputLen, converter.to_bytes(inputName).c_str());
+    if (!outputBuffer || outputLen == 0)
+        return;
+    size_t i = 0;
+    if (inputName)
+    {
+        for (; i + 1 < outputLen && inputName[i] != L'\0'; ++i)
+            outputBuffer[i] = (inputName[i] < 128) ? static_cast<char>(inputName[i]) : '?';
+    }
+    outputBuffer[i] = '\0';
 }
 #endif  // _WIN32
 
@@ -1518,6 +1540,7 @@ FfxErrorCode CreateBackendContextVK(FfxInterface* backendInterface, FfxEffect ef
         }
 
         // Map context array
+        pMem = reinterpret_cast<uint8_t*>(FFX_ALIGN_UP(reinterpret_cast<uintptr_t>(pMem), alignof(BackendContext_VK::EffectContext)));
         backendContext->pEffectContexts = (BackendContext_VK::EffectContext*)pMem;
         memset(backendContext->pEffectContexts, 0, contextArraySize);
         pMem += contextArraySize;
@@ -2422,6 +2445,34 @@ FfxErrorCode CreateResourceVK(
         imageInfo.usage = getVKImageUsageFlagsFromResourceUsage(resourceDesc.usage);
         imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        uint32_t concurrentQueueFamilies[16] = {};
+        uint32_t concurrentQueueFamilyCount = 0;
+        if (FFX_CONTAINS_FLAG(resourceDesc.flags, FFX_RESOURCE_FLAGS_CONCURRENT))
+        {
+            uint32_t familyCount = 0;
+            safeGetPhysicalDeviceQueueFamilyProperties(backendContext->physicalDevice, &familyCount, nullptr);
+            if (familyCount > 0)
+            {
+                if (familyCount > 16)
+                    familyCount = 16;
+                VkQueueFamilyProperties familyProps[16] = {};
+                safeGetPhysicalDeviceQueueFamilyProperties(backendContext->physicalDevice, &familyCount, familyProps);
+                for (uint32_t i = 0; i < familyCount; ++i)
+                {
+                    if (familyProps[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
+                    {
+                        concurrentQueueFamilies[concurrentQueueFamilyCount++] = i;
+                    }
+                }
+            }
+        }
+        if (concurrentQueueFamilyCount > 1)
+        {
+            imageInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+            imageInfo.queueFamilyIndexCount = concurrentQueueFamilyCount;
+            imageInfo.pQueueFamilyIndices = concurrentQueueFamilies;
+        }
 
         if (FFX_CONTAINS_FLAG(resourceDesc.usage, FFX_RESOURCE_USAGE_UAV) && ffxIsSurfaceFormatSRGB(createResourceDescription->resourceDescription.format))
         {

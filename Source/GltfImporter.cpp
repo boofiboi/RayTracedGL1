@@ -929,7 +929,7 @@ void RTGL1::GltfImporter::UploadToScene( VkCommandBuffer           cmd,
 
         constexpr auto candelaToLuminousFlux = []( float lumensPerSteradian ) {
             // to lumens
-            return lumensPerSteradian * ( 4 * float( Utils::M_PI ) );
+            return lumensPerSteradian * ( 4 * float( Utils::Pi ) );
         };
 
         auto makeExtras = []( const char* extradata ) {

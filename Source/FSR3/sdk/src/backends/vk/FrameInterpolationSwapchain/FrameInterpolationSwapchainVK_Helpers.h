@@ -23,12 +23,167 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <cmath>
 
 #include <FidelityFX/host/ffx_assert.h>
 #include <FidelityFX/host/backends/vk/ffx_vk.h>
 
+#ifdef _WIN32
 #include <Windows.h>
 #include <synchapi.h>
+#else
+#include <time.h>
+#include <pthread.h>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <cstdint>
+#include <cstring>
+
+#ifndef WINAPI
+#define WINAPI
+#endif
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+#ifndef INFINITE
+#define INFINITE 0xFFFFFFFFu
+#endif
+#ifndef WAIT_OBJECT_0
+#define WAIT_OBJECT_0 0u
+#endif
+#ifndef TEXT
+#define TEXT(x) x
+#endif
+#ifndef THREAD_PRIORITY_ABOVE_NORMAL
+#define THREAD_PRIORITY_ABOVE_NORMAL 1
+#endif
+#ifndef THREAD_PRIORITY_HIGHEST
+#define THREAD_PRIORITY_HIGHEST 2
+#endif
+
+typedef int32_t BOOL;
+typedef uint32_t DWORD;
+typedef uint64_t UINT64;
+typedef void* LPVOID;
+
+typedef union LARGE_INTEGER
+{
+    int64_t QuadPart;
+} LARGE_INTEGER;
+
+struct FfxLinuxSyncHandle
+{
+    enum Kind { Event, Thread };
+    Kind kind;
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool signaled = false;
+    bool manualReset = false;
+    std::thread* thread = nullptr;
+};
+
+typedef FfxLinuxSyncHandle* HANDLE;
+typedef DWORD (WINAPI* LPTHREAD_START_ROUTINE)(LPVOID);
+typedef std::recursive_mutex CRITICAL_SECTION;
+
+static inline void InitializeCriticalSection(CRITICAL_SECTION* cs) { (void)cs; }
+static inline void DeleteCriticalSection(CRITICAL_SECTION* cs) { (void)cs; }
+static inline void EnterCriticalSection(CRITICAL_SECTION* cs) { cs->lock(); }
+static inline void LeaveCriticalSection(CRITICAL_SECTION* cs) { cs->unlock(); }
+
+static inline HANDLE CreateEvent(void*, BOOL bManualReset, BOOL bInitialState, const char*)
+{
+    FfxLinuxSyncHandle* h = new FfxLinuxSyncHandle();
+    h->kind = FfxLinuxSyncHandle::Event;
+    h->manualReset = (bManualReset != FALSE);
+    h->signaled = (bInitialState != FALSE);
+    return h;
+}
+
+static inline BOOL SetEvent(HANDLE h)
+{
+    if (!h || h->kind != FfxLinuxSyncHandle::Event)
+        return FALSE;
+    std::lock_guard<std::mutex> lock(h->mtx);
+    h->signaled = true;
+    if (h->manualReset)
+        h->cv.notify_all();
+    else
+        h->cv.notify_one();
+    return TRUE;
+}
+
+static inline HANDLE CreateThread(void*, size_t, LPTHREAD_START_ROUTINE startAddress, LPVOID lpParameter, DWORD, DWORD*)
+{
+    FfxLinuxSyncHandle* h = new FfxLinuxSyncHandle();
+    h->kind = FfxLinuxSyncHandle::Thread;
+    h->thread = new std::thread([startAddress, lpParameter]() { startAddress(lpParameter); });
+    return h;
+}
+
+static inline DWORD WaitForSingleObject(HANDLE h, DWORD dwMilliseconds)
+{
+    (void)dwMilliseconds;
+    if (!h)
+        return WAIT_OBJECT_0;
+    if (h->kind == FfxLinuxSyncHandle::Thread)
+    {
+        if (h->thread && h->thread->joinable())
+            h->thread->join();
+        return WAIT_OBJECT_0;
+    }
+    std::unique_lock<std::mutex> lock(h->mtx);
+    h->cv.wait(lock, [h]() { return h->signaled; });
+    if (!h->manualReset)
+        h->signaled = false;
+    return WAIT_OBJECT_0;
+}
+
+static inline BOOL CloseHandle(HANDLE h)
+{
+    if (!h)
+        return FALSE;
+    if (h->kind == FfxLinuxSyncHandle::Thread && h->thread)
+    {
+        if (h->thread->joinable())
+            h->thread->detach();
+        delete h->thread;
+        h->thread = nullptr;
+    }
+    delete h;
+    return TRUE;
+}
+
+static inline BOOL QueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    lpPerformanceCount->QuadPart = static_cast<int64_t>(ts.tv_sec) * 1000000000ll + static_cast<int64_t>(ts.tv_nsec);
+    return TRUE;
+}
+
+static inline BOOL QueryPerformanceFrequency(LARGE_INTEGER* lpFrequency)
+{
+    lpFrequency->QuadPart = 1000000000ll;
+    return TRUE;
+}
+
+static inline void SetThreadPriority(HANDLE, int) {}
+
+static inline void SetThreadDescription(HANDLE h, const wchar_t* desc)
+{
+    if (!h || h->kind != FfxLinuxSyncHandle::Thread || !h->thread || !desc)
+        return;
+    char name[16] = {};
+    for (size_t i = 0; i < 15 && desc[i] != L'\0'; ++i)
+        name[i] = (desc[i] < 128) ? static_cast<char>(desc[i]) : '?';
+    pthread_setname_np(h->thread->native_handle(), name);
+}
+#endif
 
 
 void waitForPerformanceCount(const int64_t targetCount);

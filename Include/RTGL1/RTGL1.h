@@ -55,6 +55,35 @@ typedef void CAMetalLayer;
 #endif // RG_USE_SURFACE_XCB
 #ifdef RG_USE_SURFACE_XLIB
     #include <X11/Xlib.h>
+    #ifdef RG_LIBRARY_EXPORTS
+        #ifdef None
+            #undef None
+        #endif
+        #ifdef Bool
+            #undef Bool
+        #endif
+        #ifdef Status
+            #undef Status
+        #endif
+        #ifdef True
+            #undef True
+        #endif
+        #ifdef False
+            #undef False
+        #endif
+        #ifdef Success
+            #undef Success
+        #endif
+        #ifdef Complex
+            #undef Complex
+        #endif
+        #ifdef Always
+            #undef Always
+        #endif
+        #ifdef CurrentTime
+            #undef CurrentTime
+        #endif
+    #endif
 #endif // RG_USE_SURFACE_XLIB
 
 #ifdef __cplusplus
@@ -583,6 +612,7 @@ typedef struct RgStartFrameInfo
 {
     const char* pMapName;
     RgBool32    ignoreExternalGeometry;
+    RgExtent2D  surfaceSize;
 } RgStartFrameInfo;
 
 RGAPI RgResult RGCONV rgStartFrame( RgInstance instance, const RgStartFrameInfo* pInfo );

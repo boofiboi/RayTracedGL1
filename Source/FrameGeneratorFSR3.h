@@ -128,9 +128,13 @@ private:
 
     std::atomic< bool >                pendingReset{ false };
 
-    VkImage                            hudlessImages[ MAX_FRAMES_IN_FLIGHT ]{};
-    VkImageView                        hudlessViews[ MAX_FRAMES_IN_FLIGHT ]{};
-    VkDeviceMemory                     hudlessMemories[ MAX_FRAMES_IN_FLIGHT ]{};
+    static constexpr uint32_t          HUDLESS_IMAGE_COUNT = 4;
+
+    VkImage                            hudlessImages[ HUDLESS_IMAGE_COUNT ]{};
+    VkImageView                        hudlessViews[ HUDLESS_IMAGE_COUNT ]{};
+    VkDeviceMemory                     hudlessMemories[ HUDLESS_IMAGE_COUNT ]{};
+    uint32_t                           currentHudlessIndex{ 0 };
+    uint32_t                           lastCapturedHudlessIndex{ 0 };
 
     std::shared_ptr< class DLSS >      dlss;
     bool                               isDlssGActive{ false };

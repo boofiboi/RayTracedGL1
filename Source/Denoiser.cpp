@@ -122,7 +122,12 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
     renderHeight = height;
 
     nrd::IntegrationCreationDesc integrationDesc = {};
-    strcpy_s( integrationDesc.name, "RayTracedGL1_NRD" );
+    constexpr const char nrdName[] = "RayTracedGL1_NRD";
+    static_assert( sizeof( nrdName ) <= sizeof( integrationDesc.name ) );
+    for( size_t i = 0; i < sizeof( nrdName ); ++i )
+    {
+        integrationDesc.name[ i ] = nrdName[ i ];
+    }
     integrationDesc.resourceWidth = static_cast< uint16_t >( width );
     integrationDesc.resourceHeight = static_cast< uint16_t >( height );
     integrationDesc.queuedFrameNum = FRAMEBUFFERS_HISTORY_LENGTH;
@@ -147,6 +152,15 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
         VK_KHR_SURFACE_EXTENSION_NAME,
 #ifdef RG_USE_SURFACE_WIN32
         VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#endif
+#ifdef RG_USE_SURFACE_WAYLAND
+        VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
+#endif
+#ifdef RG_USE_SURFACE_XCB
+        VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+#endif
+#ifdef RG_USE_SURFACE_XLIB
+        VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
 #endif
     };
 

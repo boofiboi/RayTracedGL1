@@ -29,7 +29,9 @@
 #include <array>
 #include <optional>
 
+#ifdef _WIN32
 #include <d3d12.h>
+#endif
 
 #ifdef FFX_BACKEND_DX12
 #include "dx12/ffx_provider_framegenerationswapchain_dx12.h"
@@ -53,6 +55,7 @@ static constexpr size_t providerCount = _countof(providers);
 
 static std::array<std::optional<ffxProviderExternal>, 10> externalProviders = {};
 
+#ifdef FFX_BACKEND_DX12
 MIDL_INTERFACE("b58d6601-7401-4234-8180-6febfc0e484c")
 IAmdExtFfxApi : public IUnknown
 {
@@ -60,6 +63,7 @@ public:
     // Update FFX API provider
     virtual HRESULT UpdateFfxApiProvider(void* pData, uint32_t dataSizeInBytes) = 0;
 };
+#endif
 
 struct ExternalProviderData
 {
@@ -69,12 +73,13 @@ struct ExternalProviderData
 };
 #define FFX_EXTERNAL_PROVIDER_STRUCT_VERSION 1u
 
-void GetExternalProviders(ID3D12Device* device, uint64_t descType)
+void GetExternalProviders(void* device, uint64_t descType)
 {
 #ifdef FFX_BACKEND_DX12
+    ID3D12Device* d3dDevice = reinterpret_cast<ID3D12Device*>(device);
     static IAmdExtFfxApi* apiExtension = nullptr;
 
-    if (nullptr != device)
+    if (nullptr != d3dDevice)
     {
         static bool ranOnce = false;
         if (!ranOnce)
@@ -82,14 +87,14 @@ void GetExternalProviders(ID3D12Device* device, uint64_t descType)
             ranOnce = true;
             static HMODULE hModule = GetModuleHandleA("amdxc64.dll");
 
-            if (device && hModule && !apiExtension)
+            if (d3dDevice && hModule && !apiExtension)
             {
                 typedef HRESULT(__cdecl * PFNAmdExtD3DCreateInterface)(IUnknown * pOuter, REFIID riid, void** ppvObject);
                 PFNAmdExtD3DCreateInterface AmdExtD3DCreateInterface =
                     static_cast<PFNAmdExtD3DCreateInterface>((VOID*)GetProcAddress(hModule, "AmdExtD3DCreateInterface"));
                 if (AmdExtD3DCreateInterface)
                 {
-                    HRESULT hr = AmdExtD3DCreateInterface(device, IID_PPV_ARGS(&apiExtension));
+                    HRESULT hr = AmdExtD3DCreateInterface(d3dDevice, IID_PPV_ARGS(&apiExtension));
 
                     if (hr != S_OK)
                     {
@@ -130,7 +135,7 @@ void GetExternalProviders(ID3D12Device* device, uint64_t descType)
 const ffxProvider* GetffxProvider(ffxStructType_t descType, uint64_t overrideId, void* device)
 {
     // check driver-side providers
-    GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    GetExternalProviders(device, descType);
 
     // If we are overriding, do not make the best provider choice decision
     if (overrideId)
@@ -213,7 +218,7 @@ uint64_t GetProviderVersions(ffxStructType_t descType, void* device, uint64_t ca
     uint64_t count = 0;
 
     // check driver-side providers
-    GetExternalProviders(reinterpret_cast<ID3D12Device*>(device), descType);
+    GetExternalProviders(device, descType);
 
     for (const auto& provider : externalProviders)
     {

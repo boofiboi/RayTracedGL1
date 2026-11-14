@@ -79,7 +79,7 @@ bool ffxProvider_FSR2::CanProvide(uint64_t type) const
 uint64_t ffxProvider_FSR2::GetId() const
 {
     // FSR Scale, version from header
-    return 0xF5A5'CA1Eui64 << 32 | (FFX_SDK_MAKE_VERSION(FFX_FSR2_VERSION_MAJOR, FFX_FSR2_VERSION_MINOR, FFX_FSR2_VERSION_PATCH) & 0xFFFF'FFFF);
+    return 0xF5A5'CA1Eull << 32 | (FFX_SDK_MAKE_VERSION(FFX_FSR2_VERSION_MAJOR, FFX_FSR2_VERSION_MINOR, FFX_FSR2_VERSION_PATCH) & 0xFFFF'FFFF);
 }
 
 const char* ffxProvider_FSR2::GetVersionName() const

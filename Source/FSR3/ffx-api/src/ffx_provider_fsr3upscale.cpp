@@ -69,7 +69,7 @@ bool ffxProvider_FSR3Upscale::CanProvide(uint64_t type) const
 uint64_t ffxProvider_FSR3Upscale::GetId() const
 {
     // FSR Scale, version from header
-    return 0xF5A5'CA1Eui64 << 32 | (FFX_SDK_MAKE_VERSION(FFX_FSR3UPSCALER_VERSION_MAJOR, FFX_FSR3UPSCALER_VERSION_MINOR, FFX_FSR3UPSCALER_VERSION_PATCH) & 0xFFFF'FFFF);
+    return 0xF5A5'CA1Eull << 32 | (FFX_SDK_MAKE_VERSION(FFX_FSR3UPSCALER_VERSION_MAJOR, FFX_FSR3UPSCALER_VERSION_MINOR, FFX_FSR3UPSCALER_VERSION_PATCH) & 0xFFFF'FFFF);
 }
 
 const char* ffxProvider_FSR3Upscale::GetVersionName() const

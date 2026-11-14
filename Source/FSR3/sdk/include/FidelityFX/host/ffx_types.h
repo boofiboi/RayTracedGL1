@@ -23,6 +23,138 @@
 #pragma once
 
 #include <stdint.h>
+#if !defined(_WIN32)
+#include <stddef.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <wchar.h>
+
+#ifndef _countof
+#ifdef __cplusplus
+template <typename T, size_t N>
+constexpr size_t _ffx_countof(const T (&)[N]) noexcept { return N; }
+#define _countof(arr) _ffx_countof(arr)
+#else
+#define _countof(arr) (sizeof(arr) / sizeof((arr)[0]))
+#endif
+#endif
+
+static inline int strcpy_s(char* dest, size_t destsz, const char* src)
+{
+    if (!dest || destsz == 0)
+        return 22;
+    if (!src)
+    {
+        dest[0] = '\0';
+        return 22;
+    }
+    size_t len = strlen(src);
+    if (len >= destsz)
+    {
+        memcpy(dest, src, destsz - 1);
+        dest[destsz - 1] = '\0';
+        return 34;
+    }
+    memcpy(dest, src, len + 1);
+    return 0;
+}
+
+static inline int wcscpy_s(wchar_t* dest, size_t destsz, const wchar_t* src)
+{
+    if (!dest || destsz == 0)
+        return 22;
+    if (!src)
+    {
+        dest[0] = L'\0';
+        return 22;
+    }
+    size_t len = wcslen(src);
+    if (len >= destsz)
+    {
+        wmemcpy(dest, src, destsz - 1);
+        dest[destsz - 1] = L'\0';
+        return 34;
+    }
+    wmemcpy(dest, src, len + 1);
+    return 0;
+}
+
+static inline int wcscat_s(wchar_t* dest, size_t destsz, const wchar_t* src)
+{
+    if (!dest || destsz == 0 || !src)
+        return 22;
+    size_t dlen = wcsnlen(dest, destsz);
+    if (dlen >= destsz)
+        return 22;
+    size_t slen = wcslen(src);
+    if (dlen + slen >= destsz)
+    {
+        dest[0] = L'\0';
+        return 34;
+    }
+    wmemcpy(dest + dlen, src, slen + 1);
+    return 0;
+}
+
+static inline int sprintf_s(char* buf, size_t bufsz, const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int r = vsnprintf(buf, bufsz, fmt, args);
+    va_end(args);
+    return r;
+}
+
+static inline int swprintf_s(wchar_t* buf, size_t bufsz, const wchar_t* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int r = vswprintf(buf, bufsz, fmt, args);
+    va_end(args);
+    return r;
+}
+
+#ifdef __cplusplus
+template <size_t N>
+static inline int strcpy_s(char (&dest)[N], const char* src)
+{
+    return strcpy_s(dest, N, src);
+}
+
+template <size_t N>
+static inline int wcscpy_s(wchar_t (&dest)[N], const wchar_t* src)
+{
+    return wcscpy_s(dest, N, src);
+}
+
+template <size_t N>
+static inline int wcscat_s(wchar_t (&dest)[N], const wchar_t* src)
+{
+    return wcscat_s(dest, N, src);
+}
+
+template <size_t N>
+static inline int sprintf_s(char (&buf)[N], const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int r = vsnprintf(buf, N, fmt, args);
+    va_end(args);
+    return r;
+}
+
+template <size_t N>
+static inline int swprintf_s(wchar_t (&buf)[N], const wchar_t* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int r = vswprintf(buf, N, fmt, args);
+    va_end(args);
+    return r;
+}
+#endif
+#endif
 
 ///
 /// @defgroup ffxSDK SDK
@@ -77,7 +209,11 @@
 #define FFX_API __declspec(dllexport)
 #endif // #if defined (FFX_GCC)
 
+#ifdef _WIN32
 #define FFX_SDK_DEFAULT_CONTEXT_SIZE (1024 * 128)
+#else
+#define FFX_SDK_DEFAULT_CONTEXT_SIZE (1024 * 256)
+#endif
 
 /// Maximum supported number of simultaneously bound SRVs.
 ///
@@ -388,6 +524,7 @@ typedef enum FfxResourceFlags {
     FFX_RESOURCE_FLAGS_NONE             = 0,            ///< No flags.
     FFX_RESOURCE_FLAGS_ALIASABLE        = (1 << 0),     ///< A bit indicating a resource does not need to persist across frames.
     FFX_RESOURCE_FLAGS_UNDEFINED        = (1 << 1),     ///< Special case flag used internally when importing resources that require additional setup
+    FFX_RESOURCE_FLAGS_CONCURRENT       = (1 << 2),
 } FfxResourceFlags;
 
 /// An enumeration of all resource view types.
