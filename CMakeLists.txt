@@ -200,6 +200,7 @@ if (RG_WITH_IMGUI)
     add_subdirectory(Source/glfw)
     target_link_libraries(ImGui PRIVATE glfw)
     target_include_directories(ImGui PRIVATE glfw)
+    target_compile_definitions(ImGui PRIVATE GLFW_INCLUDE_NONE)
 endif()
 
 
