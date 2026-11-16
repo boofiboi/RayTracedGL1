@@ -210,12 +210,6 @@ vec3 processDebug(const ivec2 pix, const vec3 fallback)
 
         return c;
     }
-#if GRADIENT_ESTIMATION_ENABLED
-    else if ((globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_GRADIENTS) != 0)
-    {
-        return texelFetch(framebufDISPingGradient_Sampler, getCheckerboardPix(pix) / COMPUTE_ASVGF_STRATA_SIZE, 0).xyz;
-    }
-#endif
     else if( ( globalUniform.debugShowFlags & DEBUG_SHOW_FLAG_NORMALS ) != 0 )
     {
         vec3 n = texelFetchNormal( getCheckerboardPix( pix ) ).rgb;

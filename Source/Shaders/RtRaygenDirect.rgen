@@ -45,7 +45,6 @@ void main()
     {
         imageStore(framebufUnfilteredDirect, pix, uvec4(0));
         imageStore(framebufUnfilteredSpecular, pix, uvec4(0));
-        imageStore(framebufGradientInputs, pix, vec4(0.0));
         imageStoreReservoir(emptyReservoir(), pix);
         return;
     }
@@ -63,6 +62,5 @@ void main()
     imageStoreUnfilteredDirect(pix, diffuse);
     imageStoreUnfilteredSpecular(pix, demodulateSpecular(specular, surf.specularColor));
     imageStore(framebufViewDirection, pix, vec4(-surf.toViewerDir, distToLight));
-    imageStore(framebufGradientInputs, pix, vec4(getLuminance(diffuse), getLuminance(specular), 0, 0));
     imageStoreReservoir(r, pix);
 }

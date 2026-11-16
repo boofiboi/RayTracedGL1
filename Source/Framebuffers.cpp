@@ -780,11 +780,7 @@ VkExtent2D RTGL1::Framebuffers::GetFramebufSize( const ResolutionState& resoluti
 
     std::optional< uint32_t > downscale;
 
-    if( flags & FB_IMAGE_FLAGS_FRAMEBUF_FLAGS_FORCE_SIZE_1_3 )
-    {
-        downscale = 3;
-    }
-    else if( flags & FB_IMAGE_FLAGS_FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM )
+    if( flags & FB_IMAGE_FLAGS_FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM )
     {
         switch( index )
         {

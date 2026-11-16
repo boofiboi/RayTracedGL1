@@ -125,7 +125,6 @@ RTGL1::RayTracingPipeline::RayTracingPipeline( VkDevice                         
         ShaderStageInfo{ "RGenDirect",          std::nullopt },
         ShaderStageInfo{ "RGenIndirectInit",    SpecConst{ _rgInfo.indirectIlluminationMaxAlbedoLayers, _rgInfo.lightmapTexCoordLayerIndex } },
         ShaderStageInfo{ "RGenIndirectFinal",   SpecConst{ _rgInfo.indirectIlluminationMaxAlbedoLayers, _rgInfo.lightmapTexCoordLayerIndex } },
-        ShaderStageInfo{ "RGenGradients",       std::nullopt },
         ShaderStageInfo{ "RInitialReservoirs",  std::nullopt },
         ShaderStageInfo{ "RVolumetric",         std::nullopt },
         ShaderStageInfo{ "RMiss",               std::nullopt },
@@ -159,7 +158,6 @@ RTGL1::RayTracingPipeline::RayTracingPipeline( VkDevice                         
     AddRayGenGroup( toIndex( "RGenDirect" ) );          assert( raygenShaderCount - 1 == SBT_INDEX_RAYGEN_DIRECT );
     AddRayGenGroup( toIndex( "RGenIndirectInit" ) );    assert( raygenShaderCount - 1 == SBT_INDEX_RAYGEN_INDIRECT_INIT );
     AddRayGenGroup( toIndex( "RGenIndirectFinal" ) );   assert( raygenShaderCount - 1 == SBT_INDEX_RAYGEN_INDIRECT_FINAL );
-    AddRayGenGroup( toIndex( "RGenGradients" ) );       assert( raygenShaderCount - 1 == SBT_INDEX_RAYGEN_GRADIENTS );
     AddRayGenGroup( toIndex( "RInitialReservoirs" ) );  assert( raygenShaderCount - 1 == SBT_INDEX_RAYGEN_INITIAL_RESERVOIRS );
     AddRayGenGroup( toIndex( "RVolumetric" ) );         assert( raygenShaderCount - 1 == SBT_INDEX_RAYGEN_VOLUMETRIC );
 
@@ -352,7 +350,6 @@ void RTGL1::RayTracingPipeline::GetEntries( uint32_t                         sbt
             sbtRayGenIndex == SBT_INDEX_RAYGEN_DIRECT ||
             sbtRayGenIndex == SBT_INDEX_RAYGEN_INDIRECT_INIT ||
             sbtRayGenIndex == SBT_INDEX_RAYGEN_INDIRECT_FINAL ||
-            sbtRayGenIndex == SBT_INDEX_RAYGEN_GRADIENTS ||
             sbtRayGenIndex == SBT_INDEX_RAYGEN_INITIAL_RESERVOIRS ||
             sbtRayGenIndex == SBT_INDEX_RAYGEN_VOLUMETRIC );
 

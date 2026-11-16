@@ -214,7 +214,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
     // create selected physical device
     physDevice = std::make_shared< PhysicalDevice >( instance );
-    queues     = std::make_shared< Queues >( physDevice->Get(), surface, info->enableFrameGeneration );
+    queues     = std::make_shared< Queues >( physDevice->Get(), surface, true );
 
     // create vulkan device and set extension function pointers
     CreateDevice();
@@ -237,8 +237,6 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     uniform = std::make_shared< GlobalUniform >( 
         device, 
         memAllocator );
-
-    enableFrameGeneration = info->enableFrameGeneration;
 
     swapchain = std::make_shared< Swapchain >(
         device,
@@ -434,17 +432,17 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         info->pAppGUID, 
         libconfig.dlssValidation );
 
-    if( enableFrameGeneration )
+    frameGenerator = std::make_shared< FrameGeneratorFSR3 >(
+        device,
+        physDevice->Get(),
+        memAllocator,
+        queues,
+        swapchain->GetSurfaceFormat() );
+
+    frameGenerator->SetDlss( nvDlss );
+
+    if( frameGenerator->IsAvailable() )
     {
-        frameGenerator = std::make_shared< FrameGeneratorFSR3 >(
-            device,
-            physDevice->Get(),
-            memAllocator,
-            queues,
-            swapchain->GetSurfaceFormat() );
-
-        frameGenerator->SetDlss( nvDlss );
-
         swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
     }
 
@@ -519,7 +517,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
     framebuffers->Subscribe( upscalerFsr );
-    if( frameGenerator )
+    if( frameGenerator && frameGenerator->IsAvailable() )
     {
         framebuffers->Subscribe( frameGenerator );
     }

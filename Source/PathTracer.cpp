@@ -195,31 +195,6 @@ void PathTracer::TraceDirectllumination( const TraceParams& params )
     TraceRays( params.cmd, SBT_INDEX_RAYGEN_DIRECT, params.width, params.height );
 }
 
-void PathTracer::CalculateGradientsSamples( const TraceParams& params )
-{
-    CmdLabel label( params.cmd, "Gradient samples" );
-
-
-    using FI = FramebufferImageIndex;
-    FI fs[]  = {
-        FI::FB_IMAGE_INDEX_ALBEDO,
-        FI::FB_IMAGE_INDEX_GRADIENT_INPUTS,
-        FI::FB_IMAGE_INDEX_VIEW_DIRECTION,
-        FI::FB_IMAGE_INDEX_RESERVOIRS,
-        FI::FB_IMAGE_INDEX_VISIBILITY_BUFFER,
-    };
-    params.framebuffers->BarrierMultiple( params.cmd, params.frameIndex, fs );
-
-
-    uint32_t gradWidth =
-        ( params.width + COMPUTE_ASVGF_STRATA_SIZE - 1 ) / COMPUTE_ASVGF_STRATA_SIZE;
-    uint32_t gradHeight =
-        ( params.height + COMPUTE_ASVGF_STRATA_SIZE - 1 ) / COMPUTE_ASVGF_STRATA_SIZE;
-
-
-    TraceRays( params.cmd, SBT_INDEX_RAYGEN_GRADIENTS, gradWidth, gradHeight );
-}
-
 void PathTracer::TraceIndirectllumination( const TraceParams& params )
 {
     using FI = FramebufferImageIndex;

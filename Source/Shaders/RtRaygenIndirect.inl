@@ -314,17 +314,6 @@ void main()
                 continue;
             }
         }
-        {
-            const float antilagAlpha_Indir = texelFetch(
-                framebufDISGradientHistory_Sampler, pp / COMPUTE_ASVGF_STRATA_SIZE, 0 )[ 1 ];
-
-            // if there's too much difference, don't use a temporal sample
-            if( antilagAlpha_Indir > 0.25 )
-            {
-                spatialSamplesCount++;
-                continue;
-            }
-        }
 
         ReservoirIndirect temporal = restirIndirect_LoadReservoir_Prev( pp );
         // renormalize to prevent precision problems

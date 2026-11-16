@@ -219,8 +219,7 @@ CONST_TO_EVALUATE = "CONST VALUE MUST BE EVALUATED"
 # User defined constants
 # --------------------------------------------------------------------------------------------- #
 
-GRADIENT_ESTIMATION_ENABLED = True
-FRAMEBUF_IGNORE_ATTACHMENTS_DEFINE = "FRAMEBUF_IGNORE_ATTACHMENTS" # define this, to not specify framebufs that are used as attachments
+FRAMEBUF_IGNORE_ATTACHMENTS_DEFINE = "FRAMEBUF_IGNORE_ATTACHMENTS"
 def BIT( i ):
     return "1 << " + str( i )
 
@@ -302,9 +301,8 @@ CONST = {
     "SBT_INDEX_RAYGEN_DIRECT"               : 2,
     "SBT_INDEX_RAYGEN_INDIRECT_INIT"        : 3,
     "SBT_INDEX_RAYGEN_INDIRECT_FINAL"       : 4,
-    "SBT_INDEX_RAYGEN_GRADIENTS"            : 5,
-    "SBT_INDEX_RAYGEN_INITIAL_RESERVOIRS"   : 6,
-    "SBT_INDEX_RAYGEN_VOLUMETRIC"           : 7,
+    "SBT_INDEX_RAYGEN_INITIAL_RESERVOIRS"   : 5,
+    "SBT_INDEX_RAYGEN_VOLUMETRIC"           : 6,
     "SBT_INDEX_MISS_DEFAULT"                : 0,
     "SBT_INDEX_MISS_SHADOW"                 : 1,
     "SBT_INDEX_HITGROUP_FULLY_OPAQUE"       : 0,
@@ -380,22 +378,10 @@ CONST = {
     "VERT_PREPROC_MODE_DYNAMIC_AND_MOVABLE" : 1,
     "VERT_PREPROC_MODE_ALL"                 : 2,
 
-    "GRADIENT_ESTIMATION_ENABLED"           : int(GRADIENT_ESTIMATION_ENABLED),
-    "COMPUTE_GRADIENT_ATROUS_GROUP_SIZE_X"  : 16,
-    "COMPUTE_ANTIFIREFLY_GROUP_SIZE_X"      : 16,
-    "COMPUTE_SVGF_TEMPORAL_GROUP_SIZE_X"    : 16,
-    "COMPUTE_SVGF_VARIANCE_GROUP_SIZE_X"    : 16,
-    "COMPUTE_SVGF_ATROUS_GROUP_SIZE_X"      : 16,
-    "COMPUTE_SVGF_ATROUS_ITERATION_COUNT"   : 4,
-
-    "COMPUTE_ASVGF_STRATA_SIZE"                         : 3,
-    "COMPUTE_ASVGF_GRADIENT_ATROUS_ITERATION_COUNT"     : 4,  
-
     "COMPUTE_INDIRECT_DRAW_FLARES_GROUP_SIZE_X"         : 256,
     "LENS_FLARES_MAX_DRAW_CMD_COUNT"                    : 512,
 
     "DEBUG_SHOW_FLAG_MOTION_VECTORS"        : BIT( 0 ),
-    "DEBUG_SHOW_FLAG_GRADIENTS"             : BIT( 1 ),
     "DEBUG_SHOW_FLAG_UNFILTERED_DIFFUSE"    : BIT( 2 ),
     "DEBUG_SHOW_FLAG_UNFILTERED_SPECULAR"   : BIT( 3 ),
     "DEBUG_SHOW_FLAG_UNFILTERED_INDIRECT"   : BIT( 4 ),
@@ -783,7 +769,6 @@ FRAMEBUF_FLAGS_STORE_PREV           = 1 << 0
 FRAMEBUF_FLAGS_NO_SAMPLER           = 1 << 1
 FRAMEBUF_FLAGS_IS_ATTACHMENT        = 1 << 2
 FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM     = 1 << 3
-FRAMEBUF_FLAGS_FORCE_SIZE_1_3       = 1 << 4
 FRAMEBUF_FLAGS_BILINEAR_SAMPLER     = 1 << 9
 FRAMEBUF_FLAGS_UPSCALED_SIZE        = 1 << 10
 FRAMEBUF_FLAGS_SINGLE_PIXEL_SIZE    = 1 << 11
@@ -793,7 +778,6 @@ FRAMEBUF_FLAGS_USAGE_TRANSFER       = 1 << 12
 FRAMEBUF_FLAGS_ENUM = {
     "FRAMEBUF_FLAGS_IS_ATTACHMENT"      : FRAMEBUF_FLAGS_IS_ATTACHMENT,
     "FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM"   : FRAMEBUF_FLAGS_FORCE_SIZE_BLOOM,
-    "FRAMEBUF_FLAGS_FORCE_SIZE_1_3"     : FRAMEBUF_FLAGS_FORCE_SIZE_1_3,
     "FRAMEBUF_FLAGS_BILINEAR_SAMPLER"   : FRAMEBUF_FLAGS_BILINEAR_SAMPLER,
     "FRAMEBUF_FLAGS_UPSCALED_SIZE"      : FRAMEBUF_FLAGS_UPSCALED_SIZE,
     "FRAMEBUF_FLAGS_SINGLE_PIXEL_SIZE"  : FRAMEBUF_FLAGS_SINGLE_PIXEL_SIZE,
@@ -829,26 +813,6 @@ FRAMEBUFFERS = {
     "MotionDlss"                        : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "Reactivity"                        : (TYPE_UNORM8,     COMPONENT_R,    FRAMEBUF_FLAGS_IS_ATTACHMENT),
 
-    "AccumHistoryLength"                : (TYPE_FLOAT16,    COMPONENT_RGBA, FRAMEBUF_FLAGS_STORE_PREV),
-    
-    # TODO: pack float16 to e5
-    "DiffTemporary"                     : (TYPE_PACK_E5,    COMPONENT_RGB,  0),
-    "DiffAccumColor"                    : (TYPE_PACK_E5,    COMPONENT_RGB,  FRAMEBUF_FLAGS_STORE_PREV),
-    "DiffAccumMoments"                  : (TYPE_FLOAT16,    COMPONENT_RG,   FRAMEBUF_FLAGS_STORE_PREV),
-    "DiffColorHistory"                  : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
-    "DiffPingColorAndVariance"          : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
-    "DiffPongColorAndVariance"          : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
-    
-    "SpecAccumColor"                    : (TYPE_PACK_E5,    COMPONENT_RGB,  FRAMEBUF_FLAGS_STORE_PREV),
-    "SpecPingColor"                     : (TYPE_PACK_E5,    COMPONENT_RGB,  0),
-    "SpecPongColor"                     : (TYPE_PACK_E5,    COMPONENT_RGB,  0),
-    
-    "IndirAccum"                        : (TYPE_PACK_E5,    COMPONENT_RGB,  FRAMEBUF_FLAGS_STORE_PREV),
-    "IndirPing"                         : (TYPE_PACK_E5,    COMPONENT_RGB,  0),
-    "IndirPong"                         : (TYPE_PACK_E5,    COMPONENT_RGB,  0),
-
-    "AtrousFilteredVariance"            : (TYPE_FLOAT16,    COMPONENT_R,    0),
-    
     "HistogramInput"                    : (TYPE_FLOAT16,    COMPONENT_R,    0),
     
     "NormalDecal"                       : (TYPE_UINT32,     COMPONENT_R,    FRAMEBUF_FLAGS_IS_ATTACHMENT),
@@ -885,15 +849,6 @@ FRAMEBUFFERS = {
     "NrdOutDiffuse"                     : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "NrdOutSpecular"                    : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
 }
-
-if GRADIENT_ESTIMATION_ENABLED:
-    FRAMEBUFFERS.update({
-        "GradientInputs"                : (TYPE_FLOAT16,    COMPONENT_RG,   FRAMEBUF_FLAGS_STORE_PREV),
-        "DISPingGradient"               : (TYPE_UNORM8,     COMPONENT_RGBA, FRAMEBUF_FLAGS_FORCE_SIZE_1_3),
-        "DISPongGradient"               : (TYPE_UNORM8,     COMPONENT_RGBA, FRAMEBUF_FLAGS_FORCE_SIZE_1_3),
-        "DISGradientHistory"            : (TYPE_UNORM8,     COMPONENT_RGBA, FRAMEBUF_FLAGS_FORCE_SIZE_1_3),
-        "GradientPrevPix"               : (TYPE_UINT8,      COMPONENT_R,    FRAMEBUF_FLAGS_FORCE_SIZE_1_3),
-    })
 
 
 # ---

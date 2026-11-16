@@ -279,7 +279,6 @@ private:
     double postEffectTimeOffset;
 
     bool vsync;
-    bool enableFrameGeneration;
 
     FramebufferImageIndex lastPresentedAccumIndex{ FB_IMAGE_INDEX_FINAL };
     uint32_t              lastPresentedFrameIndex{ 0 };

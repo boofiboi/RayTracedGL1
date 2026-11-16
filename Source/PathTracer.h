@@ -77,7 +77,6 @@ public:
     void        TraceReflectionRefractionRays( const TraceParams& params );
     void        CalculateInitialReservoirs( const TraceParams& params );
     void        TraceDirectllumination( const TraceParams& params );
-    void        CalculateGradientsSamples( const TraceParams& params );
     void        TraceIndirectllumination( const TraceParams& params );
     void        TraceVolumetric( const TraceParams& params );
 

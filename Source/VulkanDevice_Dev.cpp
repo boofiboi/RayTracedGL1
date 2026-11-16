@@ -318,7 +318,6 @@ void RTGL1::VulkanDevice::Dev_Draw() const
                 { "Normals", DEBUG_SHOW_FLAG_NORMALS },
                 { "Refract/Refl raw albedo", DEBUG_SHOW_FLAG_REFRACT_RAW },
                 { "Motion vectors", DEBUG_SHOW_FLAG_MOTION_VECTORS },
-                { "Gradients", DEBUG_SHOW_FLAG_GRADIENTS },
                 { "Light grid", DEBUG_SHOW_FLAG_LIGHT_GRID },
             };
             for( const auto [ name, f ] : fs )
