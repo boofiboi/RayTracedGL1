@@ -232,6 +232,15 @@ struct EffectCrtDecode final : public EffectSimple<EffectCRT_PushConst>
 };
 
 
+struct EffectSrgbEncode_PushConst
+{};
+
+struct EffectSrgbEncode final : public EffectSimple<EffectSrgbEncode_PushConst>
+{
+    RTGL1_EFFECT_SIMPLE_INHERIT_CONSTRUCTOR(EffectSrgbEncode, "EffectSrgbEncode")
+};
+
+
 // ------------------ //
 
 

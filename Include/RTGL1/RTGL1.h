@@ -930,7 +930,7 @@ typedef enum RgRenderUpscaleTechnique
 {
     RG_RENDER_UPSCALE_TECHNIQUE_LINEAR,
     RG_RENDER_UPSCALE_TECHNIQUE_NEAREST,
-    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3,
+    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR,
     RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS,
 } RgRenderUpscaleTechnique;
 
@@ -1055,7 +1055,16 @@ RGAPI RgBool32 RGCONV           rgUtilIsExportActive( RgInstance instance );
 RGAPI const char* RGCONV        rgUtilGetResultDescription( RgResult result );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorByte4D( uint8_t r, uint8_t g, uint8_t b, uint8_t a );
 RGAPI RgColor4DPacked32 RGCONV  rgUtilPackColorFloat4D( float r, float g, float b, float a );
+typedef enum RgCaptureTarget
+{
+    RG_CAPTURE_FINAL      = 0,
+    RG_CAPTURE_BLOOM      = 1,
+    RG_CAPTURE_VOLUMETRIC = 2,
+    RG_CAPTURE_DENOISER   = 3,
+} RgCaptureTarget;
+
 RGAPI void RGCONV               rgUtilExportAsTGA( RgInstance instance, const void* pPixels, uint32_t width, uint32_t height, const char* pPath );
+RGAPI RgBool32 RGCONV           rgUtilReadFramebuffer( RgInstance instance, RgCaptureTarget target, void* pDstPixelsRGBA8, uint32_t dstWidth, uint32_t dstHeight );
 
 #ifdef __cplusplus
 }

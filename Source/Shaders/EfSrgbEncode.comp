@@ -1,0 +1,26 @@
+#version 460
+
+#include "EfSimple.inl"
+
+float linearToSrgb1(float c)
+{
+    c = clamp(c, 0.0, 1.0);
+    return (c <= 0.0031308) ? (c * 12.92) : (1.055 * pow(c, 1.0 / 2.4) - 0.055);
+}
+
+vec3 linearToSrgb(vec3 c)
+{
+    return vec3(linearToSrgb1(c.r), linearToSrgb1(c.g), linearToSrgb1(c.b));
+}
+
+void main()
+{
+    const ivec2 pix = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+
+    if (!effect_isPixValid(pix))
+    {
+        return;
+    }
+
+    effect_storeToTarget(linearToSrgb(effect_loadFromSource(pix)), pix);
+}

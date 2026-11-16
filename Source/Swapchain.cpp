@@ -87,14 +87,14 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
             physDevice, surface, &formatCount, surfaceFormats.data() );
         VK_CHECKERROR( r );
 
-        std::vector< VkFormat > acceptFormats = { VK_FORMAT_B8G8R8A8_SRGB,
-                                                  VK_FORMAT_R8G8B8A8_SRGB };
+        std::vector< VkFormat > acceptFormats = { VK_FORMAT_B8G8R8A8_UNORM,
+                                                  VK_FORMAT_R8G8B8A8_UNORM };
 
         for( VkFormat f : acceptFormats )
         {
             for( VkSurfaceFormatKHR sf : surfaceFormats )
             {
-                if( sf.format == f )
+                if( sf.format == f && sf.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR )
                 {
                     surfaceFormat = sf;
                     break;
@@ -104,6 +104,26 @@ RTGL1::Swapchain::Swapchain( VkDevice                                _device,
             if( surfaceFormat.format != VK_FORMAT_UNDEFINED )
             {
                 break;
+            }
+        }
+
+        if( surfaceFormat.format == VK_FORMAT_UNDEFINED )
+        {
+            for( VkFormat f : acceptFormats )
+            {
+                for( VkSurfaceFormatKHR sf : surfaceFormats )
+                {
+                    if( sf.format == f )
+                    {
+                        surfaceFormat = sf;
+                        break;
+                    }
+                }
+
+                if( surfaceFormat.format != VK_FORMAT_UNDEFINED )
+                {
+                    break;
+                }
             }
         }
 

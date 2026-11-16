@@ -82,7 +82,6 @@ set(Sources
     "Source/DecalManager.cpp"
     "Source/EffectBase.cpp"
     "Source/LightGrid.cpp"
-    "Source/UpscalerFSR3.cpp"
     "Source/FrameGeneratorFSR3.cpp"
     "Source/Stb/stb_image.cpp"
     "Source/Stb/stb_image_write.cpp"
@@ -308,25 +307,44 @@ endif()
 target_link_libraries(RayTracedGL1 PUBLIC Vulkan)
 target_include_directories(RayTracedGL1 PUBLIC "Include")
 
-# FSR3
+# FSR3 / FSR4
 if (RG_WITH_AMD_FSR3)
     message(STATUS "RG_WITH_AMD_FSR3 enabled")
     add_definitions(-DRG_USE_AMD_FSR3)
-    set(FFX_API_BACKEND "VK_X64" CACHE STRING "" FORCE)
-    set(FFX_FSR2 ON CACHE BOOL "" FORCE)
-    set(FFX_FSR3UPSCALER ON CACHE BOOL "" FORCE)
-    set(FFX_FSR3 ON CACHE BOOL "" FORCE)
-    set(FFX_FI ON CACHE BOOL "" FORCE)
-    set(FFX_OF ON CACHE BOOL "" FORCE)
-    set(FFX_AUTO_COMPILE_SHADERS OFF CACHE BOOL "" FORCE)
-    add_subdirectory(Source/FSR3/sdk)
-    add_subdirectory(Source/FSR3/ffx-api)
-    target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include" "Source/FSR3/ffx-api/include")
-    target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_vk_x64 amd_fidelityfx_vk)
-    add_custom_command(TARGET RayTracedGL1 POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:amd_fidelityfx_vk>"
-            "$<TARGET_FILE_DIR:RayTracedGL1>")
+    if (WIN32)
+        target_sources(RayTracedGL1 PRIVATE "Source/UpscalerFSR4.cpp")
+        target_include_directories(RayTracedGL1 PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR4/Kits/FidelityFX/api/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR4/Kits/FidelityFX/upscalers/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR4/Kits/FidelityFX/framegeneration/include")
+        add_custom_command(TARGET RayTracedGL1 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR4/Kits/FidelityFX/signedbin/amd_fidelityfx_loader_vk.dll"
+                "$<TARGET_FILE_DIR:RayTracedGL1>"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR4/Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_vk.dll"
+                "$<TARGET_FILE_DIR:RayTracedGL1>"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/Source/FSR4/Kits/FidelityFX/signedbin/amd_fidelityfx_framegeneration_vk.dll"
+                "$<TARGET_FILE_DIR:RayTracedGL1>")
+    else()
+        set(FFX_API_BACKEND "VK_X64" CACHE STRING "" FORCE)
+        set(FFX_FSR2 ON CACHE BOOL "" FORCE)
+        set(FFX_FSR3UPSCALER ON CACHE BOOL "" FORCE)
+        set(FFX_FSR3 ON CACHE BOOL "" FORCE)
+        set(FFX_FI ON CACHE BOOL "" FORCE)
+        set(FFX_OF ON CACHE BOOL "" FORCE)
+        set(FFX_AUTO_COMPILE_SHADERS OFF CACHE BOOL "" FORCE)
+        add_subdirectory(Source/FSR3/sdk)
+        add_subdirectory(Source/FSR3/ffx-api)
+        target_include_directories(RayTracedGL1 PRIVATE "Source/FSR3/sdk/include" "Source/FSR3/ffx-api/include")
+        target_sources(RayTracedGL1 PRIVATE "Source/UpscalerFSR3.cpp")
+        target_link_libraries(RayTracedGL1 PRIVATE ffx_fsr3upscaler_x64 ffx_frameinterpolation_x64 ffx_opticalflow_x64 ffx_backend_vk_x64 amd_fidelityfx_vk)
+        add_custom_command(TARGET RayTracedGL1 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:amd_fidelityfx_vk>"
+                "$<TARGET_FILE_DIR:RayTracedGL1>")
+    endif()
 endif()
 
 if (RG_WITH_NVIDIA_NRD)

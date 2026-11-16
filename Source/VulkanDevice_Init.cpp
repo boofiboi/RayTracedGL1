@@ -417,9 +417,15 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         *textureManager,
         *tonemapping );
 
-    upscalerFsr3 = std::make_shared< UpscalerFSR3 >(
+#ifdef _WIN32
+    upscalerFsr = std::make_shared< UpscalerFSR4 >(
         device,
         physDevice->Get() );
+#else
+    upscalerFsr = std::make_shared< UpscalerFSR3 >(
+        device,
+        physDevice->Get() );
+#endif
 
     nvDlss = std::make_shared< DLSS >(
         instance, 
@@ -482,6 +488,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     effectTeleport            = CONSTRUCT_SIMPLE_EFFECT( EffectTeleport );
     effectNightVision         = CONSTRUCT_SIMPLE_EFFECT( EffectNightVision );
     effectCrtDecode           = CONSTRUCT_SIMPLE_EFFECT( EffectCrtDecode );
+    effectSrgbEncode          = CONSTRUCT_SIMPLE_EFFECT( EffectSrgbEncode );
 #undef SIMPLE_EFFECT_CONSTRUCTOR_PARAMS
 
 
@@ -507,10 +514,11 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     shaderManager->Subscribe( effectTeleport );
     shaderManager->Subscribe( effectNightVision );
     shaderManager->Subscribe( effectCrtDecode );
+    shaderManager->Subscribe( effectSrgbEncode );
 
     framebuffers->Subscribe( rasterizer );
     framebuffers->Subscribe( decalManager );
-    framebuffers->Subscribe( upscalerFsr3 );
+    framebuffers->Subscribe( upscalerFsr );
     if( frameGenerator )
     {
         framebuffers->Subscribe( frameGenerator );
@@ -530,6 +538,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
 {
     vkDeviceWaitIdle( device );
 
+    effectSrgbEncode.reset();
     effectCrtDecode.reset();
     effectTeleport.reset();
     effectNightVision.reset();
@@ -545,7 +554,7 @@ RTGL1::VulkanDevice::~VulkanDevice()
     denoiser.reset();
     sharpening.reset();
     nvDlss.reset();
-    upscalerFsr3.reset();
+    upscalerFsr.reset();
     bloom.reset();
     imageComposition.reset();
     pathTracer.reset();
@@ -873,15 +882,158 @@ void RTGL1::VulkanDevice::CreateDevice()
         VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME,
     };
 
-    const bool hasRobustness2 = std::any_of( supportedDeviceExtensions.cbegin(),
-                                             supportedDeviceExtensions.cend(),
-                                             []( const VkExtensionProperties& ext ) {
-                                                 return !std::strcmp( ext.extensionName, VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
-                                             } );
+    auto hasExt = [ &supportedDeviceExtensions ]( const char* name ) {
+        return std::any_of( supportedDeviceExtensions.cbegin(),
+                            supportedDeviceExtensions.cend(),
+                            [ name ]( const VkExtensionProperties& ext ) {
+                                return !std::strcmp( ext.extensionName, name );
+                            } );
+    };
+
+    const bool hasRobustness2 = hasExt( VK_EXT_ROBUSTNESS_2_EXTENSION_NAME );
+
+    void* optionalTailPNext = nullptr;
+
+    VkPhysicalDeviceVulkan12Features supportedV12 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+    };
+    void* queryPNext = &supportedV12;
+
+#ifdef VK_KHR_cooperative_matrix
+    VkPhysicalDeviceCooperativeMatrixFeaturesKHR supportedCoopMatrix = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR,
+        .pNext = queryPNext,
+    };
+    if( hasExt( VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME ) )
+    {
+        queryPNext = &supportedCoopMatrix;
+    }
+#endif
+
+#ifdef VK_KHR_shader_integer_dot_product
+    VkPhysicalDeviceShaderIntegerDotProductFeaturesKHR supportedIntDot = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES_KHR,
+        .pNext = queryPNext,
+    };
+    if( hasExt( VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME ) )
+    {
+        queryPNext = &supportedIntDot;
+    }
+#endif
+
+#ifdef VK_EXT_shader_float8
+    VkPhysicalDeviceShaderFloat8FeaturesEXT supportedFloat8 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT,
+        .pNext = queryPNext,
+    };
+    if( hasExt( VK_EXT_SHADER_FLOAT8_EXTENSION_NAME ) )
+    {
+        queryPNext = &supportedFloat8;
+    }
+#endif
+
+#ifdef VK_EXT_subgroup_size_control
+    VkPhysicalDeviceSubgroupSizeControlFeaturesEXT supportedSubgroupSizeControl = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT,
+        .pNext = queryPNext,
+    };
+    if( hasExt( VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME ) )
+    {
+        queryPNext = &supportedSubgroupSizeControl;
+    }
+#endif
+
+#ifdef VK_KHR_compute_shader_derivatives
+    VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR supportedComputeDerivatives = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,
+        .pNext = queryPNext,
+    };
+    if( hasExt( VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME ) )
+    {
+        queryPNext = &supportedComputeDerivatives;
+    }
+#endif
+
+    VkPhysicalDeviceFeatures2 queryFeatures2 = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = queryPNext,
+    };
+    vkGetPhysicalDeviceFeatures2( physDevice->Get(), &queryFeatures2 );
+
+#ifdef VK_KHR_cooperative_matrix
+    VkPhysicalDeviceCooperativeMatrixFeaturesKHR coopMatrix = {
+        .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR,
+        .pNext             = optionalTailPNext,
+        .cooperativeMatrix = VK_TRUE,
+    };
+    if( hasExt( VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME ) && supportedCoopMatrix.cooperativeMatrix )
+    {
+        deviceExtensions.push_back( VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME );
+        optionalTailPNext = &coopMatrix;
+    }
+#endif
+
+#ifdef VK_KHR_shader_integer_dot_product
+    VkPhysicalDeviceShaderIntegerDotProductFeaturesKHR intDot = {
+        .sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES_KHR,
+        .pNext                   = optionalTailPNext,
+        .shaderIntegerDotProduct = VK_TRUE,
+    };
+    if( hasExt( VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME ) && supportedIntDot.shaderIntegerDotProduct )
+    {
+        deviceExtensions.push_back( VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME );
+        optionalTailPNext = &intDot;
+    }
+#endif
+
+#ifdef VK_EXT_shader_float8
+    VkPhysicalDeviceShaderFloat8FeaturesEXT float8 = {
+        .sType                         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT,
+        .pNext                         = optionalTailPNext,
+        .shaderFloat8                  = supportedFloat8.shaderFloat8,
+        .shaderFloat8CooperativeMatrix = supportedFloat8.shaderFloat8CooperativeMatrix,
+    };
+    if( hasExt( VK_EXT_SHADER_FLOAT8_EXTENSION_NAME ) && supportedFloat8.shaderFloat8 )
+    {
+        deviceExtensions.push_back( VK_EXT_SHADER_FLOAT8_EXTENSION_NAME );
+        optionalTailPNext = &float8;
+    }
+#endif
+
+#ifdef VK_EXT_subgroup_size_control
+    VkPhysicalDeviceSubgroupSizeControlFeaturesEXT subgroupSizeControl = {
+        .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT,
+        .pNext                = optionalTailPNext,
+        .subgroupSizeControl  = supportedSubgroupSizeControl.subgroupSizeControl,
+        .computeFullSubgroups = supportedSubgroupSizeControl.computeFullSubgroups,
+    };
+    if( hasExt( VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME ) &&
+        supportedSubgroupSizeControl.subgroupSizeControl )
+    {
+        deviceExtensions.push_back( VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME );
+        optionalTailPNext = &subgroupSizeControl;
+    }
+#endif
+
+#ifdef VK_KHR_compute_shader_derivatives
+    VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR computeDerivatives = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,
+        .pNext = optionalTailPNext,
+        .computeDerivativeGroupQuads  = supportedComputeDerivatives.computeDerivativeGroupQuads,
+        .computeDerivativeGroupLinear = supportedComputeDerivatives.computeDerivativeGroupLinear,
+    };
+    if( hasExt( VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME ) &&
+        ( supportedComputeDerivatives.computeDerivativeGroupQuads ||
+          supportedComputeDerivatives.computeDerivativeGroupLinear ) )
+    {
+        deviceExtensions.push_back( VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME );
+        optionalTailPNext = &computeDerivatives;
+    }
+#endif
 
     VkPhysicalDeviceRobustness2FeaturesEXT robustness = {
         .sType               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
-        .pNext               = nullptr,
+        .pNext               = optionalTailPNext,
         .robustBufferAccess2 = false,
         .robustImageAccess2  = false,
         .nullDescriptor      = true,
@@ -894,7 +1046,7 @@ void RTGL1::VulkanDevice::CreateDevice()
 
     VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicState = {
         .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
-        .pNext                = hasRobustness2 ? &robustness : nullptr,
+        .pNext                = hasRobustness2 ? static_cast< void* >( &robustness ) : optionalTailPNext,
         .extendedDynamicState = 1,
     };
 
@@ -905,11 +1057,14 @@ void RTGL1::VulkanDevice::CreateDevice()
     };
 
     VkPhysicalDeviceVulkan12Features vulkan12Features = {
-        .sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext                    = &dynamicRendering,
-        .samplerMirrorClampToEdge = 1,
-        .drawIndirectCount        = 1,
-        .shaderFloat16            = 1,
+        .sType                                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext                                      = &dynamicRendering,
+        .samplerMirrorClampToEdge                   = 1,
+        .drawIndirectCount                          = 1,
+        .storageBuffer8BitAccess                    = supportedV12.storageBuffer8BitAccess,
+        .uniformAndStorageBuffer8BitAccess          = supportedV12.uniformAndStorageBuffer8BitAccess,
+        .shaderFloat16                              = 1,
+        .shaderInt8                                 = supportedV12.shaderInt8,
         .shaderSampledImageArrayNonUniformIndexing  = 1,
         .shaderStorageBufferArrayNonUniformIndexing = 1,
         .runtimeDescriptorArray                     = 1,

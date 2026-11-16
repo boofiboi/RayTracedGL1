@@ -96,6 +96,7 @@ static ShaderModuleDefinition G_SHADERS[] =
     { "EffectNightVision",          "EfNightVision.comp.spv"                },
     { "EffectHueShift",             "EfHueShift.comp.spv"                   },
     { "EffectCrtDecode",            "EfCrtDecode.comp.spv"                  },
+    { "EffectSrgbEncode",           "EfSrgbEncode.comp.spv"                 },
 };
 
 // clang-format on

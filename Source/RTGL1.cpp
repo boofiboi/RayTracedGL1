@@ -401,3 +401,12 @@ void rgUtilExportAsTGA( RgInstance instance, const void* pPixels, uint32_t width
 {
     RTGL1::TextureExporter::WriteTGA( pPath, pPixels, { width, height } );
 }
+
+RgBool32 rgUtilReadFramebuffer( RgInstance instance, RgCaptureTarget target, void* pDstPixelsRGBA8, uint32_t dstWidth, uint32_t dstHeight )
+{
+    if( auto* dev = TryGetDevice( instance ) )
+    {
+        return dev->ReadFramebuffer( target, pDstPixelsRGBA8, dstWidth, dstHeight ) ? 1 : 0;
+    }
+    return 0;
+}

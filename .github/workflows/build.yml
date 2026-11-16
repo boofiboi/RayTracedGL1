@@ -71,7 +71,9 @@ jobs:
           if (Test-Path "Source/External/DLSS/lib/Windows_x86_64/rel") {
             Copy-Item -Path "Source/External/DLSS/lib/Windows_x86_64/rel/*.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           }
-          Copy-Item -Path "bin/amd_fidelityfx_vk.dll" -Destination "artifact_rtgl1/bin/" -Force
+          Copy-Item -Path "Source/FSR4/Kits/FidelityFX/signedbin/amd_fidelityfx_loader_vk.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          Copy-Item -Path "Source/FSR4/Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_vk.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
+          Copy-Item -Path "Source/FSR4/Kits/FidelityFX/signedbin/amd_fidelityfx_framegeneration_vk.dll" -Destination "artifact_rtgl1/Build/x64-Release/Release/" -Force
           Copy-Item -Path "Build/shaders/*.spv" -Destination "artifact_rtgl1/Build/shaders/" -Force
 
       - name: Upload Artifact

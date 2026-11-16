@@ -52,7 +52,11 @@
 #include "EffectWipe.h"
 #include "EffectSimple_Instances.h"
 #include "LightGrid.h"
-#include "UpscalerFSR3.h"
+#ifdef _WIN32
+    #include "UpscalerFSR4.h"
+#else
+    #include "UpscalerFSR3.h"
+#endif
 #include "FrameGeneratorFSR3.h"
 #include "FrameState.h"
 #include "PortalList.h"
@@ -110,6 +114,10 @@ public:
     bool IsFrameGenerationAvailable() const;
     bool IsDlssgAvailable() const;
     bool IsExportActive() const;
+    bool ReadFramebuffer( RgCaptureTarget target,
+                          void*           pDstPixelsRGBA8,
+                          uint32_t        dstWidth,
+                          uint32_t        dstHeight ) const;
 
     RgPrimitiveVertex* ScratchAllocForVertices( uint32_t count );
     void               ScratchFree( const RgPrimitiveVertex* pPointer );
@@ -218,7 +226,7 @@ private:
     std::shared_ptr< Tonemapping >               tonemapping;
     std::shared_ptr< ImageComposition >          imageComposition;
     std::shared_ptr< Bloom >                     bloom;
-    std::shared_ptr< IUpscaler >                 upscalerFsr3;
+    std::shared_ptr< IUpscaler >                 upscalerFsr;
     std::shared_ptr< IFrameGenerator >           frameGenerator;
     std::shared_ptr< DLSS >                      nvDlss;
     std::shared_ptr< Sharpening >                sharpening;
@@ -233,6 +241,7 @@ private:
     std::shared_ptr< EffectTeleport >            effectTeleport;
     std::shared_ptr< EffectNightVision >         effectNightVision;
     std::shared_ptr< EffectCrtDecode >           effectCrtDecode;
+    std::shared_ptr< EffectSrgbEncode >          effectSrgbEncode;
 
     std::shared_ptr< SamplerManager >     worldSamplerManager;
     std::shared_ptr< SamplerManager >     genericSamplerManager;
@@ -271,6 +280,11 @@ private:
 
     bool vsync;
     bool enableFrameGeneration;
+
+    FramebufferImageIndex lastPresentedAccumIndex{ FB_IMAGE_INDEX_FINAL };
+    uint32_t              lastPresentedFrameIndex{ 0 };
+    bool                  lastPresentedWasSrgbEncoded{ false };
+    bool                  hasPresentedFrame{ false };
 };
 
 }

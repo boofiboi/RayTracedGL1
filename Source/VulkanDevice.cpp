@@ -23,6 +23,7 @@
 #include "Matrix.h"
 #include "RenderResolutionHelper.h"
 #include "RgException.h"
+#include "TextureExporter.h"
 #include "Utils.h"
 
 #include "Generated/ShaderCommonC.h"
@@ -763,8 +764,14 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 
         if( isFgActive && !isDlssActive )
         {
+            FramebufferImageIndex hudlessSource =
+                !Utils::IsSRGB( swapchain->GetSurfaceFormat() )
+                    ? effectSrgbEncode->Apply( args, accum )
+                    : accum;
+
             auto [ accumImage, accumView, accumFormat, accumSz ] =
-                framebuffers->GetImageHandles( accum, frameIndex, renderResolution.GetResolutionState() );
+                framebuffers->GetImageHandles(
+                    hudlessSource, frameIndex, renderResolution.GetResolutionState() );
 
             frameGenerator->CaptureHudless( cmd,
                                             frameIndex,
@@ -812,7 +819,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                      renderResolution.UpscaledHeight() );
     }
 
-    // post-effect that work on swapchain geometry too
+    bool crtActive = false;
     {
         const auto& postef = AccessParams< RgDrawFramePostEffectsParams >( drawInfo );
 
@@ -820,16 +827,28 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         {
             accum = effectWipe->Apply( args, blueNoise, accum );
         }
-        if( postef.pCRT != nullptr && postef.pCRT->isActive )
+        crtActive = postef.pCRT != nullptr && postef.pCRT->isActive;
+        if( crtActive )
         {
             effectCrtDecode->Setup( args );
             accum = effectCrtDecode->Apply( args, accum );
         }
     }
 
-    
+    if( !drawInfo.presentPrevFrame && !crtActive &&
+        !Utils::IsSRGB( swapchain->GetSurfaceFormat() ) )
+    {
+        accum = effectSrgbEncode->Apply( args, accum );
+    }
 
-    // blit result image to present on a surface
+    if( !drawInfo.presentPrevFrame )
+    {
+        lastPresentedAccumIndex     = accum;
+        lastPresentedFrameIndex     = frameIndex;
+        lastPresentedWasSrgbEncoded = crtActive || !Utils::IsSRGB( swapchain->GetSurfaceFormat() );
+        hasPresentedFrame           = true;
+    }
+
     framebuffers->PresentToSwapchain(
         cmd, frameIndex, swapchain, accum, VK_FILTER_NEAREST, drawInfo.presentPrevFrame );
 
@@ -1433,9 +1452,9 @@ RTGL1::IUpscaler* RTGL1::VulkanDevice::GetActiveUpscaler() const
     {
         return nvDlss.get();
     }
-    if( renderResolution.IsAmdFsr3Enabled() )
+    if( renderResolution.IsAmdFsrEnabled() )
     {
-        return upscalerFsr3.get();
+        return upscalerFsr.get();
     }
     return nullptr;
 }
@@ -1447,7 +1466,7 @@ bool RTGL1::VulkanDevice::IsUpscaleTechniqueAvailable( RgRenderUpscaleTechnique 
         case RG_RENDER_UPSCALE_TECHNIQUE_NEAREST:
         case RG_RENDER_UPSCALE_TECHNIQUE_LINEAR: return true;
 
-        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3: return upscalerFsr3->IsAvailable();
+        case RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR: return upscalerFsr->IsAvailable();
 
         case RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS: return nvDlss->IsAvailable();
 
@@ -1471,6 +1490,55 @@ bool RTGL1::VulkanDevice::IsDlssgAvailable() const
 bool RTGL1::VulkanDevice::IsExportActive() const
 {
     return sceneImportExport->TryGetExporter() != nullptr;
+}
+
+bool RTGL1::VulkanDevice::ReadFramebuffer( RgCaptureTarget target,
+                                           void*           pDstPixelsRGBA8,
+                                           uint32_t        dstWidth,
+                                           uint32_t        dstHeight ) const
+{
+    if( !hasPresentedFrame || pDstPixelsRGBA8 == nullptr || dstWidth == 0 || dstHeight == 0 )
+    {
+        return false;
+    }
+
+    FramebufferImageIndex fbIdx        = lastPresentedAccumIndex;
+    bool                  exportAsSRGB = !lastPresentedWasSrgbEncoded;
+
+    switch( target )
+    {
+        case RG_CAPTURE_FINAL:
+            break;
+        case RG_CAPTURE_BLOOM:
+            fbIdx        = FB_IMAGE_INDEX_BLOOM_RESULT;
+            exportAsSRGB = true;
+            break;
+        case RG_CAPTURE_VOLUMETRIC:
+            fbIdx        = FB_IMAGE_INDEX_SCATTERING;
+            exportAsSRGB = true;
+            break;
+        case RG_CAPTURE_DENOISER:
+            fbIdx        = FB_IMAGE_INDEX_PRE_FINAL;
+            exportAsSRGB = true;
+            break;
+        default:
+            return false;
+    }
+
+    auto [ srcImage, srcView, srcFormat, srcExtent ] = framebuffers->GetImageHandles(
+        fbIdx, lastPresentedFrameIndex, renderResolution.GetResolutionState() );
+
+    TextureExporter exporter;
+    return exporter.ReadPixelsRGBA8( *memAllocator,
+                                     *cmdManager,
+                                     srcImage,
+                                     { srcExtent.width, srcExtent.height },
+                                     srcFormat,
+                                     VK_IMAGE_LAYOUT_GENERAL,
+                                     { dstWidth, dstHeight },
+                                     exportAsSRGB,
+                                     static_cast< uint8_t* >( pDstPixelsRGBA8 ),
+                                     true );
 }
 
 RgPrimitiveVertex* RTGL1::VulkanDevice::ScratchAllocForVertices( uint32_t vertexCount )

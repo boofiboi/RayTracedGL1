@@ -103,7 +103,7 @@ void RTGL1::UpscalerFSR3::OnFramebuffersSizeChange( const ResolutionState& resol
     DestroyContextAndResources();
 
     FfxFsr3UpscalerContextDescription contextDesc = {
-        .flags          = 0,
+        .flags          = FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE,
         .maxRenderSize  = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .maxUpscaleSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight },
         .fpMessage      = nullptr,
@@ -308,7 +308,7 @@ RTGL1::FramebufferImageIndex RTGL1::UpscalerFSR3::Apply(
         .motionVectorScale          = { float( renderResolution.GetResolutionState().renderWidth ), float( renderResolution.GetResolutionState().renderHeight ) },
         .renderSize                 = { renderResolution.GetResolutionState().renderWidth, renderResolution.GetResolutionState().renderHeight },
         .upscaleSize                = { renderResolution.GetResolutionState().upscaledWidth, renderResolution.GetResolutionState().upscaledHeight },
-        .enableSharpening           = renderResolution.IsCASInsideFSR3(),
+        .enableSharpening           = renderResolution.IsCASInsideFSR(),
         .sharpness                  = renderResolution.GetSharpeningIntensity(),
         .frameTimeDelta             = float( timeDelta * 1000.0 ),
         .preExposure                = 1.0f,

@@ -1,33 +1,6 @@
-// Copyright (c) 2022 Sultim Tsyrendashiev
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #pragma once
 
 #include "FrameGenerator.h"
-
-#ifdef RG_USE_AMD_FSR3
-    #include <atomic>
-
-    #include <ffx_api/ffx_api.h>
-    #include <ffx_api/vk/ffx_api_vk.h>
-#endif
 
 namespace RTGL1
 {
@@ -101,59 +74,8 @@ public:
     void     WaitForPresents() override;
 
 private:
-#ifdef RG_USE_AMD_FSR3
-    void CreateFgContext( uint32_t displayWidth, uint32_t displayHeight );
-    void DestroyFgContext();
-    void CreateHudlessImages( uint32_t width, uint32_t height );
-    void DestroyHudlessImages();
-
-    VkDevice                           device;
-    VkPhysicalDevice                   physDevice;
-    std::shared_ptr< MemoryAllocator > allocator;
-    std::shared_ptr< Queues >          queues;
-    VkFormat                           backBufferFormat;
-
-    ffxContext                         fgContext{ nullptr };
-    ffxContext                         swapchainContext{ nullptr };
-
-    PFN_vkCreateSwapchainFFXAPI        pfnCreateSwapchainFFX{ nullptr };
-    PFN_vkDestroySwapchainFFXAPI       pfnDestroySwapchainFFX{ nullptr };
-    PFN_vkGetSwapchainImagesKHR        pfnGetSwapchainImages{ nullptr };
-    PFN_vkAcquireNextImageKHR          pfnAcquireNextImage{ nullptr };
-    PFN_vkQueuePresentKHR              pfnQueuePresent{ nullptr };
-
-    bool                               fgContextFailed{ false };
-    bool                               swapchainContextFailed{ false };
-    bool                               swapchainHandleAlive{ false };
-
-    std::atomic< bool >                pendingReset{ false };
-
-    static constexpr uint32_t          HUDLESS_IMAGE_COUNT = 4;
-
-    VkImage                            hudlessImages[ HUDLESS_IMAGE_COUNT ]{};
-    VkImageView                        hudlessViews[ HUDLESS_IMAGE_COUNT ]{};
-    VkDeviceMemory                     hudlessMemories[ HUDLESS_IMAGE_COUNT ]{};
-    uint32_t                           currentHudlessIndex{ 0 };
-    uint32_t                           lastCapturedHudlessIndex{ 0 };
-
-    std::shared_ptr< class DLSS >      dlss;
-    bool                               isDlssGActive{ false };
-    bool                               prevFrameGenEnabled{ false };
-
-    VkImage                            savedDepthImage{ VK_NULL_HANDLE };
-    VkImageView                        savedDepthView{ VK_NULL_HANDLE };
-    VkImage                            savedMotionImage{ VK_NULL_HANDLE };
-    VkImageView                        savedMotionView{ VK_NULL_HANDLE };
-    float                              savedViewMatrix[ 16 ]{};
-    float                              savedCameraNear{ 0.0f };
-    float                              savedCameraFar{ 0.0f };
-    float                              savedFovVerticalRad{ 0.0f };
-    uint32_t                           currentWidth{ 0 };
-    uint32_t                           currentHeight{ 0 };
-    uint32_t                           savedRenderWidth{ 0 };
-    uint32_t                           savedRenderHeight{ 0 };
-    uint32_t                           currentFrameIndex{ 0 };
-#endif
+    struct Impl;
+    std::unique_ptr< Impl > impl;
 };
 
 }

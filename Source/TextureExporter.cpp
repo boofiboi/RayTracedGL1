@@ -101,11 +101,6 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                                           bool                         exportAsSRGB,
                                           bool                         overwriteFiles )
 {
-    VkDevice device = allocator.GetDevice();
-
-    const VkFormat dstImageFormat =
-        exportAsSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-
     switch( PrepareTargetFile( filepath, overwriteFiles ) )
     {
         case PrepareResult::AlreadyExists: return true;
@@ -114,6 +109,48 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
         default: return false;
     }
 
+    auto pixels = std::make_unique< uint8_t[] >(
+        DstBytesPerPixel * srcImageSize.width * srcImageSize.height );
+
+    if( !ReadPixelsRGBA8( allocator,
+                          cmdManager,
+                          srcImage,
+                          srcImageSize,
+                          srcImageFormat,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          srcImageSize,
+                          exportAsSRGB,
+                          pixels.get(),
+                          false ) )
+    {
+        return false;
+    }
+
+    return WriteTGA( filepath, pixels.get(), srcImageSize );
+}
+
+bool RTGL1::TextureExporter::ReadPixelsRGBA8( MemoryAllocator&      allocator,
+                                              CommandBufferManager& cmdManager,
+                                              VkImage               srcImage,
+                                              RgExtent2D            srcImageSize,
+                                              VkFormat              srcImageFormat,
+                                              VkImageLayout         srcImageLayout,
+                                              RgExtent2D            dstImageSize,
+                                              bool                  exportAsSRGB,
+                                              uint8_t*              dstPixels,
+                                              bool                  forceOpaqueAlpha )
+{
+    if( srcImage == VK_NULL_HANDLE || srcImageSize.width == 0 || srcImageSize.height == 0 ||
+        dstImageSize.width == 0 || dstImageSize.height == 0 || dstPixels == nullptr )
+    {
+        return false;
+    }
+
+    VkDevice device = allocator.GetDevice();
+
+    const VkFormat dstImageFormat =
+        exportAsSRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+
     if( !CheckSupport( allocator.GetPhysicalDevice(), srcImageFormat, dstImageFormat ) )
     {
         return false;
@@ -121,8 +158,6 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
 
     vkDeviceWaitIdle( device );
     VkCommandBuffer cmd = cmdManager.StartGraphicsCmd();
-
-    constexpr VkImageLayout srcImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     const VkImageSubresourceRange subresRange = {
         .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -137,11 +172,6 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
         .arrayLayer = 0,
     };
 
-    // Can't vkCmdBlit into a linear tiling directly
-    // Can't vkCmdCopy directly from a compressed format (diff block extents with rgba8)
-    // 1. Blit from compressed to optimal rgba8
-    // 2. Copy from optimal rgba8 to linear rgba8
-
     VkImage dstImage_Optimal = VK_NULL_HANDLE;
     VkImage dstImage_Linear  = VK_NULL_HANDLE;
     {
@@ -151,13 +181,13 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
             .flags       = 0,
             .imageType   = VK_IMAGE_TYPE_2D,
             .format      = dstImageFormat,
-            .extent      = { srcImageSize.width, srcImageSize.height, 1 },
+            .extent      = { dstImageSize.width, dstImageSize.height, 1 },
             .mipLevels   = 1,
             .arrayLayers = 1,
             .samples     = VK_SAMPLE_COUNT_1_BIT,
-            .tiling      = VK_IMAGE_TILING_OPTIMAL, /* optimal */
+            .tiling      = VK_IMAGE_TILING_OPTIMAL,
             .usage =
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, /* dst + src */
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0,
             .pQueueFamilyIndices   = nullptr,
@@ -177,12 +207,12 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
             .flags                 = 0,
             .imageType             = VK_IMAGE_TYPE_2D,
             .format                = dstImageFormat,
-            .extent                = { srcImageSize.width, srcImageSize.height, 1 },
+            .extent                = { dstImageSize.width, dstImageSize.height, 1 },
             .mipLevels             = 1,
             .arrayLayers           = 1,
             .samples               = VK_SAMPLE_COUNT_1_BIT,
-            .tiling                = VK_IMAGE_TILING_LINEAR,          /* linear */
-            .usage                 = VK_IMAGE_USAGE_TRANSFER_DST_BIT, /* dst */
+            .tiling                = VK_IMAGE_TILING_LINEAR,
+            .usage                 = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0,
             .pQueueFamilyIndices   = nullptr,
@@ -225,14 +255,12 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
         VK_CHECKERROR( r );
     }
 
-    // blit srcImage -> dstImage_Optimal
     {
         VkImageMemoryBarrier2 bs[] = {
-            // srcImage to transfer src
             {
                 .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
-                .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-                .srcAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+                .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .srcAccessMask       = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
                 .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
                 .dstAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
                 .oldLayout           = srcImageLayout,
@@ -242,7 +270,6 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                 .image               = srcImage,
                 .subresourceRange    = subresRange,
             },
-            // dstImage_Optimal to transfer dst
             {
                 .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
@@ -279,8 +306,14 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                                 .baseArrayLayer = 0,
                                 .layerCount     = 1 },
             .dstOffsets     = { { 0, 0, 0 },
-                                { int32_t( srcImageSize.width ), int32_t( srcImageSize.height ), 1 } },
+                                { int32_t( dstImageSize.width ), int32_t( dstImageSize.height ), 1 } },
         };
+
+        const VkFilter filter =
+            ( srcImageSize.width == dstImageSize.width &&
+              srcImageSize.height == dstImageSize.height )
+                ? VK_FILTER_NEAREST
+                : VK_FILTER_LINEAR;
 
         vkCmdBlitImage( cmd,
                         srcImage,
@@ -289,14 +322,12 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         1,
                         &blit,
-                        VK_FILTER_NEAREST );
+                        filter );
     }
 
-    // copy dstImage_Optimal -> dstImage_Linear
     {
         VkImageMemoryBarrier2 bs[] = {
             {
-                // dstImage_Optimal to transfer src
                 .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -310,7 +341,6 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                 .subresourceRange    = subresRange,
             },
             {
-                // dstImage_Linear to transfer dst
                 .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
                 .srcAccessMask       = VK_ACCESS_2_NONE,
@@ -345,7 +375,7 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                                 .baseArrayLayer = 0,
                                 .layerCount     = 1 },
             .dstOffset      = { 0, 0, 0 },
-            .extent         = { srcImageSize.width, srcImageSize.height, 1 },
+            .extent         = { dstImageSize.width, dstImageSize.height, 1 },
         };
 
         vkCmdCopyImage( cmd,
@@ -360,12 +390,11 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
     {
         VkImageMemoryBarrier2 bs[] = {
             {
-                // srcImage to original layout
                 .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-                .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-                .dstAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+                .dstStageMask        = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .dstAccessMask       = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
                 .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 .newLayout           = srcImageLayout,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -374,7 +403,6 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
                 .subresourceRange    = subresRange,
             },
             {
-                // dstImage_Linear to host read
                 .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -401,18 +429,14 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
     cmdManager.Submit( cmd );
     cmdManager.WaitGraphicsIdle();
 
-    bool success = false;
     {
         VkSubresourceLayout subresLayout = {};
         vkGetImageSubresourceLayout( device, dstImage_Linear, &subres, &subresLayout );
 
-        const VkDeviceSize rowSize   = DstBytesPerPixel * srcImageSize.width;
-        const VkDeviceSize tightSize = rowSize * srcImageSize.height;
+        const VkDeviceSize rowSize = DstBytesPerPixel * dstImageSize.width;
 
         assert( subresLayout.rowPitch >= rowSize );
-        assert( subresLayout.size >= subresLayout.rowPitch * ( srcImageSize.height - 1 ) + rowSize );
-
-        auto pixels = std::make_unique< uint8_t[] >( tightSize );
+        assert( subresLayout.size >= subresLayout.rowPitch * ( dstImageSize.height - 1 ) + rowSize );
 
         uint8_t* rawData{ nullptr };
         VkResult r = vkMapMemory( device,
@@ -424,18 +448,23 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
         VK_CHECKERROR( r );
 
         const uint8_t* srcPtr = &rawData[ subresLayout.offset ];
-        uint8_t*       dstPtr = pixels.get();
+        uint8_t*       dstPtr = dstPixels;
 
-        for( uint32_t row = 0; row < srcImageSize.height; row++ )
+        for( uint32_t row = 0; row < dstImageSize.height; row++ )
         {
             memcpy( dstPtr, srcPtr, rowSize );
+            if( forceOpaqueAlpha )
+            {
+                for( uint32_t col = 0; col < dstImageSize.width; col++ )
+                {
+                    dstPtr[ col * 4 + 3 ] = 255;
+                }
+            }
             srcPtr += subresLayout.rowPitch;
             dstPtr += rowSize;
         }
 
         vkUnmapMemory( device, dstMemory_Linear );
-
-        success = WriteTGA( filepath, pixels.get(), srcImageSize );
     }
     {
         vkFreeMemory( device, dstMemory_Linear, nullptr );
@@ -445,7 +474,7 @@ bool RTGL1::TextureExporter::ExportAsTGA( MemoryAllocator&             allocator
         vkDestroyImage( device, dstImage_Optimal, nullptr );
     }
 
-    return success;
+    return true;
 }
 
 bool RTGL1::TextureExporter::CheckSupport( VkPhysicalDevice physDevice,

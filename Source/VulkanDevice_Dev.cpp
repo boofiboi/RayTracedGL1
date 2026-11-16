@@ -141,9 +141,15 @@ void RTGL1::VulkanDevice::Dev_Draw() const
                                     reinterpret_cast< int* >( &modifiers.upscaleTechnique ),
                                     RG_RENDER_UPSCALE_TECHNIQUE_NEAREST );
                 ImGui::SameLine();
+#ifdef _WIN32
+                ImGui::RadioButton( "FSR 4##Upscale",
+                                    reinterpret_cast< int* >( &modifiers.upscaleTechnique ),
+                                    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR );
+#else
                 ImGui::RadioButton( "FSR 3.1##Upscale",
                                     reinterpret_cast< int* >( &modifiers.upscaleTechnique ),
-                                    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 );
+                                    RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR );
+#endif
                 ImGui::SameLine();
                 ImGui::BeginDisabled( !dlssOk );
                 ImGui::RadioButton( "DLSS 2##Upscale",
@@ -166,7 +172,7 @@ void RTGL1::VulkanDevice::Dev_Draw() const
             }
 
             bool forceCustom =
-                modifiers.upscaleTechnique != RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 &&
+                modifiers.upscaleTechnique != RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR &&
                 modifiers.upscaleTechnique != RG_RENDER_UPSCALE_TECHNIQUE_NVIDIA_DLSS;
             if( forceCustom )
             {
@@ -196,7 +202,7 @@ void RTGL1::VulkanDevice::Dev_Draw() const
                                     RG_RENDER_RESOLUTION_MODE_QUALITY );
                 ImGui::SameLine();
                 ImGui::BeginDisabled( modifiers.upscaleTechnique ==
-                                      RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR3 );
+                                      RG_RENDER_UPSCALE_TECHNIQUE_AMD_FSR );
                 ImGui::RadioButton( "Ultra Quality##Resolution",
                                     reinterpret_cast< int* >( &modifiers.resolutionMode ),
                                     RG_RENDER_RESOLUTION_MODE_ULTRA_QUALITY );

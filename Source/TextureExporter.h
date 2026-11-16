@@ -52,6 +52,17 @@ public:
                       bool                         exportAsSRGB,
                       bool                         overwriteFiles = true );
 
+    bool ReadPixelsRGBA8( MemoryAllocator&      allocator,
+                          CommandBufferManager& cmdManager,
+                          VkImage               srcImage,
+                          RgExtent2D            srcImageSize,
+                          VkFormat              srcImageFormat,
+                          VkImageLayout         srcImageLayout,
+                          RgExtent2D            dstImageSize,
+                          bool                  exportAsSRGB,
+                          uint8_t*              dstPixels,
+                          bool                  forceOpaqueAlpha );
+
     bool CheckSupport( VkPhysicalDevice physDevice,
                        VkFormat         srcImageFormat,
                        VkFormat         dstImageFormat );

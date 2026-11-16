@@ -1008,6 +1008,7 @@ DWORD WINAPI copyAndPresent_presenterThread(LPVOID pParam)
                             SubmissionSemaphores toSignal;
                             SubmissionSemaphores toWait;
                             toWait.add(presenter->compositionSemaphore, frameInfo.presentIndex);  // composition to finish
+                            toSignal.add(presenter->frameRenderedSemaphores[imageIndex]);
 
                             // no image was acquired, just skip everything and signal the appropriate semaphores
 
@@ -1028,7 +1029,6 @@ DWORD WINAPI copyAndPresent_presenterThread(LPVOID pParam)
 
                             if (res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR)
                             {
-                                toSignal.add(presenter->frameRenderedSemaphores[imageIndex]);
                                 toWait.add(imageAvailableSemaphore);  // swapchain image to be available
 
                                 auto presentCommandList = presenter->commandPool.get(presenter->device, presenter->presentQueue, "presentCommandList");
@@ -1175,8 +1175,8 @@ DWORD WINAPI composeAndPresent_presenterThread(LPVOID pParam)
 
                             if (res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR)
                             {
-                                toSignal.add(presenter->frameRenderedSemaphores[realSwapchainImageIndex]);
                                 toWait.add(acquireSemaphore);
+                                toSignal.add(presenter->frameRenderedSemaphores[realSwapchainImageIndex]);
 
                                 res = compositeSwapChainFrame(presenter,
                                                               &entry,
