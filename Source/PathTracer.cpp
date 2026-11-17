@@ -121,6 +121,7 @@ void PathTracer::TracePrimaryRays( const TraceParams& params )
         FI::FB_IMAGE_INDEX_VISIBILITY_BUFFER,
         FI::FB_IMAGE_INDEX_VIEW_DIRECTION,
         FI::FB_IMAGE_INDEX_THROUGHPUT,
+        FI::FB_IMAGE_INDEX_GLASS_REFLECTION,
         FI::FB_IMAGE_INDEX_PRIMARY_TO_REFL_REFR,
         FI::FB_IMAGE_INDEX_WATER_PARAMS,
     };
@@ -145,6 +146,7 @@ void PathTracer::TraceReflectionRefractionRays( const TraceParams& params )
         FI::FB_IMAGE_INDEX_VISIBILITY_BUFFER,
         FI::FB_IMAGE_INDEX_VIEW_DIRECTION,
         FI::FB_IMAGE_INDEX_THROUGHPUT,
+        FI::FB_IMAGE_INDEX_GLASS_REFLECTION,
         FI::FB_IMAGE_INDEX_PRIMARY_TO_REFL_REFR,
         FI::FB_IMAGE_INDEX_WATER_PARAMS,
     };

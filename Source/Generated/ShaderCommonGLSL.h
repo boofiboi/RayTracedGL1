@@ -417,42 +417,43 @@ struct ShPortalInstance
 #define FB_IMAGE_INDEX_PRIMARY_TO_REFL_REFR 19
 #define FB_IMAGE_INDEX_WATER_PARAMS 20
 #define FB_IMAGE_INDEX_THROUGHPUT 21
-#define FB_IMAGE_INDEX_PRE_FINAL 22
-#define FB_IMAGE_INDEX_FINAL 23
-#define FB_IMAGE_INDEX_UPSCALED_PING 24
-#define FB_IMAGE_INDEX_UPSCALED_PONG 25
-#define FB_IMAGE_INDEX_MOTION_DLSS 26
-#define FB_IMAGE_INDEX_REACTIVITY 27
-#define FB_IMAGE_INDEX_HISTOGRAM_INPUT 28
-#define FB_IMAGE_INDEX_NORMAL_DECAL 29
-#define FB_IMAGE_INDEX_SCATTERING 30
-#define FB_IMAGE_INDEX_SCATTERING_PREV 31
-#define FB_IMAGE_INDEX_SCATTERING_HISTORY 32
-#define FB_IMAGE_INDEX_SCATTERING_HISTORY_PREV 33
-#define FB_IMAGE_INDEX_ACID_FOG_R_T 34
-#define FB_IMAGE_INDEX_ACID_FOG 35
-#define FB_IMAGE_INDEX_SCREEN_EMIS_R_T 36
-#define FB_IMAGE_INDEX_SCREEN_EMISSION 37
-#define FB_IMAGE_INDEX_BLOOM_INPUT 38
-#define FB_IMAGE_INDEX_BLOOM_MIP1 39
-#define FB_IMAGE_INDEX_BLOOM_MIP2 40
-#define FB_IMAGE_INDEX_BLOOM_MIP3 41
-#define FB_IMAGE_INDEX_BLOOM_MIP4 42
-#define FB_IMAGE_INDEX_BLOOM_MIP5 43
-#define FB_IMAGE_INDEX_BLOOM_MIP6 44
-#define FB_IMAGE_INDEX_BLOOM_MIP7 45
-#define FB_IMAGE_INDEX_BLOOM_MIP8 46
-#define FB_IMAGE_INDEX_BLOOM_RESULT 47
-#define FB_IMAGE_INDEX_WIPE_EFFECT_SOURCE 48
-#define FB_IMAGE_INDEX_RESERVOIRS 49
-#define FB_IMAGE_INDEX_RESERVOIRS_PREV 50
-#define FB_IMAGE_INDEX_RESERVOIRS_INITIAL 51
-#define FB_IMAGE_INDEX_NRD_DIFFUSE_HIT_DIST 52
-#define FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST 53
-#define FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS 54
-#define FB_IMAGE_INDEX_NRD_VIEW_Z 55
-#define FB_IMAGE_INDEX_NRD_OUT_DIFFUSE 56
-#define FB_IMAGE_INDEX_NRD_OUT_SPECULAR 57
+#define FB_IMAGE_INDEX_GLASS_REFLECTION 22
+#define FB_IMAGE_INDEX_PRE_FINAL 23
+#define FB_IMAGE_INDEX_FINAL 24
+#define FB_IMAGE_INDEX_UPSCALED_PING 25
+#define FB_IMAGE_INDEX_UPSCALED_PONG 26
+#define FB_IMAGE_INDEX_MOTION_DLSS 27
+#define FB_IMAGE_INDEX_REACTIVITY 28
+#define FB_IMAGE_INDEX_HISTOGRAM_INPUT 29
+#define FB_IMAGE_INDEX_NORMAL_DECAL 30
+#define FB_IMAGE_INDEX_SCATTERING 31
+#define FB_IMAGE_INDEX_SCATTERING_PREV 32
+#define FB_IMAGE_INDEX_SCATTERING_HISTORY 33
+#define FB_IMAGE_INDEX_SCATTERING_HISTORY_PREV 34
+#define FB_IMAGE_INDEX_ACID_FOG_R_T 35
+#define FB_IMAGE_INDEX_ACID_FOG 36
+#define FB_IMAGE_INDEX_SCREEN_EMIS_R_T 37
+#define FB_IMAGE_INDEX_SCREEN_EMISSION 38
+#define FB_IMAGE_INDEX_BLOOM_INPUT 39
+#define FB_IMAGE_INDEX_BLOOM_MIP1 40
+#define FB_IMAGE_INDEX_BLOOM_MIP2 41
+#define FB_IMAGE_INDEX_BLOOM_MIP3 42
+#define FB_IMAGE_INDEX_BLOOM_MIP4 43
+#define FB_IMAGE_INDEX_BLOOM_MIP5 44
+#define FB_IMAGE_INDEX_BLOOM_MIP6 45
+#define FB_IMAGE_INDEX_BLOOM_MIP7 46
+#define FB_IMAGE_INDEX_BLOOM_MIP8 47
+#define FB_IMAGE_INDEX_BLOOM_RESULT 48
+#define FB_IMAGE_INDEX_WIPE_EFFECT_SOURCE 49
+#define FB_IMAGE_INDEX_RESERVOIRS 50
+#define FB_IMAGE_INDEX_RESERVOIRS_PREV 51
+#define FB_IMAGE_INDEX_RESERVOIRS_INITIAL 52
+#define FB_IMAGE_INDEX_NRD_DIFFUSE_HIT_DIST 53
+#define FB_IMAGE_INDEX_NRD_SPECULAR_HIT_DIST 54
+#define FB_IMAGE_INDEX_NRD_NORMAL_ROUGHNESS 55
+#define FB_IMAGE_INDEX_NRD_VIEW_Z 56
+#define FB_IMAGE_INDEX_NRD_OUT_DIFFUSE 57
+#define FB_IMAGE_INDEX_NRD_OUT_SPECULAR 58
 
 // framebuffers
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
@@ -479,128 +480,130 @@ layout(set = DESC_SET_FRAMEBUFFERS, binding = 18, rgba16f) uniform image2D frame
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 19, rgba32ui) uniform uimage2D framebufPrimaryToReflRefr;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 20, rgba16f) uniform image2D framebufWaterParams;
 layout(set = DESC_SET_FRAMEBUFFERS, binding = 21, rgba16f) uniform image2D framebufThroughput;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 22, r11f_g11f_b10f) uniform image2D framebufPreFinal;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 22, r11f_g11f_b10f) uniform image2D framebufGlassReflection;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 23, r11f_g11f_b10f) uniform image2D framebufPreFinal;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 23, r11f_g11f_b10f) uniform image2D framebufFinal;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 24, r11f_g11f_b10f) uniform image2D framebufFinal;
 #endif
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 24, r11f_g11f_b10f) uniform image2D framebufUpscaledPing;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 25, r11f_g11f_b10f) uniform image2D framebufUpscaledPing;
 #endif
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 25, r11f_g11f_b10f) uniform image2D framebufUpscaledPong;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 26, r11f_g11f_b10f) uniform image2D framebufUpscaledPong;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 26, rgba16f) uniform image2D framebufMotionDlss;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 27, rgba16f) uniform image2D framebufMotionDlss;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 27, r8) uniform image2D framebufReactivity;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 28, r8) uniform image2D framebufReactivity;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 28, r16f) uniform image2D framebufHistogramInput;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 29, r16f) uniform image2D framebufHistogramInput;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 29, r32ui) uniform uimage2D framebufNormalDecal;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 30, r32ui) uniform uimage2D framebufNormalDecal;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 30, rgba16f) uniform image2D framebufScattering;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 31, rgba16f) uniform image2D framebufScattering_Prev;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 32, r16f) uniform image2D framebufScatteringHistory;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 33, r16f) uniform image2D framebufScatteringHistory_Prev;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 34, r11f_g11f_b10f) uniform image2D framebufAcidFogRT;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 35, r11f_g11f_b10f) uniform image2D framebufAcidFog;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 36, r11f_g11f_b10f) uniform image2D framebufScreenEmisRT;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 31, rgba16f) uniform image2D framebufScattering;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 32, rgba16f) uniform image2D framebufScattering_Prev;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 33, r16f) uniform image2D framebufScatteringHistory;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 34, r16f) uniform image2D framebufScatteringHistory_Prev;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 35, r11f_g11f_b10f) uniform image2D framebufAcidFogRT;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 36, r11f_g11f_b10f) uniform image2D framebufAcidFog;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 37, r11f_g11f_b10f) uniform image2D framebufScreenEmisRT;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 37, r11f_g11f_b10f) uniform image2D framebufScreenEmission;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 38, r11f_g11f_b10f) uniform image2D framebufScreenEmission;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 38, r11f_g11f_b10f) uniform image2D framebufBloomInput;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 39, r11f_g11f_b10f) uniform image2D framebufBloom_Mip1;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 40, r11f_g11f_b10f) uniform image2D framebufBloom_Mip2;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 41, r11f_g11f_b10f) uniform image2D framebufBloom_Mip3;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 42, r11f_g11f_b10f) uniform image2D framebufBloom_Mip4;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 43, r11f_g11f_b10f) uniform image2D framebufBloom_Mip5;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 44, r11f_g11f_b10f) uniform image2D framebufBloom_Mip6;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 45, r11f_g11f_b10f) uniform image2D framebufBloom_Mip7;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 46, r11f_g11f_b10f) uniform image2D framebufBloom_Mip8;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 47, r11f_g11f_b10f) uniform image2D framebufBloom_Result;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 48, r11f_g11f_b10f) uniform image2D framebufWipeEffectSource;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 49, rgba32ui) uniform uimage2D framebufReservoirs;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 50, rgba32ui) uniform uimage2D framebufReservoirs_Prev;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 51, rgba32ui) uniform uimage2D framebufReservoirsInitial;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 52, rgba16f) uniform image2D framebufNrdDiffuseHitDist;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 53, rgba16f) uniform image2D framebufNrdSpecularHitDist;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 54, rgba16f) uniform image2D framebufNrdNormalRoughness;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 55, r32f) uniform image2D framebufNrdViewZ;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 56, rgba16f) uniform image2D framebufNrdOutDiffuse;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 57, rgba16f) uniform image2D framebufNrdOutSpecular;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 39, r11f_g11f_b10f) uniform image2D framebufBloomInput;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 40, r11f_g11f_b10f) uniform image2D framebufBloom_Mip1;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 41, r11f_g11f_b10f) uniform image2D framebufBloom_Mip2;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 42, r11f_g11f_b10f) uniform image2D framebufBloom_Mip3;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 43, r11f_g11f_b10f) uniform image2D framebufBloom_Mip4;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 44, r11f_g11f_b10f) uniform image2D framebufBloom_Mip5;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 45, r11f_g11f_b10f) uniform image2D framebufBloom_Mip6;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 46, r11f_g11f_b10f) uniform image2D framebufBloom_Mip7;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 47, r11f_g11f_b10f) uniform image2D framebufBloom_Mip8;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 48, r11f_g11f_b10f) uniform image2D framebufBloom_Result;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 49, r11f_g11f_b10f) uniform image2D framebufWipeEffectSource;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 50, rgba32ui) uniform uimage2D framebufReservoirs;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 51, rgba32ui) uniform uimage2D framebufReservoirs_Prev;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 52, rgba32ui) uniform uimage2D framebufReservoirsInitial;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 53, rgba16f) uniform image2D framebufNrdDiffuseHitDist;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 54, rgba16f) uniform image2D framebufNrdSpecularHitDist;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 55, rgba16f) uniform image2D framebufNrdNormalRoughness;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 56, r32f) uniform image2D framebufNrdViewZ;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 57, rgba16f) uniform image2D framebufNrdOutDiffuse;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 58, rgba16f) uniform image2D framebufNrdOutSpecular;
 
 // samplers
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 58) uniform sampler2D framebufAlbedo_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 59) uniform sampler2D framebufAlbedo_Sampler;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 59) uniform usampler2D framebufIsSky_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 60) uniform usampler2D framebufNormal_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 61) uniform usampler2D framebufNormal_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 62) uniform sampler2D framebufMetallicRoughness_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 63) uniform sampler2D framebufMetallicRoughness_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 64) uniform sampler2D framebufDepthWorld_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 65) uniform sampler2D framebufDepthWorld_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 66) uniform sampler2D framebufDepthGrad_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 67) uniform sampler2D framebufDepthNdc_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 68) uniform sampler2D framebufMotion_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 69) uniform usampler2D framebufUnfilteredDirect_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 70) uniform usampler2D framebufUnfilteredSpecular_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 71) uniform usampler2D framebufUnfilteredIndir_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 72) uniform sampler2D framebufSurfacePosition_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 73) uniform sampler2D framebufSurfacePosition_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 74) uniform sampler2D framebufVisibilityBuffer_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 75) uniform sampler2D framebufVisibilityBuffer_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 76) uniform sampler2D framebufViewDirection_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 77) uniform usampler2D framebufPrimaryToReflRefr_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 78) uniform sampler2D framebufWaterParams_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 79) uniform sampler2D framebufThroughput_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 80) uniform sampler2D framebufPreFinal_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 60) uniform usampler2D framebufIsSky_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 61) uniform usampler2D framebufNormal_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 62) uniform usampler2D framebufNormal_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 63) uniform sampler2D framebufMetallicRoughness_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 64) uniform sampler2D framebufMetallicRoughness_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 65) uniform sampler2D framebufDepthWorld_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 66) uniform sampler2D framebufDepthWorld_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 67) uniform sampler2D framebufDepthGrad_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 68) uniform sampler2D framebufDepthNdc_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 69) uniform sampler2D framebufMotion_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 70) uniform usampler2D framebufUnfilteredDirect_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 71) uniform usampler2D framebufUnfilteredSpecular_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 72) uniform usampler2D framebufUnfilteredIndir_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 73) uniform sampler2D framebufSurfacePosition_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 74) uniform sampler2D framebufSurfacePosition_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 75) uniform sampler2D framebufVisibilityBuffer_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 76) uniform sampler2D framebufVisibilityBuffer_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 77) uniform sampler2D framebufViewDirection_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 78) uniform usampler2D framebufPrimaryToReflRefr_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 79) uniform sampler2D framebufWaterParams_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 80) uniform sampler2D framebufThroughput_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 81) uniform sampler2D framebufGlassReflection_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 82) uniform sampler2D framebufPreFinal_Sampler;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 81) uniform sampler2D framebufFinal_Sampler;
-#endif
-#ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 82) uniform sampler2D framebufUpscaledPing_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 83) uniform sampler2D framebufFinal_Sampler;
 #endif
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 83) uniform sampler2D framebufUpscaledPong_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 84) uniform sampler2D framebufUpscaledPing_Sampler;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 84) uniform sampler2D framebufMotionDlss_Sampler;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 85) uniform sampler2D framebufReactivity_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 85) uniform sampler2D framebufUpscaledPong_Sampler;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 86) uniform sampler2D framebufHistogramInput_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 86) uniform sampler2D framebufMotionDlss_Sampler;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 87) uniform usampler2D framebufNormalDecal_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 87) uniform sampler2D framebufReactivity_Sampler;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 88) uniform sampler2D framebufScattering_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 89) uniform sampler2D framebufScattering_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 90) uniform sampler2D framebufScatteringHistory_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 91) uniform sampler2D framebufScatteringHistory_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 92) uniform sampler2D framebufAcidFogRT_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 93) uniform sampler2D framebufAcidFog_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 94) uniform sampler2D framebufScreenEmisRT_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 88) uniform sampler2D framebufHistogramInput_Sampler;
 #ifndef FRAMEBUF_IGNORE_ATTACHMENTS
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 95) uniform sampler2D framebufScreenEmission_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 89) uniform usampler2D framebufNormalDecal_Sampler;
 #endif
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 96) uniform sampler2D framebufBloomInput_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 97) uniform sampler2D framebufBloom_Mip1_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 98) uniform sampler2D framebufBloom_Mip2_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 99) uniform sampler2D framebufBloom_Mip3_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 100) uniform sampler2D framebufBloom_Mip4_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 101) uniform sampler2D framebufBloom_Mip5_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 102) uniform sampler2D framebufBloom_Mip6_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 103) uniform sampler2D framebufBloom_Mip7_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 104) uniform sampler2D framebufBloom_Mip8_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 105) uniform sampler2D framebufBloom_Result_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 106) uniform sampler2D framebufWipeEffectSource_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 107) uniform usampler2D framebufReservoirs_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 108) uniform usampler2D framebufReservoirs_Prev_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 109) uniform usampler2D framebufReservoirsInitial_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 110) uniform sampler2D framebufNrdDiffuseHitDist_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 111) uniform sampler2D framebufNrdSpecularHitDist_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 112) uniform sampler2D framebufNrdNormalRoughness_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 113) uniform sampler2D framebufNrdViewZ_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 114) uniform sampler2D framebufNrdOutDiffuse_Sampler;
-layout(set = DESC_SET_FRAMEBUFFERS, binding = 115) uniform sampler2D framebufNrdOutSpecular_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 90) uniform sampler2D framebufScattering_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 91) uniform sampler2D framebufScattering_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 92) uniform sampler2D framebufScatteringHistory_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 93) uniform sampler2D framebufScatteringHistory_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 94) uniform sampler2D framebufAcidFogRT_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 95) uniform sampler2D framebufAcidFog_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 96) uniform sampler2D framebufScreenEmisRT_Sampler;
+#ifndef FRAMEBUF_IGNORE_ATTACHMENTS
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 97) uniform sampler2D framebufScreenEmission_Sampler;
+#endif
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 98) uniform sampler2D framebufBloomInput_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 99) uniform sampler2D framebufBloom_Mip1_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 100) uniform sampler2D framebufBloom_Mip2_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 101) uniform sampler2D framebufBloom_Mip3_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 102) uniform sampler2D framebufBloom_Mip4_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 103) uniform sampler2D framebufBloom_Mip5_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 104) uniform sampler2D framebufBloom_Mip6_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 105) uniform sampler2D framebufBloom_Mip7_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 106) uniform sampler2D framebufBloom_Mip8_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 107) uniform sampler2D framebufBloom_Result_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 108) uniform sampler2D framebufWipeEffectSource_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 109) uniform usampler2D framebufReservoirs_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 110) uniform usampler2D framebufReservoirs_Prev_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 111) uniform usampler2D framebufReservoirsInitial_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 112) uniform sampler2D framebufNrdDiffuseHitDist_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 113) uniform sampler2D framebufNrdSpecularHitDist_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 114) uniform sampler2D framebufNrdNormalRoughness_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 115) uniform sampler2D framebufNrdViewZ_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 116) uniform sampler2D framebufNrdOutDiffuse_Sampler;
+layout(set = DESC_SET_FRAMEBUFFERS, binding = 117) uniform sampler2D framebufNrdOutSpecular_Sampler;
 
 // pack/unpack formats
 void imageStoreUnfilteredDirect(const ivec2 pix, const vec3 unpacked) { imageStore(framebufUnfilteredDirect, pix, uvec4(encodeE5B9G9R9(unpacked))); }

@@ -1,39 +1,29 @@
 
 # RTGL1
-
-  
-
-  
-
 RTGL1 is a library that aims to simplify the process of porting 3D applications to *real-time path tracing*, via hardware accelerated ray tracing, denoising algorithms (A-SVGF) and sampling algorithms (ReSTIR, ReSTIR GI) to improve the image quality by reusing spatio-temporal data.
-
-  
-
 This fork includes many improvements on the original repository, including FSR3 upscaling support, FSR3 framegen (eventually), newer versions of DLSS and many more.
-
-  
-
 It is intended to be used in addition to my fork of xash-rt, which also includes many changes and improvements to the overall experience.
-
-  
 
 ## Improvements over original RTGL1
 
-Removed FSR2 and added FSR3 support - FSR3 works on exactly the same devices, but with better performance and better visual quality.
+- Removed FSR2 and added FSR3/FSR4 support - FSR3 works on exactly the same devices, but with better performance and better visual quality.
+    - FSR4 runs on supported GPUs with FSR3.1.6 FG handling frame generation.
 
-FSR3 Framegen support
+- Frame generation support (FSR + DLSS)
 
-Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
+- Linux support UwU
 
-Water semantics: "waterColor" is the color that white light becomes after passing through 1 meter of that water, "waterDensity" is an absorption multiplier (1.0 - exactly as the color implies, 0.0 - crystal clear), "waterReflectivity" is a [0,1] multiplier for the Fresnel reflection strength of the water surface. Global fallback for all water without per-texture params is set by the engine (rt_me_water_* cvars).
+- Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
 
-Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning etc.
+- Water semantics: "waterColor" is the color that white light becomes after passing through 1 meter of that water, "waterDensity" is an absorption multiplier (1.0 - exactly as the color implies, 0.0 - crystal clear), "waterReflectivity" is a [0,1] multiplier for the Fresnel reflection strength of the water surface. Global fallback for all water without per-texture params is set by the engine (rt_me_water_* cvars).
 
-nVidia NRD denoiser replacing SVGF Atrous.
+- Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning etc.
 
-DLSS 4.5 support with its accompanying frame gen
+- nVidia NRD denoiser replacing SVGF Atrous.
 
-Lottes CRT shader replacing the old, ugly "NTSC scanline" emulating shader
+- DLSS 4.5 support with its accompanying frame gen
+
+- Lottes CRT shader replacing the old, ugly "NTSC scanline" emulating shader
 
 ## Build
 

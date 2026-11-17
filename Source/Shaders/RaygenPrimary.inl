@@ -56,7 +56,11 @@ bool classicShading_PRIM();
 #define DESC_SET_CUBEMAPS 7
 #define DESC_SET_RENDER_CUBEMAP 8
 #define DESC_SET_PORTALS 9
-#define LIGHT_SAMPLE_METHOD (LIGHT_SAMPLE_METHOD_NONE)
+#ifdef RAYGEN_REFL_REFR_SHADER
+    #define LIGHT_SAMPLE_METHOD (LIGHT_SAMPLE_METHOD_INDIR)
+#else
+    #define LIGHT_SAMPLE_METHOD (LIGHT_SAMPLE_METHOD_NONE)
+#endif
 #include "RaygenCommon.h"
 
 vec2 getMotionVectorForUpscaler(const vec2 motionCurToPrev)
@@ -136,10 +140,11 @@ void storeSky(
     imageStore(framebufDepthNdc,            getRegularPixFromCheckerboardPix(pix), vec4(clamp(firstHitDepthNDC, 0.0, 1.0)));
     imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(m), 0.0, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, 0.0));
+    imageStore(framebufGlassReflection,     getRegularPixFromCheckerboardPix(pix), vec4(0.0));
     imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(0.0));
 #else
     imageStore(framebufThroughput,          pix, vec4(throughput, wasSplit ? 1.0 : -1.0));
-    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(UPSCALER_REACTIVITY_REFLREFR));
+    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(wasSplit ? UPSCALER_REACTIVITY_REFLREFR : 0.25));
 #endif
 }
 
@@ -387,6 +392,7 @@ void main()
     // per-material water params of the primary hit are re-fetched there from the visibility buffer
     imageStore(framebufPrimaryToReflRefr,   pix, uvec4(h.geometryInstanceFlags, primaryPayload.instIdAndIndex, h.portalIndex, 0));
     imageStore(framebufWaterParams,         getRegularPixFromCheckerboardPix(pix), vec4(cameraWaterColor, cameraWaterDensity));
+    imageStore(framebufGlassReflection,     getRegularPixFromCheckerboardPix(pix), vec4(0.0));
 
     // save info for rasterization and upscalers (FSR/DLSS), but only about primary surface,
     // as reflections/refraction only may be losely represented via rasterization
@@ -411,6 +417,7 @@ void main()
     const vec2 inUV = getPixelUVWithJitter(regularPix);
 
     const vec3 cameraRayDir = getRayDir(inUV);
+    const uint randomSeed = getRandomSeed(pix, globalUniform.frameId);
     
     if (isSkyPix(pix))
     {
@@ -466,8 +473,8 @@ void main()
     vec3 virtualPos = h.hitPosition;
     vec3 rayDir = cameraRayDir;
     uint currentRayMedia = globalUniform.cameraMediaType;
-    // if there was no hitinfo from refl/refr, preserve primary hitinfo
     bool hitInfoWasOverwritten = false;
+    vec3 glassReflection = vec3(0.0);
 
 
     propagateRayCone(rayCone, firstHitDepthLinear);
@@ -517,14 +524,14 @@ void main()
             getNormal( h.hitPosition, h.normal, rayCone, rayDir, isWater, wasPortal );
 
         vec3  rayOrigin = h.hitPosition;
-        bool  doSplit   = !wasSplit;
+        bool  doSplit   = isWater && !wasSplit;
         bool  doRefraction;
         vec3  refractionDir;
         float F;
 
         if (toRefract && calcRefractionDirection(curIndexOfRefraction, newIndexOfRefraction, rayDir, normal, refractionDir))
         {
-            doRefraction = isPixOdd;
+            doRefraction = isWater ? isPixOdd : true;
             float cosI = abs(dot(normal, rayDir));
             float cosT = abs(dot(normal, refractionDir));
             F = getFresnelDielectric(curIndexOfRefraction, newIndexOfRefraction, cosI, cosT);
@@ -544,6 +551,39 @@ void main()
 
         if (doRefraction)
         {
+            if (!isWater && F > 0.0001)
+            {
+                const vec3 reflDir = reflect( normalize( rayDir ), normal );
+                const ShPayload reflPayload = traceReflectionRefractionRay(
+                    rayOrigin, reflDir, instIndex, h.geometryInstanceFlags, false );
+
+                if (!doesPayloadContainHitInfo(reflPayload))
+                {
+                    glassReflection += throughput * F * getSky(reflDir);
+                }
+                else
+                {
+                    vec3 reflVirtualPos = virtualPos;
+                    float reflRayLen;
+                    vec2 reflMotion;
+                    float reflMotionDepth;
+                    float reflMotionViewZ;
+                    vec3 reflEmis;
+                    const ShHitInfo reflHit = getHitInfoWithRayCone_ReflectionRefraction(
+                        reflPayload, rayCone,
+                        rayOrigin, reflDir, cameraRayDir,
+                        reflVirtualPos,
+                        reflRayLen,
+                        reflMotion, reflMotionDepth, reflMotionViewZ,
+                        reflEmis
+                    );
+                    const Surface reflSurf = hitInfoToSurface_Indirect(reflHit, reflDir);
+                    const vec3 reflDirect = processDirectIllumination(randomSeed, reflSurf, 1);
+                    glassReflection += throughput * F * reflDirect * reflHit.albedo;
+                    screenEmission += throughput * F * reflEmis;
+                }
+            }
+
             rayDir = refractionDir;
             throughput *= (1 - F);
 
@@ -635,6 +675,8 @@ void main()
             throughput *= trans;
 
             storeSky(pix, rayDir, true, throughput, fogAccum, wasSplit);
+            imageStore(framebufScreenEmisRT, getRegularPixFromCheckerboardPix(pix), vec4(screenEmission, 0.0));
+            imageStore(framebufGlassReflection, getRegularPixFromCheckerboardPix(pix), vec4(glassReflection, 0.0));
             return;  
         }
 
@@ -680,7 +722,8 @@ void main()
     imageStore(framebufVisibilityBuffer,    pix, packVisibilityBuffer(currentPayload));
     imageStore(framebufViewDirection,       pix, vec4(rayDir, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, wasSplit ? 1.0 : -1.0));
+    imageStore(framebufGlassReflection,     getRegularPixFromCheckerboardPix(pix), vec4(glassReflection, 0.0));
     imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), motionViewZ, 0.0));
-    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(UPSCALER_REACTIVITY_REFLREFR));
+    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(wasSplit ? UPSCALER_REACTIVITY_REFLREFR : 0.25));
 }
 #endif

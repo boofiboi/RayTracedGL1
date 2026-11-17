@@ -75,11 +75,12 @@ void main()
 
         illuminated *= throughput;
         illuminated *= getMaterialAmbient(albedo);
+        illuminated += texelFetch(framebufGlassReflection_Sampler, pix, 0).rgb;
 
     }
     else
     {
-        illuminated = albedo * throughput;
+        illuminated = albedo * throughput + texelFetch(framebufGlassReflection_Sampler, pix, 0).rgb;
     }
 
     imageStore(framebufHistogramInput, pix, vec4(max(0.0, getLuminance(illuminated))));

@@ -33,7 +33,6 @@ void propagateRayCone(inout RayCone c, float rayLength)
 {
     // new cone width should increase by 2*RayLength*tan(SpreadAngle/2), but RayLength*SpreadAngle is a close approximation
     c.width	+= c.spreadAngle * rayLength;
-    c.spreadAngle *= 2;
 }
 
 vec4 getUVDerivativesFromRayCone(
@@ -52,9 +51,8 @@ vec4 getUVDerivativesFromRayCone(
     const vec3 faceNormal = cross(edge10, edge20);
     float quadArea = length(faceNormal);
 
-    float normalTerm = abs(dot(rayDir, worldNormal));
-    float projectedConeWidth = rayCone.width / normalTerm;
-    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / quadArea;
+    float normalTerm = max(abs(dot(rayDir, worldNormal)), 0.001);
+    float visibleAreaRatio = (rayCone.width * rayCone.width) / max(quadArea * normalTerm, 1e-8);
 
     float visibleUVArea = quadUVArea * visibleAreaRatio;
     float ULength = sqrt(visibleUVArea);
@@ -68,9 +66,8 @@ float getWaterDerivU(const RayCone rayCone, const vec3 rayDir, const vec3 worldN
     const float quadArea = 1.0;
     const float quadUVArea = 1.0;
 
-    float normalTerm = abs(dot(rayDir, worldNormal));
-    float projectedConeWidth = rayCone.width / normalTerm;
-    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / quadArea;
+    float normalTerm = max(abs(dot(rayDir, worldNormal)), 0.001);
+    float visibleAreaRatio = (rayCone.width * rayCone.width) / max(quadArea * normalTerm, 1e-8);
 
     float visibleUVArea = quadUVArea * visibleAreaRatio;
     float ULength = sqrt(visibleUVArea);
@@ -94,9 +91,8 @@ DerivativeSet getTriangleUVDerivativesFromRayCone(
     const vec3 faceNormal = cross(edge10, edge20);
     float quadArea = length(faceNormal);
 
-    float normalTerm = abs(dot(rayDir, worldNormal));
-    float projectedConeWidth = rayCone.width / normalTerm;
-    float visibleAreaRatio = (projectedConeWidth * projectedConeWidth) / quadArea;
+    float normalTerm = max(abs(dot(rayDir, worldNormal)), 0.001);
+    float visibleAreaRatio = (rayCone.width * rayCone.width) / max(quadArea * normalTerm, 1e-8);
 
 
     DerivativeSet derivSet;

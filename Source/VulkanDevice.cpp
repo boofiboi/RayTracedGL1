@@ -591,15 +591,15 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 
         pathTracer->TracePrimaryRays( params );
 
-        // draw decals on top of primary surface
         decalManager->Draw( cmd, frameIndex, uniform, framebuffers, textureManager );
+
+        lightManager->BarrierLightGrid( cmd, frameIndex );
 
         if( uniform->GetData()->reflectRefractMaxDepth > 0 )
         {
             pathTracer->TraceReflectionRefractionRays( params );
         }
 
-        lightManager->BarrierLightGrid( cmd, frameIndex );
         pathTracer->CalculateInitialReservoirs( params );
         pathTracer->TraceDirectllumination( params );
         pathTracer->TraceIndirectllumination( params );

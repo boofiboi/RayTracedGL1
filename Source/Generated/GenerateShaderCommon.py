@@ -803,6 +803,7 @@ FRAMEBUFFERS = {
     "PrimaryToReflRefr"                 : (TYPE_UINT32,     COMPONENT_RGBA, 0),
     "WaterParams"                       : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
     "Throughput"                        : (TYPE_FLOAT16,    COMPONENT_RGBA, 0),
+    "GlassReflection"                   : (TYPE_PACK_11,    COMPONENT_RGB,  0),
     "PreFinal"                          : (TYPE_PACK_11,    COMPONENT_RGB,  0),
     "Final"                             : (TYPE_PACK_11,    COMPONENT_RGB,  FRAMEBUF_FLAGS_IS_ATTACHMENT),
 
