@@ -1,208 +1,48 @@
+<div align="center">
 
-# RTGL1
-RTGL1 is a library that aims to simplify the process of porting 3D applications to *real-time path tracing*, via hardware accelerated ray tracing, denoising algorithms (A-SVGF) and sampling algorithms (ReSTIR, ReSTIR GI) to improve the image quality by reusing spatio-temporal data.
-This fork includes many improvements on the original repository, including FSR3 upscaling support, FSR3 framegen (eventually), newer versions of DLSS and many more.
-It is intended to be used in addition to my fork of xash-rt, which also includes many changes and improvements to the overall experience.
+# RayTracedGL1 (RTGL1)
 
-## Improvements over original RTGL1
+[![Engine](https://img.shields.io/badge/Engine-xash--rt_Improved-2E3440?logo=github&logoColor=white&style=for-the-badge)](https://github.com/boofiboi/xash-rt)
+[![Language](https://img.shields.io/badge/Language-C%2B%2B-00599C?logo=cplusplus&logoColor=white&style=for-the-badge)](https://github.com/boofiboi/RayTracedGL1)
+[![Graphics](https://img.shields.io/badge/Graphics-Vulkan-AC162C?logo=vulkan&logoColor=white&style=for-the-badge)](https://github.com/boofiboi/RayTracedGL1)
+<br>
+![Ray Tracing](https://img.shields.io/badge/Ray_Tracing-Path_Traced-E5A93C?logo=sparkles&logoColor=white&style=for-the-badge)
+![AMD FSR](https://img.shields.io/badge/AMD-FSR_3_%2F_4-ED1C24?logo=amd&logoColor=white&style=for-the-badge)
+![NVIDIA DLSS](https://img.shields.io/badge/NVIDIA-DLSS_4.5-76B900?logo=nvidia&logoColor=white&style=for-the-badge)
 
-- Removed FSR2 and added FSR3/FSR4 support - FSR3 works on exactly the same devices, but with better performance and better visual quality.
-    - FSR4 runs on supported GPUs with FSR3.1.6 FG handling frame generation.
+</div>
 
-- Frame generation support (FSR + DLSS)
+RTGL1 is a Vulkan-based rendering library designed to simplify porting 3D applications to **real-time path tracing** using hardware-accelerated ray tracing, spatio-temporal sampling (ReSTIR, ReSTIR GI), and modern denoising pipelines.
 
-- Linux support UwU
+This fork introduces major graphical, upscaling, and platform improvements over the original repository and is intended to be paired with [Xash-RT Improved](https://github.com/boofiboi/xash-rt).
 
-- Ability to set color of brushes/textures marked with "isWater:true" with "waterColor:[xxx,xxx,xxx] and "Density" with "waterDensity:xx" - Mainly used for making water look dirty in areas that are supposed to have dirty water (ba_canal2, residue processing etc.)
+---
 
-- Water semantics: "waterColor" is the color that white light becomes after passing through 1 meter of that water, "waterDensity" is an absorption multiplier (1.0 - exactly as the color implies, 0.0 - crystal clear), "waterReflectivity" is a [0,1] multiplier for the Fresnel reflection strength of the water surface. Global fallback for all water without per-texture params is set by the engine (rt_me_water_* cvars).
+## Key Improvements
 
-- Improved SPIRV shaders allowing for more accurate bloom, tonemapping, lightning etc.
+### Upscaling & Frame Generation
+* **AMD FSR 3 & FSR 4:** Replaced FSR 2 with FSR 3 (supporting the exact same hardware with superior performance and image quality) and FSR 4 on supported GPUs, paired with FSR 3.1.6 Frame Generation.
+* **NVIDIA DLSS 4.5:** Full support for DLSS 4.5 Upscaling and Frame Generation.
 
-- nVidia NRD denoiser replacing SVGF Atrous.
+### Denoising & Shaders
+* **NVIDIA Real-Time Denoisers (NRD):** Replaced the legacy A-SVGF denoiser with NRD for cleaner, more stable ray-traced output.
+* **SPIR-V Shader Overhaul:** Improved SPIR-V shaders for more accurate bloom, tonemapping, and lighting.
+* **Lottes CRT Shader:** Replaced the old NTSC scanline emulation shader with a proper Lottes CRT shader.
 
-- DLSS 4.5 support with its accompanying frame gen
+### Platform & Material Features
+* **Native Linux Support:** Full support for Linux builds.
+* **Per-Texture Water Semantics:** Customizable water properties for brushes/textures flagged with `"isWater": true`, allowing dirty or murky water in maps like `ba_canal2` and *Residue Processing*.
 
-- Lottes CRT shader replacing the old, ugly "NTSC scanline" emulating shader
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `waterColor` | `[R, G, B]` | The color white light becomes after passing through 1 meter of water. |
+| `waterDensity` | `float` | Absorption multiplier (`1.0` = exact `waterColor` absorption, `0.0` = crystal clear). |
+| `waterReflectivity` | `[0, 1]` | Multiplier controlling the Fresnel reflection strength of the water surface. |
 
-## Build
+*(Global fallback values for water surfaces without per-texture parameters are controlled via the engine's `rt_me_water_*` cvars.)*
 
+---
 
+## Building
 
-1. Requirements:
-
-* 64-bit CPU
-
-* GPU with a ray tracing support
-
-* [Git](https://github.com/git-for-windows/git/releases)
-
-* [CMake](https://cmake.org/download/)
-
-* [Vulkan SDK](https://vulkan.lunarg.com/)
-
-* [Python 3](https://www.python.org/downloads/) (for building the shaders)
-
-* [FSR3 SDK](https://gpuopen.com/fidelityfx-super-resolution-3/#:~:text=Download%20the%20latest%20version%20%2D%20v3.1.5)
-
-
-
-
-1. Clone the repository
-
-*  `git clone https://github.com/boofiboi/RayTracedGL1.git --recursive`
-  
-1. Extract the FSR3 sdk into Source/FSR3
-2. 
-3. Configure with CMake
-
-* on Windows, with Visual Studio:
-
-* open the folder as CMake project
-
-* otherwise:
-
-* specify windowing systems to build the library with, by enabling some of the CMake options:
-
-*  `RG_WITH_SURFACE_WIN32`
-
-*  `RG_WITH_SURFACE_METAL`
-
-*  `RG_WITH_SURFACE_WAYLAND`
-
-*  `RG_WITH_SURFACE_XCB`
-
-*  `RG_WITH_SURFACE_XLIB`
-
-* configure (Command defaults to WIN32)
-
-```
-cmake -S E:/Xash/RayTracedGL1 -B E:/Xash/RayTracedGL1/Build/x64-Release -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DRG_WITH_NRD=ON -DRG_WITH_AMD_FSR3=ON -DRG_WITH_EXPORTS=ON -DRG_WITH_SHADERS=ON -DRG_WITH_IMGUI=ON -DRG_WITH_SURFACE_WIN32=ON -DSHADERMAKE_FIND_DXC=OFF -DSHADERMAKE_FIND_DXC_VK=ON
-
-```
-
-* Compile
-
-*  `cmake --build E:/Xash/RayTracedGL1/Build/x64-Release -j` - Builds "Release with debug info" build.
-
-  
-
-### Notes:
-
-  
-
-* RTGL1 requires a set of blue noise images on start-up: `RgInstanceCreateInfo::pBlueNoiseFilePath`. A ready-to-use resource can be found here: `Tools/BlueNoise_LDR_RGBA_128.ktx2`
-
-  
-
-  
-
-## Tools
-
-  
-
-  
-
-### Shader development
-
-  
-
-  
-
-RTGL1 supports shader hot-reloading (a target application sets `RgStartFrameInfo::requestShaderReload=true` in runtime).
-
-  
-
-  
-
-But to ease the process of *building* the shaders, instead of running `GenerateShaders.py` from a terminal manually, you can install [Visual Studio Code](https://code.visualstudio.com/) and [Script Runner extension](https://marketplace.visualstudio.com/items?itemName=easterapps.script-runner) to it. Open `Sources/Shaders` folder, add such config to VS Code's `.json` settings file (TODO: VS Code workspace).
-
-  
-
-```
-
-  
-
-"script-runner.definitions": { "commands": [ { "identifier": "shaderBuild", "description": "Build shaders", "command": "cls; python .\\GenerateShaders.py -ps", "working_directory": "${workspaceFolder}", }, { "identifier": "shaderGenAndBuild", "description": "Build shaders with generating common files", "command": "cls; python .\\GenerateShaders.py -ps -g", "working_directory": "${workspaceFolder}", } ], },
-
-  
-
-```
-
-  
-
-Then assign hotkeys to `shaderBuild` and `shaderGenAndBuild` commands in `File->Preferences->Keyboard Shortcuts`.
-
-  
-
-  
-
-### Textures
-
-Some games don't have PBR materials, but to add them, RTGL1 provides 'texture overriding' functionality: application requests to upload an original texture and specifies its name, then RTGL1 tries to find files with such name (appending some suffixes, e.g. `_n` for normal maps, or none for albedo maps) and loads them instead of original ones. These files are in `.ktx2` format with a specific compression and contain image data.
-
-  
-
-To generate such textures:
-
-Some games don't have PBR materials, but to add them, RTGL1 provides 'texture overriding' functionality: application requests to upload an original texture and specifies its name, then RTGL1 tries to find files with such name (appending some suffixes, e.g. `_n` for normal maps, or none for albedo maps) and loads them instead of original ones. These files are in `.ktx2` format with a specific compression and contain image data.
-
-  
-
-  
-
-To generate such textures:
-
-  
-
-1. [Compressonator CLI](https://gpuopen.com/compressonator/) and `Python3` are required
-
-  
-
-1. Create a folder, put `Tools/CreateKTX2.py`, create folder named `Raw` and `Compressed`.
-
-  
-
-1. The script:
-
-1. scans files (with `INPUT_EXTENSIONS`) in `Raw` folder
-
-1. generates corresponding `.ktx2` file to `Compressed` folder, preserving the hierarchy
-
-  
-
-On RTGL1 initialization, `RgInstanceCreateInfo::pOverridenTexturesFolderPath` should contain a path to the `Compressed` folder.
-
-1. scans files (with `INPUT_EXTENSIONS`) in `Raw` folder
-
-  
-
-1. generates corresponding `.ktx2` file to `Compressed` folder, preserving the hierarchy
-
-  
-
-  
-
-On RTGL1 initialization, `RgInstanceCreateInfo::pOverridenTexturesFolderPath` should contain a path to the `Compressed` folder.
-
-  
-
-  
-
-# Projects
-
-  
-
-* https://github.com/sultim-t/Serious-Engine-RT/releases
-
-  
-
-* https://github.com/sultim-t/prboom-plus-rt
-
-  
-
-* https://github.com/sultim-t/vkquake-rt
-
-  
-
-* https://github.com/sultim-t/xash-rt
+Pre-compiled binaries are distributed directly through [Xash-RT Improved Releases](https://github.com/boofiboi/xash-rt/releases) and CI artifacts. Manual build instructions are not currently provided.
