@@ -620,12 +620,50 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
     scVersionDesc.header.type  = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_VERSION_VK;
     scVersionDesc.header.pNext = &modeDesc.header;
     scVersionDesc.version      = FFX_FRAMEGENERATION_SWAPCHAIN_VK_VERSION;
+
+    uint64_t                swapchainProviderId = 0;
+    VkDeviceContext         vkDevCtx            = {
+        .vkDevice         = impl->device,
+        .vkPhysicalDevice = impl->physDevice,
+        .vkDeviceProcAddr = vkGetDeviceProcAddr,
+    };
+    uint64_t                scVersionCount = 0;
+    ffxQueryDescGetVersions scVersionQuery = {};
+    scVersionQuery.header.type             = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
+    scVersionQuery.createDescType          = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
+    scVersionQuery.device                  = &vkDevCtx;
+    scVersionQuery.outputCount             = &scVersionCount;
+    if( impl->QueryCall( nullptr, &scVersionQuery.header ) == FFX_API_RETURN_OK && scVersionCount > 0 )
+    {
+        std::vector< uint64_t >    scVersionIds( scVersionCount );
+        std::vector< const char* > scVersionNames( scVersionCount );
+        scVersionQuery.versionIds   = scVersionIds.data();
+        scVersionQuery.versionNames = scVersionNames.data();
+        if( impl->QueryCall( nullptr, &scVersionQuery.header ) == FFX_API_RETURN_OK )
+        {
+            for( uint64_t i = 0; i < scVersionCount; i++ )
+            {
+                if( ( scVersionIds[ i ] & 0x80000000ULL ) == 0 &&
+                    ( swapchainProviderId == 0 ||
+                      ( scVersionIds[ i ] & 0x7FFFFFFFULL ) > ( swapchainProviderId & 0x7FFFFFFFULL ) ) )
+                {
+                    swapchainProviderId = scVersionIds[ i ];
+                }
+            }
+        }
+    }
+
+    ffxOverrideVersion scVersionOverride = {};
+    scVersionOverride.header.type        = FFX_API_DESC_TYPE_OVERRIDE_VERSION;
+    scVersionOverride.header.pNext       = &scVersionDesc.header;
+    scVersionOverride.versionId          = swapchainProviderId;
 #endif
 
     ffxCreateContextDescFrameGenerationSwapChainVK createDesc = {};
     createDesc.header.type             = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_VK;
 #ifdef _WIN32
-    createDesc.header.pNext            = &scVersionDesc.header;
+    createDesc.header.pNext =
+        swapchainProviderId ? &scVersionOverride.header : &scVersionDesc.header;
 #else
     createDesc.header.pNext            = &modeDesc.header;
 #endif
