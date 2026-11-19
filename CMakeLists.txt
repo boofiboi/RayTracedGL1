@@ -363,6 +363,8 @@ if (RG_WITH_NVIDIA_NRD)
                 target_compile_options(${nri_target} PRIVATE -Wno-error=maybe-uninitialized -Wno-error=uninitialized)
             endif()
         endforeach()
+    elseif (MSVC AND TARGET NRD)
+        target_compile_options(NRD PRIVATE /wd4834)
     endif()
     target_include_directories(RayTracedGL1 PRIVATE 
         "Source/External/NRD/Include" 
