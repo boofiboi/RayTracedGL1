@@ -361,6 +361,7 @@ struct BspData
     int                          lightmapSamples{ 3 };
     int32_t                      worldRootNode{ 0 };
     bool                         hasAuthoredBspLights{ false };
+    std::optional< RgDirectionalLightUploadInfo > bspSunLight;
 
     template< typename T >
     static bool ReadLump( const std::vector< uint8_t >& buf,
@@ -692,6 +693,7 @@ bool LoadBspFromFile( const std::filesystem::path& bspPath, BspData& out )
     }
 
     out.hasAuthoredBspLights = false;
+    out.bspSunLight.reset();
     const BspLump& entLump   = hdr.lumps[ LUMP_ENTITIES ];
     if( entLump.fileofs >= 0 && entLump.filelen > 0 &&
         size_t( entLump.fileofs ) + size_t( entLump.filelen ) <= buf.size() )
@@ -703,6 +705,193 @@ bool LoadBspFromFile( const std::filesystem::path& bspPath, BspData& out )
             entText.find( "\"light_spot\"" ) != std::string_view::npos )
         {
             out.hasAuthoredBspLights = true;
+        }
+
+        float bestScore = -1.0f;
+        bool  bestIsEnv = false;
+        size_t p        = 0;
+        while( p < entText.size() )
+        {
+            size_t open = entText.find( '{', p );
+            if( open == std::string_view::npos )
+            {
+                break;
+            }
+            size_t close = entText.find( '}', open + 1 );
+            if( close == std::string_view::npos )
+            {
+                break;
+            }
+            std::string_view block = entText.substr( open + 1, close - open - 1 );
+            p                      = close + 1;
+
+            bool  isEnv      = false;
+            bool  hasSky     = false;
+            bool  hasColor   = false;
+            bool  hasPitch   = false;
+            bool  hasAngle   = false;
+            bool  hasAngles  = false;
+            float rgb[ 3 ]   = { 255.0f, 255.0f, 255.0f };
+            float scale      = 255.0f;
+            float pitchVal   = -45.0f;
+            float angleVal   = 0.0f;
+            float angles[ 3 ] = { 0.0f, 0.0f, 0.0f };
+
+            size_t q = 0;
+            while( q < block.size() )
+            {
+                size_t k0 = block.find( '"', q );
+                if( k0 == std::string_view::npos )
+                {
+                    break;
+                }
+                size_t k1 = block.find( '"', k0 + 1 );
+                if( k1 == std::string_view::npos )
+                {
+                    break;
+                }
+                size_t v0 = block.find( '"', k1 + 1 );
+                if( v0 == std::string_view::npos )
+                {
+                    break;
+                }
+                size_t v1 = block.find( '"', v0 + 1 );
+                if( v1 == std::string_view::npos )
+                {
+                    break;
+                }
+                std::string_view key = block.substr( k0 + 1, k1 - k0 - 1 );
+                std::string      val( block.substr( v0 + 1, v1 - v0 - 1 ) );
+                q = v1 + 1;
+
+                if( key == "classname" )
+                {
+                    isEnv = ( val == "light_environment" );
+                }
+                else if( key == "_sky" )
+                {
+                    int tmp = 0;
+                    if( std::sscanf( val.c_str(), "%i", &tmp ) == 1 && tmp != 0 )
+                    {
+                        hasSky = true;
+                    }
+                }
+                else if( key == "_light" )
+                {
+                    float c0 = 0.0f, c1 = 0.0f, c2 = 0.0f, s = 255.0f;
+                    int   n = std::sscanf( val.c_str(), "%f %f %f %f", &c0, &c1, &c2, &s );
+                    if( n == 1 )
+                    {
+                        rgb[ 0 ] = rgb[ 1 ] = rgb[ 2 ] = c0;
+                        scale                          = 255.0f;
+                        hasColor                       = true;
+                    }
+                    else if( n == 3 )
+                    {
+                        rgb[ 0 ] = c0;
+                        rgb[ 1 ] = c1;
+                        rgb[ 2 ] = c2;
+                        scale    = 255.0f;
+                        hasColor = true;
+                    }
+                    else if( n == 4 )
+                    {
+                        rgb[ 0 ] = c0;
+                        rgb[ 1 ] = c1;
+                        rgb[ 2 ] = c2;
+                        scale    = s;
+                        hasColor = true;
+                    }
+                }
+                else if( key == "pitch" )
+                {
+                    if( std::sscanf( val.c_str(), "%f", &pitchVal ) == 1 )
+                    {
+                        hasPitch = true;
+                    }
+                }
+                else if( key == "angle" )
+                {
+                    if( std::sscanf( val.c_str(), "%f", &angleVal ) == 1 )
+                    {
+                        hasAngle = true;
+                    }
+                }
+                else if( key == "angles" )
+                {
+                    if( std::sscanf( val.c_str(), "%f %f %f", &angles[ 0 ], &angles[ 1 ], &angles[ 2 ] ) == 3 )
+                    {
+                        hasAngles = true;
+                    }
+                }
+            }
+
+            if( !( isEnv || hasSky ) || !hasColor )
+            {
+                continue;
+            }
+
+            float pitch = -45.0f;
+            float yaw   = 0.0f;
+            if( hasAngles )
+            {
+                pitch = -angles[ 0 ];
+                yaw   = angles[ 1 ];
+            }
+            if( hasAngle )
+            {
+                if( angleVal == -2.0f )
+                {
+                    pitch = -90.0f;
+                }
+                else if( angleVal != -1.0f )
+                {
+                    yaw = angleVal;
+                }
+            }
+            if( hasPitch )
+            {
+                pitch = pitchVal;
+            }
+            if( pitch > 0.0f )
+            {
+                pitch = -pitch;
+            }
+            if( pitch > -5.0f )
+            {
+                pitch = -5.0f;
+            }
+
+            float r = std::pow( std::clamp( rgb[ 0 ] / 255.0f, 0.0f, 1.0f ), 2.2f );
+            float g = std::pow( std::clamp( rgb[ 1 ] / 255.0f, 0.0f, 1.0f ), 2.2f );
+            float b = std::pow( std::clamp( rgb[ 2 ] / 255.0f, 0.0f, 1.0f ), 2.2f );
+            float sunIntensity =
+                scale <= 255.0f ? ( scale / 255.0f ) : ( 1.0f + std::log2( scale / 255.0f ) * 0.25f );
+            sunIntensity = std::clamp( sunIntensity, 0.05f, 2.0f );
+            float score  = sunIntensity * std::max( { r, g, b } );
+
+            if( !out.bspSunLight.has_value() || ( isEnv && !bestIsEnv ) ||
+                ( isEnv == bestIsEnv && score > bestScore ) )
+            {
+                bestIsEnv = isEnv;
+                bestScore = score;
+
+                constexpr float DEG2RAD = 3.14159265358979323846f / 180.0f;
+                float           pr      = -pitch * DEG2RAD;
+                float           yr      = yaw * DEG2RAD;
+                float           cp      = std::cos( pr );
+                Vec3            dir     = Normalize( { cp * std::cos( yr ), cp * std::sin( yr ), -std::sin( pr ) } );
+
+                out.bspSunLight = RgDirectionalLightUploadInfo{
+                    .uniqueID               = 0,
+                    .isExportable           = true,
+                    .extra                  = {},
+                    .color                  = Utils::PackColorFromFloat( r, g, b, 1.0f ),
+                    .intensity              = sunIntensity * 7000.0f,
+                    .direction              = ToRg( dir ),
+                    .angularDiameterDegrees = 0.5f,
+                };
+            }
         }
     }
 
@@ -1473,6 +1662,12 @@ std::vector< RTGL1::GenericLight > RTGL1::BspLightEstimator::EstimateLights(
                 std::max( 0.0f, s.resRgb.z - sub.z ),
             };
         }
+    }
+
+    if( hasSkyFaces && !hasExistingDirectional && bsp.bspSunLight.has_value() )
+    {
+        estimated.push_back( *bsp.bspSunLight );
+        hasExistingDirectional = true;
     }
 
     if( hasSkyFaces && !hasExistingDirectional )

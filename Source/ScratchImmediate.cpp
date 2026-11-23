@@ -36,7 +36,7 @@ uint32_t GetTriangleCount( RgUtilImScratchTopology topology, uint32_t vertexCoun
         }
         case RG_UTIL_IM_SCRATCH_TOPOLOGY_TRIANGLE_STRIP:
         case RG_UTIL_IM_SCRATCH_TOPOLOGY_TRIANGLE_FAN: {
-            return std ::max( 0u, vertexCount - 2 );
+            return vertexCount >= 3 ? ( vertexCount - 2 ) : 0u;
         }
         case RG_UTIL_IM_SCRATCH_TOPOLOGY_QUADS: {
             uint32_t quadsCount = vertexCount / 4;

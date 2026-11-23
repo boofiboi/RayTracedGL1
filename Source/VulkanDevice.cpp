@@ -1160,16 +1160,14 @@ void RTGL1::VulkanDevice::UploadMeshPrimitive( const RgMeshInfo*          pMesh,
             if( r == UploadResult::ExportableDynamic || r == UploadResult::ExportableStatic )
             {
                 e->AddPrimitive( *pMesh, prim );
+                e->AddPrimitiveLights( *pMesh, prim );
             }
-
-            // SHIPPING_HACK: add lights even for non-exportable geometry
-            e->AddPrimitiveLights( *pMesh, prim );
         }
 
 
         if( prim.pEditorInfo && prim.pEditorInfo->attachedLightExists )
         {
-            if( prim.pEditorInfo->attachedLightEvenOnDynamic )
+            if( prim.pEditorInfo->attachedLightEvenOnDynamic && r != UploadResult::ExportableStatic )
             {
                 GltfExporter::MakeLightsForPrimitiveDynamic( *pMesh,
                                                              prim,
