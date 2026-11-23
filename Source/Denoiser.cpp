@@ -291,6 +291,11 @@ void RTGL1::Denoiser::Denoise( VkCommandBuffer cmd,
         nrd::CommonSettings commonSettings = {};
         memcpy( commonSettings.viewToClipMatrix, uniform->GetData()->projection, sizeof( float ) * 16 );
         memcpy( commonSettings.viewToClipMatrixPrev, uniform->GetData()->projectionPrev, sizeof( float ) * 16 );
+        for( int i : { 1, 5, 9, 13 } )
+        {
+            commonSettings.viewToClipMatrix[ i ]     = -commonSettings.viewToClipMatrix[ i ];
+            commonSettings.viewToClipMatrixPrev[ i ] = -commonSettings.viewToClipMatrixPrev[ i ];
+        }
         memcpy( commonSettings.worldToViewMatrix, uniform->GetData()->view, sizeof( float ) * 16 );
         memcpy( commonSettings.worldToViewMatrixPrev, uniform->GetData()->viewPrev, sizeof( float ) * 16 );
 

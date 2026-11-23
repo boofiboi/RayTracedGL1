@@ -82,12 +82,12 @@ TextureManager::TextureManager( VkDevice                                _device,
                                 const std::filesystem::path&            _dirtMaskTexturePath,
                                 RgTextureSwizzling                      _pbrSwizzling,
                                 bool                                    _forceNormalMapFilterLinear,
-                                const LibraryConfig&                    _config )
+                                bool                                    _isDevMode )
     : device( _device )
     , pbrSwizzling( _pbrSwizzling )
     , imageLoaderKtx( std::make_shared< ImageLoader >() )
     , imageLoaderRaw( std::make_shared< ImageLoaderDev >() )
-    , isdevmode( _config.developerMode )
+    , isdevmode( _isDevMode )
     , memAllocator( std::move( _memAllocator ) )
     , cmdManager( std::move( _cmdManager ) )
     , samplerMgr( std::move( _samplerMgr ) )

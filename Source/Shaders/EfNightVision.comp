@@ -5,7 +5,7 @@ struct EffectNightVision_PushConst
     float gain;
     float noiseIntensity;
     float vignetteIntensity;
-    float pad;
+    uint mode;
 };
 
 #define EFFECT_PUSH_CONST_T EffectNightVision_PushConst
@@ -45,6 +45,19 @@ void main()
     }
 
     vec2 centered = effect_getCenteredFromPix(pix);
+    ivec2 sz = effect_getFramebufSize();
+    float aspect = float(sz.x) / float(sz.y);
+    vec2 tubeCoord = centered * vec2(aspect, 1.0);
+    float distFromCenter = length(tubeCoord);
+    float vignette = 1.0 - smoothstep(0.85, 1.35, distFromCenter * push.custom.vignetteIntensity);
+
+    if (push.custom.mode == 2)
+    {
+        vec3 src = effect_loadFromSource(pix);
+        effect_storeToTarget(src * mix(1.0, vignette, progress), pix);
+        return;
+    }
+
     float r2 = dot(centered, centered);
     float distScale = 1.0 + 0.1 * push.custom.vignetteIntensity;
     vec2 distorted = (centered / distScale) * (1.0 + 0.05 * r2 * push.custom.vignetteIntensity);
@@ -69,12 +82,10 @@ void main()
     float scanline = 0.94 + 0.06 * sin(float(pix.y) * 3.14159265);
     outColor *= scanline;
 
-    ivec2 sz = effect_getFramebufSize();
-    float aspect = float(sz.x) / float(sz.y);
-    vec2 tubeCoord = centered * vec2(aspect, 1.0);
-    float distFromCenter = length(tubeCoord);
-    float vignette = smoothstep(1.35, 0.85, distFromCenter * push.custom.vignetteIntensity);
-    outColor *= vignette;
+    if (push.custom.mode == 0)
+    {
+        outColor *= vignette;
+    }
 
     vec3 finalRgb = mix(effect_loadFromSource(pix), outColor, progress);
     effect_storeToTarget(finalRgb, pix);

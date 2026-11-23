@@ -185,6 +185,7 @@ namespace RTGL1
 #define VOLUME_ENABLE_NONE (0)
 #define VOLUME_ENABLE_SIMPLE (1)
 #define VOLUME_ENABLE_VOLUMETRIC (2)
+#define MAX_LIGHTSTYLES (64)
 
 struct ShVertex
 {
@@ -291,6 +292,7 @@ struct ShGlobalUniform
     int32_t instanceGeomCount[48];
     float viewProjCubemap[96];
     float skyCubemapRotationTransform[16];
+    float lightstyleValues[64];
 };
 
 struct ShGeometryInstance
@@ -324,7 +326,7 @@ struct ShGeometryInstance
     uint32_t waterColorPacked;
     float waterDensity;
     float waterReflectivity;
-    uint32_t _unused6;
+    int32_t lightstyle;
     uint32_t _unused7;
     uint32_t _unused8;
     uint32_t _unused9;

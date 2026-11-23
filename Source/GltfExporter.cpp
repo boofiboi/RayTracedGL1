@@ -20,6 +20,7 @@
 
 #include "GltfExporter.h"
 
+#include "BspLightEstimator.h"
 #include "Const.h"
 #include "SpanCounted.h"
 #include "TextureExporter.h"
@@ -50,13 +51,14 @@ void HashCombine( std::size_t& seed, const T& v )
 
 bool TransformIsLess( const RgTransform& a, const RgTransform& b )
 {
+    constexpr float eps = 0.0001f;
     for( size_t i = 0; i < std::size( a.matrix ); i++ )
     {
         for( size_t j = 0; j < std::size( a.matrix[ 0 ] ); j++ )
         {
-            if( a.matrix[ i ][ j ] < b.matrix[ i ][ j ] )
+            if( std::abs( a.matrix[ i ][ j ] - b.matrix[ i ][ j ] ) > eps )
             {
-                return true;
+                return a.matrix[ i ][ j ] < b.matrix[ i ][ j ];
             }
         }
     }
@@ -86,7 +88,8 @@ uint64_t TransformHash( const RgTransform& a )
     {
         for( size_t j = 0; j < std::size( a.matrix[ 0 ] ); j++ )
         {
-            HashCombine( h, a.matrix[ i ][ j ] );
+            float v = std::abs( a.matrix[ i ][ j ] ) < 1e-6f ? 0.0f : a.matrix[ i ][ j ];
+            HashCombine( h, v );
         }
     }
     return h;
@@ -1103,174 +1106,643 @@ private:
 };
 
 
+struct LightClusterSample
+{
+    RgFloat3D position;
+    RgFloat3D normal;
+    float     areaGameUnitsSq;
+    float     fluxWeight;
+    bool      isOmnidirectional;
+};
+
+struct WorldTri
+{
+    RgFloat3D v[ 3 ];
+    RgFloat3D bmin;
+    RgFloat3D bmax;
+};
+
+float VecDot( const RgFloat3D& a, const RgFloat3D& b )
+{
+    return a.data[ 0 ] * b.data[ 0 ] + a.data[ 1 ] * b.data[ 1 ] + a.data[ 2 ] * b.data[ 2 ];
+}
+
+RgFloat3D VecSub( const RgFloat3D& a, const RgFloat3D& b )
+{
+    return { a.data[ 0 ] - b.data[ 0 ], a.data[ 1 ] - b.data[ 1 ], a.data[ 2 ] - b.data[ 2 ] };
+}
+
+RgFloat3D VecCross( const RgFloat3D& a, const RgFloat3D& b )
+{
+    return {
+        a.data[ 1 ] * b.data[ 2 ] - a.data[ 2 ] * b.data[ 1 ],
+        a.data[ 2 ] * b.data[ 0 ] - a.data[ 0 ] * b.data[ 2 ],
+        a.data[ 0 ] * b.data[ 1 ] - a.data[ 1 ] * b.data[ 0 ],
+    };
+}
+
+bool RayIntersectsTri( const RgFloat3D& origin,
+                       const RgFloat3D& dir,
+                       const WorldTri&  tri,
+                       float            maxT,
+                       float&           outT )
+{
+    constexpr float eps = 1e-6f;
+    RgFloat3D       e1  = VecSub( tri.v[ 1 ], tri.v[ 0 ] );
+    RgFloat3D       e2  = VecSub( tri.v[ 2 ], tri.v[ 0 ] );
+    RgFloat3D       p   = VecCross( dir, e2 );
+    float           det = VecDot( e1, p );
+    if( std::abs( det ) < eps )
+    {
+        return false;
+    }
+    float     invDet = 1.0f / det;
+    RgFloat3D s      = VecSub( origin, tri.v[ 0 ] );
+    float     u      = invDet * VecDot( s, p );
+    if( u < 0.0f || u > 1.0f )
+    {
+        return false;
+    }
+    RgFloat3D q = VecCross( s, e1 );
+    float     v = invDet * VecDot( dir, q );
+    if( v < 0.0f || u + v > 1.0f )
+    {
+        return false;
+    }
+    float t = invDet * VecDot( e2, q );
+    if( t > 0.01f && t < maxT )
+    {
+        outT = t;
+        return true;
+    }
+    return false;
+}
+
+bool HasSegmentClearance( const RgFloat3D&               a,
+                         const RgFloat3D&               b,
+                         const std::vector< WorldTri >& worldTris )
+{
+    RgFloat3D delta = VecSub( b, a );
+    float     len   = RTGL1::Utils::Length( delta.data );
+    if( len < 1e-3f )
+    {
+        return true;
+    }
+    RgFloat3D dir   = delta * ( 1.0f / len );
+    float     minX  = std::min( a.data[ 0 ], b.data[ 0 ] ) - 0.1f;
+    float     minY  = std::min( a.data[ 1 ], b.data[ 1 ] ) - 0.1f;
+    float     minZ  = std::min( a.data[ 2 ], b.data[ 2 ] ) - 0.1f;
+    float     maxX  = std::max( a.data[ 0 ], b.data[ 0 ] ) + 0.1f;
+    float     maxY  = std::max( a.data[ 1 ], b.data[ 1 ] ) + 0.1f;
+    float     maxZ  = std::max( a.data[ 2 ], b.data[ 2 ] ) + 0.1f;
+    float     maxT  = len * 0.96f;
+
+    for( const WorldTri& tri : worldTris )
+    {
+        if( tri.bmax.data[ 0 ] < minX || tri.bmin.data[ 0 ] > maxX ||
+            tri.bmax.data[ 1 ] < minY || tri.bmin.data[ 1 ] > maxY ||
+            tri.bmax.data[ 2 ] < minZ || tri.bmin.data[ 2 ] > maxZ )
+        {
+            continue;
+        }
+        float t = 0.0f;
+        if( RayIntersectsTri( a, dir, tri, maxT, t ) && t > len * 0.04f )
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+float ComputeClearanceAlongNormal( const RgFloat3D&               origin,
+                                   const RgFloat3D&               normal,
+                                   float                          maxProbeDist,
+                                   const std::vector< WorldTri >& worldTris )
+{
+    float bestT = maxProbeDist;
+    RgFloat3D endPt = origin + normal * maxProbeDist;
+    float rMinX = std::min( origin.data[ 0 ], endPt.data[ 0 ] ) - 0.1f;
+    float rMinY = std::min( origin.data[ 1 ], endPt.data[ 1 ] ) - 0.1f;
+    float rMinZ = std::min( origin.data[ 2 ], endPt.data[ 2 ] ) - 0.1f;
+    float rMaxX = std::max( origin.data[ 0 ], endPt.data[ 0 ] ) + 0.1f;
+    float rMaxY = std::max( origin.data[ 1 ], endPt.data[ 1 ] ) + 0.1f;
+    float rMaxZ = std::max( origin.data[ 2 ], endPt.data[ 2 ] ) + 0.1f;
+
+    for( const WorldTri& tri : worldTris )
+    {
+        if( tri.bmax.data[ 0 ] < rMinX || tri.bmin.data[ 0 ] > rMaxX ||
+            tri.bmax.data[ 1 ] < rMinY || tri.bmin.data[ 1 ] > rMaxY ||
+            tri.bmax.data[ 2 ] < rMinZ || tri.bmin.data[ 2 ] > rMaxZ )
+        {
+            continue;
+        }
+        float t = 0.0f;
+        if( RayIntersectsTri( origin, normal, tri, bestT, t ) )
+        {
+            bestT = t;
+        }
+    }
+    return bestT;
+}
+
+struct QuantizedVertexKey
+{
+    int64_t x, y, z;
+    bool    operator==( const QuantizedVertexKey& o ) const = default;
+};
+
+struct QuantizedVertexHash
+{
+    size_t operator()( const QuantizedVertexKey& k ) const noexcept
+    {
+        size_t h = 0;
+        HashCombine( h, k.x );
+        HashCombine( h, k.y );
+        HashCombine( h, k.z );
+        return h;
+    }
+};
+
+struct QuantizedEdgeKey
+{
+    uint32_t a, b;
+    bool     operator==( const QuantizedEdgeKey& o ) const = default;
+};
+
+struct QuantizedEdgeHash
+{
+    size_t operator()( const QuantizedEdgeKey& k ) const noexcept
+    {
+        size_t h = 0;
+        HashCombine( h, k.a );
+        HashCombine( h, k.b );
+        return h;
+    }
+};
+
+void EmitClusterSampleGroup( const std::vector< uint32_t >&       members,
+                             const RgFloat3D*                     triVerts,
+                             const RgFloat3D*                     triCentroids,
+                             const RgFloat3D*                     triNormals,
+                             const float*                         triAreas,
+                             float                                oneGameUnitInMeters,
+                             bool                                 subdivideElongated,
+                             bool                                 allowOmnidirectional,
+                             std::vector< LightClusterSample >&   outSamples )
+{
+    RgFloat3D sumPos{ 0, 0, 0 };
+    RgFloat3D sumNorm{ 0, 0, 0 };
+    float     totalArea = 0.0f;
+
+    for( uint32_t idx : members )
+    {
+        float area = triAreas[ idx ];
+        sumPos     = sumPos + triCentroids[ idx ] * area;
+        sumNorm    = sumNorm + triNormals[ idx ] * area;
+        totalArea += area;
+    }
+
+    if( totalArea <= 1e-4f )
+    {
+        return;
+    }
+
+    RgFloat3D center  = sumPos * ( 1.0f / totalArea );
+    float     normLen = RTGL1::Utils::Length( sumNorm.data );
+    float     areaM2  = totalArea * oneGameUnitInMeters * oneGameUnitInMeters;
+    float     scale   = std::clamp( std::sqrt( areaM2 / 0.25f ), 0.25f, 1.0f );
+
+    if( allowOmnidirectional && normLen / totalArea < 0.25f )
+    {
+        RgFloat3D hintNormal{ 0, 0, 0 };
+        if( normLen / totalArea >= 0.02f && normLen > 1e-6f )
+        {
+            hintNormal    = sumNorm * ( 1.0f / normLen );
+            float maxProj = 0.0f;
+            for( uint32_t idx : members )
+            {
+                for( int k = 0; k < 3; k++ )
+                {
+                    maxProj = std::max(
+                        maxProj, VecDot( VecSub( triVerts[ idx * 3 + k ], center ), hintNormal ) );
+                }
+            }
+            if( maxProj > 0.0f )
+            {
+                center = center + hintNormal * maxProj;
+            }
+        }
+        outSamples.push_back( LightClusterSample{
+            .position          = center,
+            .normal            = hintNormal,
+            .areaGameUnitsSq   = totalArea,
+            .fluxWeight        = scale,
+            .isOmnidirectional = true,
+        } );
+        return;
+    }
+
+    if( normLen < 1e-6f )
+    {
+        return;
+    }
+
+    RgFloat3D normal = sumNorm * ( 1.0f / normLen );
+
+    if( allowOmnidirectional )
+    {
+        float maxProj = 0.0f;
+        for( uint32_t idx : members )
+        {
+            for( int k = 0; k < 3; k++ )
+            {
+                maxProj = std::max( maxProj, VecDot( VecSub( triVerts[ idx * 3 + k ], center ), normal ) );
+            }
+        }
+        if( maxProj > 0.0f )
+        {
+            center = center + normal * maxProj;
+        }
+    }
+
+    int       subCount = 1;
+    RgFloat3D majorAxis{ 0, 0, 0 };
+    float     majorSpan = 0.0f;
+
+    if( subdivideElongated && members.size() >= 2 )
+    {
+        RgFloat3D tmpUp = std::abs( normal.data[ 2 ] ) < 0.9f ? RgFloat3D{ 0, 0, 1 }
+                                                             : RgFloat3D{ 1, 0, 0 };
+        RgFloat3D tangentU = RTGL1::Utils::Normalize( VecCross( tmpUp, normal ) );
+        RgFloat3D tangentV = RTGL1::Utils::Normalize( VecCross( normal, tangentU ) );
+
+        double cxx = 0.0, cyy = 0.0, cxy = 0.0;
+        for( uint32_t idx : members )
+        {
+            float area = triAreas[ idx ];
+            for( int k = 0; k < 3; k++ )
+            {
+                RgFloat3D rel = VecSub( triVerts[ idx * 3 + k ], center );
+                double    u   = VecDot( rel, tangentU );
+                double    v   = VecDot( rel, tangentV );
+                cxx += u * u * double( area );
+                cyy += v * v * double( area );
+                cxy += u * v * double( area );
+            }
+        }
+
+        double trace = cxx + cyy;
+        double diff  = cxx - cyy;
+        double disc  = std::sqrt( diff * diff + 4.0 * cxy * cxy );
+        double lam1  = 0.5 * ( trace + disc );
+
+        if( lam1 > 1e-4 )
+        {
+            double ang = 0.5 * std::atan2( 2.0 * cxy, diff );
+            majorAxis  = RTGL1::Utils::Normalize(
+                tangentU * float( std::cos( ang ) ) + tangentV * float( std::sin( ang ) ) );
+            RgFloat3D minorAxis = RTGL1::Utils::Normalize( VecCross( normal, majorAxis ) );
+
+            float minU = 1e30f, maxU = -1e30f;
+            float minV = 1e30f, maxV = -1e30f;
+            for( uint32_t idx : members )
+            {
+                for( int k = 0; k < 3; k++ )
+                {
+                    RgFloat3D rel = VecSub( triVerts[ idx * 3 + k ], center );
+                    float     u   = VecDot( rel, majorAxis );
+                    float     v   = VecDot( rel, minorAxis );
+                    minU          = std::min( minU, u );
+                    maxU          = std::max( maxU, u );
+                    minV          = std::min( minV, v );
+                    maxV          = std::max( maxV, v );
+                }
+            }
+            majorSpan       = maxU - minU;
+            float minorSpan = std::max( 1e-3f, maxV - minV );
+            float aspect    = majorSpan / minorSpan;
+            float lenMeters = majorSpan * oneGameUnitInMeters;
+            if( aspect > 2.5f && lenMeters > 0.6f )
+            {
+                subCount = std::clamp( int( std::lround( aspect ) ), 2, 8 );
+            }
+        }
+    }
+
+    float eachWeight = scale / float( subCount );
+    if( subCount == 1 )
+    {
+        outSamples.push_back( LightClusterSample{
+            .position          = center,
+            .normal            = normal,
+            .areaGameUnitsSq   = totalArea,
+            .fluxWeight        = eachWeight,
+            .isOmnidirectional = false,
+        } );
+    }
+    else
+    {
+        float halfSpan = majorSpan * 0.5f * ( 1.0f - 1.0f / float( subCount ) );
+        for( int s = 0; s < subCount; s++ )
+        {
+            float     t   = ( subCount > 1 ) ? ( -1.0f + 2.0f * float( s ) / float( subCount - 1 ) ) : 0.0f;
+            RgFloat3D pos = center + majorAxis * ( t * halfSpan );
+            outSamples.push_back( LightClusterSample{
+                .position          = pos,
+                .normal            = normal,
+                .areaGameUnitsSq   = totalArea / float( subCount ),
+                .fluxWeight        = eachWeight,
+                .isOmnidirectional = false,
+            } );
+        }
+    }
+}
+
+void ExtractCoplanarLightClusters( const RgTransform&                   transform,
+                                   const RgPrimitiveVertex*             pVertices,
+                                   uint32_t                             vertexCount,
+                                   const uint32_t*                      pIndices,
+                                   uint32_t                             indexCount,
+                                   float                                oneGameUnitInMeters,
+                                   bool                                 subdivideElongated,
+                                   bool                                 collapseCompactFixtures,
+                                   std::vector< LightClusterSample >&   outSamples )
+{
+    if( !pVertices || !pIndices || vertexCount == 0 || indexCount < 3 )
+    {
+        return;
+    }
+
+    uint32_t triCount = indexCount / 3;
+    if( triCount > 1024 )
+    {
+        RTGL1::debug::Warning(
+            "The amount of triangles on a primitive with attached light is too high ({})",
+            triCount );
+    }
+
+    std::vector< RgFloat3D > triVerts( triCount * 3 );
+    std::vector< uint32_t >  triQ( triCount * 3 );
+    std::vector< RgFloat3D > triCentroids( triCount );
+    std::vector< RgFloat3D > triNormals( triCount );
+    std::vector< float >     triAreas( triCount, 0.0f );
+    std::vector< uint8_t >   triValid( triCount, 0 );
+
+    std::unordered_map< QuantizedVertexKey, uint32_t, QuantizedVertexHash > vertMap;
+    vertMap.reserve( vertexCount );
+
+    auto quantizeVert = [ &vertMap ]( const RgFloat3D& p ) -> uint32_t {
+        QuantizedVertexKey k{
+            int64_t( std::llround( double( p.data[ 0 ] ) * 100.0 ) ),
+            int64_t( std::llround( double( p.data[ 1 ] ) * 100.0 ) ),
+            int64_t( std::llround( double( p.data[ 2 ] ) * 100.0 ) ),
+        };
+        auto [ it, inserted ] = vertMap.emplace( k, uint32_t( vertMap.size() ) );
+        return it->second;
+    };
+
+    for( uint32_t t = 0; t < triCount; t++ )
+    {
+        RgFloat3D v[ 3 ];
+        for( int k = 0; k < 3; k++ )
+        {
+            const float* src    = pVertices[ pIndices[ t * 3 + k ] ].position;
+            v[ k ]              = RTGL1::Utils::ApplyTransform( transform, RgFloat3D{ RG_ACCESS_VEC3( src ) } );
+            triVerts[ t * 3 + k ] = v[ k ];
+            triQ[ t * 3 + k ]     = quantizeVert( v[ k ] );
+        }
+        RgFloat3D unnorm = RTGL1::Utils::GetUnnormalizedNormal( v );
+        float     len    = RTGL1::Utils::Length( unnorm.data );
+        triAreas[ t ]    = len * 0.5f;
+        if( triAreas[ t ] > 1e-4f )
+        {
+            triValid[ t ]     = 1;
+            triNormals[ t ]   = unnorm * ( 1.0f / len );
+            triCentroids[ t ] = ( v[ 0 ] + v[ 1 ] + v[ 2 ] ) * ( 1.0f / 3.0f );
+        }
+    }
+
+    std::unordered_map< uint32_t, std::vector< uint32_t > >             vertToTris;
+    std::unordered_map< QuantizedEdgeKey, std::vector< uint32_t >, QuantizedEdgeHash > edgeToTris;
+    vertToTris.reserve( vertMap.size() );
+    edgeToTris.reserve( triCount * 3 );
+
+    for( uint32_t t = 0; t < triCount; t++ )
+    {
+        if( !triValid[ t ] )
+        {
+            continue;
+        }
+        for( int e = 0; e < 3; e++ )
+        {
+            uint32_t a = triQ[ t * 3 + e ];
+            uint32_t b = triQ[ t * 3 + ( e + 1 ) % 3 ];
+            vertToTris[ a ].push_back( t );
+            if( a > b )
+            {
+                std::swap( a, b );
+            }
+            edgeToTris[ QuantizedEdgeKey{ a, b } ].push_back( t );
+        }
+    }
+
+    std::vector< uint32_t > parent( triCount );
+    for( uint32_t t = 0; t < triCount; t++ )
+    {
+        parent[ t ] = t;
+    }
+
+    auto findRoot = [ &parent ]( uint32_t x ) {
+        while( parent[ x ] != x )
+        {
+            parent[ x ] = parent[ parent[ x ] ];
+            x           = parent[ x ];
+        }
+        return x;
+    };
+
+    auto unite = [ &parent, &findRoot ]( uint32_t a, uint32_t b ) {
+        uint32_t ra = findRoot( a );
+        uint32_t rb = findRoot( b );
+        if( ra != rb )
+        {
+            parent[ rb ] = ra;
+        }
+    };
+
+    if( collapseCompactFixtures )
+    {
+        for( const auto& [ vq, list ] : vertToTris )
+        {
+            for( size_t i = 1; i < list.size(); i++ )
+            {
+                unite( list[ 0 ], list[ i ] );
+            }
+        }
+    }
+    else
+    {
+        for( const auto& [ edge, list ] : edgeToTris )
+        {
+            for( size_t i = 0; i < list.size(); i++ )
+            {
+                for( size_t j = i + 1; j < list.size(); j++ )
+                {
+                    if( VecDot( triNormals[ list[ i ] ], triNormals[ list[ j ] ] ) > 0.99f &&
+                        std::abs( VecDot( VecSub( triCentroids[ list[ j ] ], triCentroids[ list[ i ] ] ),
+                                          triNormals[ list[ i ] ] ) ) < 0.5f )
+                    {
+                        unite( list[ i ], list[ j ] );
+                    }
+                }
+            }
+        }
+    }
+
+    std::unordered_map< uint32_t, std::vector< uint32_t > > islands;
+    for( uint32_t t = 0; t < triCount; t++ )
+    {
+        if( triValid[ t ] )
+        {
+            islands[ findRoot( t ) ].push_back( t );
+        }
+    }
+
+    for( const auto& [ root, members ] : islands )
+    {
+        if( !collapseCompactFixtures )
+        {
+            EmitClusterSampleGroup( members,
+                                    triVerts.data(),
+                                    triCentroids.data(),
+                                    triNormals.data(),
+                                    triAreas.data(),
+                                    oneGameUnitInMeters,
+                                    subdivideElongated,
+                                    false,
+                                    outSamples );
+            continue;
+        }
+
+        RgFloat3D bmin{ 1e30f, 1e30f, 1e30f };
+        RgFloat3D bmax{ -1e30f, -1e30f, -1e30f };
+        for( uint32_t idx : members )
+        {
+            for( int k = 0; k < 3; k++ )
+            {
+                const RgFloat3D& p = triVerts[ idx * 3 + k ];
+                bmin.data[ 0 ]     = std::min( bmin.data[ 0 ], p.data[ 0 ] );
+                bmin.data[ 1 ]     = std::min( bmin.data[ 1 ], p.data[ 1 ] );
+                bmin.data[ 2 ]     = std::min( bmin.data[ 2 ], p.data[ 2 ] );
+                bmax.data[ 0 ]     = std::max( bmax.data[ 0 ], p.data[ 0 ] );
+                bmax.data[ 1 ]     = std::max( bmax.data[ 1 ], p.data[ 1 ] );
+                bmax.data[ 2 ]     = std::max( bmax.data[ 2 ], p.data[ 2 ] );
+            }
+        }
+        float diagMeters = RTGL1::Utils::Length( VecSub( bmax, bmin ).data ) * oneGameUnitInMeters;
+
+        if( diagMeters <= 2.5f )
+        {
+            EmitClusterSampleGroup( members,
+                                    triVerts.data(),
+                                    triCentroids.data(),
+                                    triNormals.data(),
+                                    triAreas.data(),
+                                    oneGameUnitInMeters,
+                                    false,
+                                    true,
+                                    outSamples );
+        }
+        else
+        {
+            std::unordered_map< uint32_t, uint32_t > subParent;
+            subParent.reserve( members.size() );
+            for( uint32_t idx : members )
+            {
+                subParent[ idx ] = idx;
+            }
+            auto findSub = [ &subParent ]( uint32_t x ) {
+                while( subParent[ x ] != x )
+                {
+                    subParent[ x ] = subParent[ subParent[ x ] ];
+                    x              = subParent[ x ];
+                }
+                return x;
+            };
+            for( const auto& [ edge, list ] : edgeToTris )
+            {
+                for( size_t i = 0; i < list.size(); i++ )
+                {
+                    if( !subParent.contains( list[ i ] ) )
+                    {
+                        continue;
+                    }
+                    for( size_t j = i + 1; j < list.size(); j++ )
+                    {
+                        if( !subParent.contains( list[ j ] ) )
+                        {
+                            continue;
+                        }
+                        if( VecDot( triNormals[ list[ i ] ], triNormals[ list[ j ] ] ) > 0.99f &&
+                            std::abs( VecDot(
+                                VecSub( triCentroids[ list[ j ] ], triCentroids[ list[ i ] ] ),
+                                triNormals[ list[ i ] ] ) ) < 0.5f )
+                        {
+                            uint32_t ra = findSub( list[ i ] );
+                            uint32_t rb = findSub( list[ j ] );
+                            if( ra != rb )
+                            {
+                                subParent[ rb ] = ra;
+                            }
+                        }
+                    }
+                }
+            }
+            std::unordered_map< uint32_t, std::vector< uint32_t > > subGroups;
+            for( uint32_t idx : members )
+            {
+                subGroups[ findSub( idx ) ].push_back( idx );
+            }
+            for( const auto& [ sroot, smem ] : subGroups )
+            {
+                EmitClusterSampleGroup( smem,
+                                        triVerts.data(),
+                                        triCentroids.data(),
+                                        triNormals.data(),
+                                        triAreas.data(),
+                                        oneGameUnitInMeters,
+                                        false,
+                                        true,
+                                        outSamples );
+            }
+        }
+    }
+}
+
 void ExtractPrimitiveLightPositions( const RgMeshInfo&                     mesh,
                                      const RgMeshPrimitiveInfo&            prim,
                                      std::vector< RTGL1::PositionNormal >& initial )
 {
     assert( initial.empty() );
 
-    constexpr auto toFloat3 = []( const float( &ptr )[ 3 ] ) {
-        return RgFloat3D{ RG_ACCESS_VEC3( ptr ) };
-    };
-    using RTGL1::Utils::ApplyTransform;
-
-    assert( prim.indexCount % 3 == 0 );
-    if( prim.indexCount / 3 > 1024 )
+    std::vector< LightClusterSample > clusters;
+    ExtractCoplanarLightClusters( mesh.transform,
+                                  prim.pVertices,
+                                  prim.vertexCount,
+                                  prim.pIndices,
+                                  prim.indexCount,
+                                  1.0f,
+                                  false,
+                                  false,
+                                  clusters );
+    initial.reserve( clusters.size() );
+    for( const LightClusterSample& c : clusters )
     {
-        RTGL1::debug::Warning(
-            "The amount of triangles on a primitive (ID {}-{}, material name: {}) "
-            "with attached light is too high ()",
-            prim.indexCount / 3,
-            mesh.uniqueObjectID,
-            prim.primitiveIndexInMesh,
-            RTGL1::Utils::SafeCstr( prim.pTextureName ) );
-    }
-
-#if POLYLIGHT_AS_SPHERE
-    using PositionNormal = RTGL1::PositionNormal;
-
-    auto merge = []( const std::optional< PositionNormal >& a,
-                     const std::optional< PositionNormal >& b ) -> std::optional< PositionNormal > {
-        if( a && b )
-        {
-            return PositionNormal{
-                .position = ( a->position + b->position ) * 0.5f,
-                .normal   = RTGL1::Utils::Normalize( a->normal + b->normal ),
-            };
-        }
-        if( a && !b )
-        {
-            return a;
-        }
-        if( !a && b )
-        {
-            return b;
-        }
-        return std::nullopt;
-    };
-
-    struct Tri
-    {
-        RgFloat3D v[ 3 ];
-    };
-    auto haveCommonEdge = []( const Tri& a, const Tri& b ) {
-        auto isSameEdge = []( const RgFloat3D& v0,
-                              const RgFloat3D& v1,
-                              const RgFloat3D& u0,
-                              const RgFloat3D& u1 ) {
-            return ( RTGL1::Utils::AreAlmostSame( v0, u0 ) &&
-                     RTGL1::Utils::AreAlmostSame( v1, u1 ) ) ||
-                   ( RTGL1::Utils::AreAlmostSame( v0, u1 ) &&
-                     RTGL1::Utils::AreAlmostSame( v1, u0 ) );
-        };
-        constexpr int edges[][ 2 ] = {
-            { 0, 1 },
-            { 1, 2 },
-            { 2, 0 },
-        };
-        for( const auto& [ av0, av1 ] : edges )
-        {
-            for( const auto& [ bv0, bv1 ] : edges )
-            {
-                if( isSameEdge( a.v[ av0 ], a.v[ av1 ], b.v[ bv0 ], b.v[ bv1 ] ) )
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    };
-    std::optional< Tri >            prev;
-    std::optional< PositionNormal > accum;
-
-    auto flushAccum = [ &initial, &accum ]() {
-        if( accum )
-        {
-            initial.push_back( *accum );
-            accum = std::nullopt;
-        }
-    };
-
-    for( uint32_t tri = 0; tri < prim.indexCount / 3; tri++ )
-    {
-        Tri local = {
-            toFloat3( prim.pVertices[ prim.pIndices[ tri * 3 + 0 ] ].position ),
-            toFloat3( prim.pVertices[ prim.pIndices[ tri * 3 + 1 ] ].position ),
-            toFloat3( prim.pVertices[ prim.pIndices[ tri * 3 + 2 ] ].position ),
-        };
-
-        Tri global = {
-            ApplyTransform( mesh.transform, local.v[ 0 ] ),
-            ApplyTransform( mesh.transform, local.v[ 1 ] ),
-            ApplyTransform( mesh.transform, local.v[ 2 ] ),
-        };
-
-        if( auto n = TryGetNormal( global.v ) )
-        {
-            if( prev )
-            {
-                if( !haveCommonEdge( global, *prev ) )
-                {
-                    flushAccum();
-                }
-            }
-            prev = global;
-
-            accum = merge( accum,
-                           PositionNormal{
-                               .position = GetCenter( global.v ),
-                               .normal   = *n,
-                           } );
-        }
-    }
-    flushAccum();
-#endif
-}
-
-void MakeLightsForPrimitive( const RgMeshInfo&                     mesh,
-                             const RgMeshPrimitiveInfo&            prim,
-                             const RgEditorAttachedLightInfo&      lightInfo,
-                             float                                 oneGameUnitInMeters,
-                             std::vector< RTGL1::PositionNormal >& initial,
-                             std::vector< RgSpotLightUploadInfo >& result )
-{
-    assert( initial.empty() );
-    assert( result.empty() );
-
-    ExtractPrimitiveLightPositions( mesh, prim, initial );
-
-#if POLYLIGHT_AS_SPHERE
-    for( const auto& [ position, normal ] : initial )
-    {
-        float offset = 0.1f / oneGameUnitInMeters;
-
-        result.emplace_back( RgSpotLightUploadInfo{
-            .uniqueID     = 0,
-            .isExportable = true,
-            .extra        = {},
-            .color        = lightInfo.color,
-            .intensity    = lightInfo.intensity,
-            .position     = position + normal * offset,
-            .direction    = normal,
-            .radius       = 0.05f / oneGameUnitInMeters,
-            .angleOuter   = RTGL1::Utils::DegToRad( 89 ),
-            .angleInner   = RTGL1::Utils::DegToRad( 75 ),
+        initial.push_back( RTGL1::PositionNormal{
+            .position = c.position,
+            .normal   = c.normal,
         } );
     }
-#endif
-}
-
-
-auto MakeLightsForPrimitive( const RgMeshInfo&                     mesh,
-                             const RgMeshPrimitiveInfo&            prim,
-                             const RgEditorAttachedLightInfo&      lightInfo,
-                             float                                 oneGameUnitInMeters )
-{
-    std::vector< RTGL1::PositionNormal > initial;
-    std::vector< RgSpotLightUploadInfo > resolved;
-    MakeLightsForPrimitive( mesh, prim, lightInfo, oneGameUnitInMeters, initial, resolved );
-
-    return resolved;
 }
 
 
@@ -1391,13 +1863,329 @@ void RTGL1::GltfExporter::AddPrimitive( const RgMeshInfo&          mesh,
 void RTGL1::GltfExporter::AddPrimitiveLights( const RgMeshInfo&          mesh,
                                               const RgMeshPrimitiveInfo& primitive )
 {
-    if( primitive.pEditorInfo && primitive.pEditorInfo->attachedLightExists )
+    if( primitive.pEditorInfo && primitive.pEditorInfo->attachedLightExists &&
+        primitive.vertexCount > 0 && primitive.indexCount >= 3 && primitive.pVertices &&
+        primitive.pIndices )
     {
-        auto primLights = MakeLightsForPrimitive(
-            mesh, primitive, primitive.pEditorInfo->attachedLight, oneGameUnitInMeters );
-
-        sceneLights.insert( sceneLights.end(), primLights.begin(), primLights.end() );
+        attachedLightPrimitives.push_back( AttachedLightPrimitive{
+            .primitive = std::make_shared< DeepCopyOfPrimitive >( primitive ),
+            .transform = mesh.transform,
+            .lightInfo = primitive.pEditorInfo->attachedLight,
+        } );
     }
+}
+
+void RTGL1::GltfExporter::ResolveAttachedPrimitiveLights()
+{
+    constexpr float goldSrcEngineLightScale   = 0.12f;
+    constexpr float goldSrcAttachedLightScale = 0.55f;
+
+    for( GenericLight& gl : sceneLights )
+    {
+        if( auto* sph = std::get_if< RgSphericalLightUploadInfo >( &gl ) )
+        {
+            sph->intensity *= goldSrcEngineLightScale;
+        }
+        else if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &gl ) )
+        {
+            sp->intensity *= goldSrcEngineLightScale;
+        }
+    }
+
+    if( attachedLightPrimitives.empty() )
+    {
+        return;
+    }
+
+    std::vector< WorldTri > worldTris;
+    for( const auto& [ meshNode, prims ] : scene )
+    {
+        for( const auto& prim : prims )
+        {
+            auto verts = prim->Vertices();
+            auto inds  = prim->Indices();
+            for( size_t t = 0; t + 2 < inds.size(); t += 3 )
+            {
+                WorldTri wt{};
+                for( int k = 0; k < 3; k++ )
+                {
+                    const float* p = verts[ inds[ t + k ] ].position;
+                    wt.v[ k ] = Utils::ApplyTransform( meshNode.transform,
+                                                       RgFloat3D{ RG_ACCESS_VEC3( p ) } );
+                }
+                wt.bmin = {
+                    std::min( { wt.v[ 0 ].data[ 0 ], wt.v[ 1 ].data[ 0 ], wt.v[ 2 ].data[ 0 ] } ),
+                    std::min( { wt.v[ 0 ].data[ 1 ], wt.v[ 1 ].data[ 1 ], wt.v[ 2 ].data[ 1 ] } ),
+                    std::min( { wt.v[ 0 ].data[ 2 ], wt.v[ 1 ].data[ 2 ], wt.v[ 2 ].data[ 2 ] } ),
+                };
+                wt.bmax = {
+                    std::max( { wt.v[ 0 ].data[ 0 ], wt.v[ 1 ].data[ 0 ], wt.v[ 2 ].data[ 0 ] } ),
+                    std::max( { wt.v[ 0 ].data[ 1 ], wt.v[ 1 ].data[ 1 ], wt.v[ 2 ].data[ 1 ] } ),
+                    std::max( { wt.v[ 0 ].data[ 2 ], wt.v[ 1 ].data[ 2 ], wt.v[ 2 ].data[ 2 ] } ),
+                };
+                worldTris.push_back( wt );
+            }
+        }
+    }
+
+    float maxDesiredOffset     = 0.1f / oneGameUnitInMeters;
+    float maxDesiredOmniOffset = 0.2f / oneGameUnitInMeters;
+    float minOffset            = 0.01f / oneGameUnitInMeters;
+    float fixtureMatchSq       = ( 1.25f / oneGameUnitInMeters ) * ( 1.25f / oneGameUnitInMeters );
+    float closeSpotSq          = ( 0.75f / oneGameUnitInMeters ) * ( 0.75f / oneGameUnitInMeters );
+    float candDedupSq          = ( 0.85f / oneGameUnitInMeters ) * ( 0.85f / oneGameUnitInMeters );
+
+    std::vector< GenericLight > addedLights;
+
+    for( const AttachedLightPrimitive& item : attachedLightPrimitives )
+    {
+        auto verts = item.primitive->Vertices();
+        auto inds  = item.primitive->Indices();
+
+        std::vector< LightClusterSample > clusters;
+        ExtractCoplanarLightClusters( item.transform,
+                                      verts.data(),
+                                      uint32_t( verts.size() ),
+                                      inds.data(),
+                                      uint32_t( inds.size() ),
+                                      oneGameUnitInMeters,
+                                      false,
+                                      true,
+                                      clusters );
+
+        for( const LightClusterSample& c : clusters )
+        {
+            if( c.isOmnidirectional )
+            {
+                RgFloat3D pos     = c.position;
+                bool      hasHint = RTGL1::Utils::Length( c.normal.data ) > 0.5f;
+                if( hasHint )
+                {
+                    float clearance = ComputeClearanceAlongNormal(
+                        c.position + c.normal * minOffset,
+                        c.normal,
+                        maxDesiredOmniOffset * 2.5f,
+                        worldTris );
+                    float safeOffset = std::clamp( clearance * 0.4f, minOffset, maxDesiredOmniOffset );
+                    pos              = c.position + c.normal * safeOffset;
+                }
+
+                bool hasForwardSpot = false;
+                for( const GenericLight& existing : sceneLights )
+                {
+                    if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &existing ) )
+                    {
+                        RgFloat3D d = VecSub( sp->position, pos );
+                        if( VecDot( d, d ) < candDedupSq &&
+                            ( !hasHint || VecDot( sp->direction, c.normal ) > 0.3f ) &&
+                            HasSegmentClearance( sp->position, pos, worldTris ) )
+                        {
+                            hasForwardSpot = true;
+                            break;
+                        }
+                    }
+                }
+                if( hasForwardSpot )
+                {
+                    continue;
+                }
+
+                bool dupAdded = false;
+                for( const GenericLight& added : addedLights )
+                {
+                    if( auto* sph = std::get_if< RgSphericalLightUploadInfo >( &added ) )
+                    {
+                        RgFloat3D d = VecSub( sph->position, pos );
+                        if( VecDot( d, d ) < candDedupSq )
+                        {
+                            dupAdded = true;
+                            break;
+                        }
+                    }
+                    else if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &added ) )
+                    {
+                        RgFloat3D d = VecSub( sp->position, pos );
+                        if( VecDot( d, d ) < candDedupSq )
+                        {
+                            dupAdded = true;
+                            break;
+                        }
+                    }
+                }
+                if( dupAdded )
+                {
+                    continue;
+                }
+
+                RgLightExtraInfo preservedExtra{};
+                std::erase_if( sceneLights, [ & ]( const GenericLight& gl ) {
+                    if( auto* sph = std::get_if< RgSphericalLightUploadInfo >( &gl ) )
+                    {
+                        RgFloat3D d = VecSub( sph->position, pos );
+                        if( VecDot( d, d ) < fixtureMatchSq &&
+                            HasSegmentClearance( sph->position, pos, worldTris ) )
+                        {
+                            if( !preservedExtra.exists && sph->extra.exists )
+                            {
+                                preservedExtra = sph->extra;
+                            }
+                            return true;
+                        }
+                    }
+                    else if( hasHint )
+                    {
+                        if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &gl ) )
+                        {
+                            RgFloat3D d = VecSub( sp->position, pos );
+                            if( VecDot( d, d ) < fixtureMatchSq &&
+                                VecDot( sp->direction, c.normal ) < -0.3f &&
+                                HasSegmentClearance( sp->position, pos, worldTris ) )
+                            {
+                                if( !preservedExtra.exists && sp->extra.exists )
+                                {
+                                    preservedExtra = sp->extra;
+                                }
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                } );
+
+                addedLights.emplace_back( RgSphericalLightUploadInfo{
+                    .uniqueID     = 0,
+                    .isExportable = true,
+                    .extra        = preservedExtra,
+                    .color        = item.lightInfo.color,
+                    .intensity    = item.lightInfo.intensity * c.fluxWeight * goldSrcAttachedLightScale,
+                    .position     = pos,
+                    .radius       = 0.05f / oneGameUnitInMeters,
+                } );
+                continue;
+            }
+
+            float clearance  = ComputeClearanceAlongNormal(
+                c.position + c.normal * minOffset, c.normal, maxDesiredOffset * 2.5f, worldTris );
+            float safeOffset = std::clamp( clearance * 0.4f, minOffset, maxDesiredOffset );
+            RgFloat3D pos    = c.position + c.normal * safeOffset;
+
+            bool hasMatchingSpot = false;
+            RgFloat3D matchedSpotPos{};
+            for( const GenericLight& existing : sceneLights )
+            {
+                if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &existing ) )
+                {
+                    RgFloat3D d = VecSub( sp->position, pos );
+                    if( VecDot( d, d ) < fixtureMatchSq &&
+                        VecDot( sp->direction, c.normal ) > 0.5f &&
+                        HasSegmentClearance( sp->position, pos, worldTris ) )
+                    {
+                        hasMatchingSpot = true;
+                        matchedSpotPos  = sp->position;
+                        break;
+                    }
+                }
+            }
+
+            if( hasMatchingSpot )
+            {
+                std::erase_if( sceneLights, [ & ]( const GenericLight& gl ) {
+                    if( auto* sph = std::get_if< RgSphericalLightUploadInfo >( &gl ) )
+                    {
+                        RgFloat3D d = VecSub( sph->position, matchedSpotPos );
+                        return VecDot( d, d ) < closeSpotSq &&
+                               HasSegmentClearance( sph->position, matchedSpotPos, worldTris );
+                    }
+                    return false;
+                } );
+                continue;
+            }
+
+            bool dupAdded = false;
+            for( const GenericLight& added : addedLights )
+            {
+                if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &added ) )
+                {
+                    RgFloat3D d = VecSub( sp->position, pos );
+                    if( VecDot( d, d ) < candDedupSq &&
+                        VecDot( sp->direction, c.normal ) > 0.5f )
+                    {
+                        dupAdded = true;
+                        break;
+                    }
+                }
+            }
+            if( dupAdded )
+            {
+                continue;
+            }
+
+            RgLightExtraInfo preservedExtra{};
+            float frontLimit = -0.3f / oneGameUnitInMeters;
+            std::erase_if( sceneLights, [ & ]( const GenericLight& gl ) {
+                if( auto* sph = std::get_if< RgSphericalLightUploadInfo >( &gl ) )
+                {
+                    RgFloat3D d = VecSub( sph->position, pos );
+                    if( VecDot( d, d ) < fixtureMatchSq &&
+                        VecDot( VecSub( sph->position, c.position ), c.normal ) > frontLimit &&
+                        HasSegmentClearance( sph->position, pos, worldTris ) )
+                    {
+                        if( !preservedExtra.exists && sph->extra.exists )
+                        {
+                            preservedExtra = sph->extra;
+                        }
+                        return true;
+                    }
+                }
+                return false;
+            } );
+
+            addedLights.emplace_back( RgSpotLightUploadInfo{
+                .uniqueID     = 0,
+                .isExportable = true,
+                .extra        = preservedExtra,
+                .color        = item.lightInfo.color,
+                .intensity    = item.lightInfo.intensity * c.fluxWeight * goldSrcAttachedLightScale,
+                .position     = pos,
+                .direction    = c.normal,
+                .radius       = 0.05f / oneGameUnitInMeters,
+                .angleOuter   = RTGL1::Utils::DegToRad( 89 ),
+                .angleInner   = RTGL1::Utils::DegToRad( 75 ),
+            } );
+        }
+    }
+
+    sceneLights.insert( sceneLights.end(), addedLights.begin(), addedLights.end() );
+
+    float tinyFillSq = ( 0.45f / oneGameUnitInMeters ) * ( 0.45f / oneGameUnitInMeters );
+    std::vector< RgFloat3D > spotPositions;
+    for( const GenericLight& gl : sceneLights )
+    {
+        if( auto* sp = std::get_if< RgSpotLightUploadInfo >( &gl ) )
+        {
+            spotPositions.push_back( sp->position );
+        }
+    }
+    if( !spotPositions.empty() )
+    {
+        std::erase_if( sceneLights, [ & ]( const GenericLight& gl ) {
+            if( auto* sph = std::get_if< RgSphericalLightUploadInfo >( &gl ) )
+            {
+                for( const RgFloat3D& spPos : spotPositions )
+                {
+                    RgFloat3D d = VecSub( sph->position, spPos );
+                    if( VecDot( d, d ) < tinyFillSq &&
+                        HasSegmentClearance( sph->position, spPos, worldTris ) )
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } );
+    }
+
+    attachedLightPrimitives.clear();
 }
 
 void RTGL1::GltfExporter::MakeLightsForPrimitiveDynamic(
@@ -1442,7 +2230,11 @@ void RTGL1::GltfExporter::AddLight( const GenericLightPtr& light )
 }
 
 void RTGL1::GltfExporter::ExportToFiles( const std::filesystem::path& gltfPath,
-                                         const TextureManager&        textureManager )
+                                         const TextureManager&        textureManager,
+                                         const TextureMetaManager&    textureMeta,
+                                         const std::filesystem::path& bspPath,
+                                         std::string_view             mapName,
+                                         const std::filesystem::path& scenesFolder )
 {
     if( scene.empty() )
     {
@@ -1461,6 +2253,14 @@ void RTGL1::GltfExporter::ExportToFiles( const std::filesystem::path& gltfPath,
         debug::Warning( "Denied to write to the folder {}",
                         std::filesystem::absolute( GetGltfFolder( gltfPath ) ).string() );
         return;
+    }
+
+    ResolveAttachedPrimitiveLights();
+
+    {
+        auto bspLights = BspLightEstimator::EstimateLights(
+            bspPath, mapName, scenesFolder, textureMeta, sceneLights, oneGameUnitInMeters );
+        sceneLights.insert( sceneLights.end(), bspLights.begin(), bspLights.end() );
     }
 
 
@@ -1678,7 +2478,11 @@ bool RTGL1::GltfMeshNode::operator==( const GltfMeshNode& other ) const
 
 bool RTGL1::GltfMeshNode::operator<( const GltfMeshNode& other ) const
 {
-    return this->name < other.name && TransformIsLess( this->transform, other.transform );
+    if( this->name != other.name )
+    {
+        return this->name < other.name;
+    }
+    return TransformIsLess( this->transform, other.transform );
 }
 
 uint64_t RTGL1::GltfMeshNode::Hash() const

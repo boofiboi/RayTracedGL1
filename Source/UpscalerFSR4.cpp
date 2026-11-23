@@ -94,8 +94,11 @@ void InsertBarriers( VkCommandBuffer      cmd,
         barriers[ i ] = {
             .sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask  = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR |
-                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT |
+                             VK_ACCESS_2_SHADER_READ_BIT |
+                             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             .dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             .dstAccessMask = inputsAndOutput[ i ] == OUTPUT_IMAGE_INDEX
                                  ? VK_ACCESS_2_SHADER_WRITE_BIT
@@ -142,9 +145,10 @@ struct RTGL1::UpscalerFSR4::FfxState
     ffxContext   context{ nullptr };
 };
 
-RTGL1::UpscalerFSR4::UpscalerFSR4( VkDevice _device, VkPhysicalDevice _physDevice )
+RTGL1::UpscalerFSR4::UpscalerFSR4( VkDevice _device, VkPhysicalDevice _physDevice, float _worldScale )
     : device( _device )
     , physDevice( _physDevice )
+    , viewSpaceToMeters( _worldScale > 0.0f ? _worldScale : 1.0f )
     , ffxState( std::make_unique< FfxState >() )
 {
     if( !LoadFfxApiFunctions( L"amd_fidelityfx_upscaler_vk.dll", ffxState->module, ffxState->funcs ) )
@@ -227,7 +231,8 @@ void RTGL1::UpscalerFSR4::DestroyContext()
 
 void RTGL1::UpscalerFSR4::OnFramebuffersSizeChange( const ResolutionState& resolutionState )
 {
-    if( resolutionState.upscaledWidth == 0 || resolutionState.upscaledHeight == 0 )
+    if( resolutionState.renderWidth == 0 || resolutionState.renderHeight == 0 ||
+        resolutionState.upscaledWidth == 0 || resolutionState.upscaledHeight == 0 )
     {
         if( isContextCreated )
         {
@@ -261,11 +266,11 @@ void RTGL1::UpscalerFSR4::OnFramebuffersSizeChange( const ResolutionState& resol
     ffxCreateContextDescUpscale createDesc = {};
     createDesc.header.type                 = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
     createDesc.header.pNext                = &versionDesc.header;
-    createDesc.flags                       = FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+    createDesc.flags                       = 0;
 #ifndef NDEBUG
     createDesc.flags |= FFX_UPSCALE_ENABLE_DEBUG_CHECKING;
 #endif
-    createDesc.maxRenderSize  = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
+    createDesc.maxRenderSize  = { resolutionState.renderWidth, resolutionState.renderHeight };
     createDesc.maxUpscaleSize = { resolutionState.upscaledWidth, resolutionState.upscaledHeight };
     createDesc.fpMessage      = FfxMessageCallback;
 
@@ -360,7 +365,7 @@ RTGL1::FramebufferImageIndex RTGL1::UpscalerFSR4::Apply(
     info.cameraNear               = nearPlane;
     info.cameraFar                = farPlane;
     info.cameraFovAngleVertical   = fovVerticalRad;
-    info.viewSpaceToMetersFactor  = 1.0f;
+    info.viewSpaceToMetersFactor  = viewSpaceToMeters;
     info.flags                    = 0;
 
     ffxReturnCode_t ret = ffxState->funcs.Dispatch( &ffxState->context, &info.header );
@@ -435,9 +440,10 @@ struct RTGL1::UpscalerFSR4::FfxState
 {
 };
 
-RTGL1::UpscalerFSR4::UpscalerFSR4( VkDevice _device, VkPhysicalDevice _physDevice )
+RTGL1::UpscalerFSR4::UpscalerFSR4( VkDevice _device, VkPhysicalDevice _physDevice, float _worldScale )
     : device( _device )
     , physDevice( _physDevice )
+    , viewSpaceToMeters( _worldScale > 0.0f ? _worldScale : 1.0f )
 {
 }
 

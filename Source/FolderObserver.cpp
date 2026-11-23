@@ -28,7 +28,7 @@ namespace RTGL1
 {
 namespace
 {
-    constexpr auto CHECK_FREQUENCY = std::chrono::milliseconds( 500 );
+    constexpr auto CHECK_FREQUENCY = std::chrono::milliseconds( 2000 );
 
     void InsertAllFolderFiles( std::deque< FolderObserver::DependentFile >& dst,
                                const fs::path&                              folder )

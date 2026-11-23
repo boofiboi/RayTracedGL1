@@ -62,19 +62,23 @@
 #include "PortalList.h"
 #include "RestirBuffers.h"
 #include "Volumetric.h"
-#include "DebugWindows.h"
+#ifdef RG_USE_DEVMODE
+    #include "DebugWindows.h"
+    #include "FolderObserver.h"
+    #include "VulkanDevice_Dev.h"
+#endif
 #include "ScratchImmediate.h"
-#include "FolderObserver.h"
 #include "TextureMeta.h"
 #include "SceneMeta.h"
 #include "DrawFrameInfo.h"
-#include "VulkanDevice_Dev.h"
 // clang-format on
 
 namespace RTGL1
 {
 
+#ifdef RG_USE_DEVMODE
 struct Devmode;
+#endif
 
 
 class VulkanDevice
@@ -147,7 +151,11 @@ public:
 
 
     void Print( std::string_view msg, RgMessageSeverityFlags severity ) const;
+#ifdef RG_USE_DEVMODE
     bool IsDevMode() const { return devmode != nullptr; }
+#else
+    bool IsDevMode() const { return false; }
+#endif
 
 private:
     void CreateInstance( const RgInstanceCreateInfo& info );
@@ -167,10 +175,12 @@ private:
     void            Render( VkCommandBuffer cmd, const RgDrawFrameInfo& drawInfo );
     void            EndFrame( VkCommandBuffer cmd );
 
+#ifdef RG_USE_DEVMODE
 private:
     void Dev_Draw() const;
     void Dev_Override( DrawFrameInfoCopy& copy ) const;
     void Dev_TryBreak( const char* pTextureName, bool isImageUpload );
+#endif
 
 private:
     VkInstance   instance;
@@ -192,7 +202,6 @@ private:
     VkFence     frameFences[ MAX_FRAMES_IN_FLIGHT ]              = {};
     VkSemaphore imageAvailableSemaphores[ MAX_FRAMES_IN_FLIGHT ] = {};
     VkSemaphore renderFinishedSemaphores[ MAX_FRAMES_IN_FLIGHT ]      = {};
-    VkSemaphore renderFinishedDebugSemaphores[ MAX_FRAMES_IN_FLIGHT ] = {};
     VkSemaphore inFrameSemaphores[ MAX_FRAMES_IN_FLIGHT ]        = {};
 
     bool    waitForOutOfFrameFence;
@@ -256,14 +265,15 @@ private:
     LibraryConfig                     libconfig;
     VkDebugUtilsMessengerEXT          debugMessenger;
     std::unique_ptr< UserPrint >      userPrint;
+#ifdef RG_USE_DEVMODE
     std::shared_ptr< DebugWindows >   debugWindows;
-    ScratchImmediate                  scratchImmediate;
     std::unique_ptr< FolderObserver > observer;
+    std::unique_ptr< Devmode >        devmode;
+#endif
+    ScratchImmediate                  scratchImmediate;
 
     std::vector< PositionNormal >             tempStorageInit;
     std::vector< RgSphericalLightUploadInfo > tempStorageLights;
-
-    std::unique_ptr< Devmode > devmode;
 
     bool rayCullBackFacingTriangles;
     bool allowGeometryWithSkyFlag;

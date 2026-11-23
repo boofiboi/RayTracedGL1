@@ -244,7 +244,8 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         physDevice->Get(),
         cmdManager );
     
-    if( libconfig.developerMode )
+#ifdef RG_USE_DEVMODE
+    if( info->enableDevMode )
     {
         debugWindows = std::make_shared< DebugWindows >( 
             instance,
@@ -259,6 +260,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
         observer = std::make_unique< FolderObserver >( ovrdFolder );
     }
+#endif
 
     // for world samplers with modifyable lod biad
     worldSamplerManager = std::make_shared< SamplerManager >( device, 8, info->textureSamplerForceMinificationFilterLinear );
@@ -289,7 +291,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         ovrdFolder / "DirtMask.ktx2",
         info->pbrTextureSwizzling,
         !!info->textureSamplerForceNormalMapFilterLinear,
-        libconfig );
+        IsDevMode() );
 
     textureMetaManager = std::make_shared< TextureMetaManager >(
         ovrdFolder / DATABASE_FOLDER );
@@ -418,7 +420,8 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 #ifdef _WIN32
     upscalerFsr = std::make_shared< UpscalerFSR4 >(
         device,
-        physDevice->Get() );
+        physDevice->Get(),
+        info->worldScale );
 #else
     upscalerFsr = std::make_shared< UpscalerFSR3 >(
         device,
@@ -437,7 +440,8 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         physDevice->Get(),
         memAllocator,
         queues,
-        swapchain->GetSurfaceFormat() );
+        swapchain->GetSurfaceFormat(),
+        info->worldScale );
 
     frameGenerator->SetDlss( nvDlss );
 
@@ -523,6 +527,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     }
     framebuffers->Subscribe( restirBuffers );
 
+#ifdef RG_USE_DEVMODE
     if( observer )
     {
         observer->Subscribe( textureManager );
@@ -530,6 +535,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
         observer->Subscribe( sceneMetaManager );
         observer->Subscribe( sceneImportExport );
     }
+#endif
 }
 
 RTGL1::VulkanDevice::~VulkanDevice()
@@ -580,9 +586,11 @@ RTGL1::VulkanDevice::~VulkanDevice()
     textureMetaManager.reset();
     sceneMetaManager.reset();
 
+#ifdef RG_USE_DEVMODE
     debugWindows.reset();
     devmode.reset();
     observer.reset();
+#endif
 
     framebuffers.reset();
     swapchain.reset();
@@ -1189,20 +1197,6 @@ void RTGL1::VulkanDevice::CreateSyncPrimitives()
             VkSemaphoreCreateInfo semaphoreInfo = {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
             };
-            VkResult r = vkCreateSemaphore(
-                device, &semaphoreInfo, nullptr, &renderFinishedDebugSemaphores[ i ] );
-
-            VK_CHECKERROR( r );
-            SET_DEBUG_NAME( device,
-                            renderFinishedDebugSemaphores[ i ],
-                            VK_OBJECT_TYPE_SEMAPHORE,
-                            "Render finished debug semaphore" );
-        }
-
-        {
-            VkSemaphoreCreateInfo semaphoreInfo = {
-                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            };
             VkResult r =
                 vkCreateSemaphore( device, &semaphoreInfo, nullptr, &inFrameSemaphores[ i ] );
 
@@ -1257,7 +1251,6 @@ void RTGL1::VulkanDevice::DestroySyncPrimitives()
     {
         vkDestroySemaphore( device, imageAvailableSemaphores[ i ], nullptr );
         vkDestroySemaphore( device, renderFinishedSemaphores[ i ], nullptr );
-        vkDestroySemaphore( device, renderFinishedDebugSemaphores[ i ], nullptr );
         vkDestroySemaphore( device, inFrameSemaphores[ i ], nullptr );
 
         vkDestroyFence( device, frameFences[ i ], nullptr );

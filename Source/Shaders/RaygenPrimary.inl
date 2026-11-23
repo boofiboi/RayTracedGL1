@@ -70,28 +70,27 @@ vec2 getMotionVectorForUpscaler(const vec2 motionCurToPrev)
 
 #define UPSCALER_REACTIVITY_REFLREFR 0.8
 
-vec2 getMotionForInfinitePoint(const ivec2 pix)
+vec2 getMotionForInfinitePoint(const ivec2 regularPix)
 {
-    // treat as a point with .w=0, i.e. at infinite distance.
-    // IMPORTANT: use the unjittered pixel center UV, NOT getPixelUVWithJitter.
-    // Jitter shifts the ray direction, which would bake the sub-pixel jitter offset
-    // into screenSpaceCur. FSR3 would then interpret that per-frame jitter as real
-    // camera motion and smear sky pixels whenever the camera moves.
-    const vec2 pixelCenterUV = (vec2(pix) + vec2(0.5)) / vec2(globalUniform.renderWidth, globalUniform.renderHeight);
+    const vec2 pixelCenterUV = (vec2(regularPix) + vec2(0.5)) / vec2(globalUniform.renderWidth, globalUniform.renderHeight);
     vec3 rayDir = getRayDir(pixelCenterUV);
 
-    vec3 viewSpacePosCur   = mat3(globalUniform.view)     * rayDir;
-    vec3 viewSpacePosPrev  = mat3(globalUniform.viewPrev) * rayDir;
+    vec4 viewSpacePosCur   = vec4(mat3(globalUniform.view)     * rayDir, 0.0);
+    vec4 viewSpacePosPrev  = vec4(mat3(globalUniform.viewPrev) * rayDir, 0.0);
 
-    vec3 clipSpacePosCur   = mat3(globalUniform.projection)     * viewSpacePosCur;
-    vec3 clipSpacePosPrev  = mat3(globalUniform.projectionPrev) * viewSpacePosPrev;
+    vec4 clipSpacePosCur   = globalUniform.projection     * viewSpacePosCur;
+    vec4 clipSpacePosPrev  = globalUniform.projectionPrev * viewSpacePosPrev;
 
-    // don't divide by .w
-    vec3 ndcCur            = clipSpacePosCur.xyz;
-    vec3 ndcPrev           = clipSpacePosPrev.xyz;
+    if (clipSpacePosPrev.w <= 1e-4)
+    {
+        return vec2(2.0);
+    }
 
-    vec2 screenSpaceCur    = ndcCur.xy  * 0.5 + 0.5;
-    vec2 screenSpacePrev   = ndcPrev.xy * 0.5 + 0.5;
+    vec2 ndcCur            = clipSpacePosCur.xy  / clipSpacePosCur.w;
+    vec2 ndcPrev           = clipSpacePosPrev.xy / clipSpacePosPrev.w;
+
+    vec2 screenSpaceCur    = ndcCur  * 0.5 + 0.5;
+    vec2 screenSpacePrev   = ndcPrev * 0.5 + 0.5;
 
     return screenSpacePrev - screenSpaceCur;
 }
@@ -123,7 +122,7 @@ void storeSky(
             framebufAlbedo, getRegularPixFromCheckerboardPix( pix ), vec4( skyColor, 0.0 ) );
     }
 
-    vec2 m = getMotionForInfinitePoint(pix);
+    vec2 m = getMotionForInfinitePoint(getRegularPixFromCheckerboardPix(pix));
 
     imageStoreNormal(                       pix, vec3(0.0));
     imageStore(framebufMetallicRoughness,   pix, vec4(0.0));

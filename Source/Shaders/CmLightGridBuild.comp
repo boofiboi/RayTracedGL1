@@ -51,7 +51,15 @@ void main()
     const vec3 cellCenter = getCellWorldCenter(cellIndex);
     const float cellRadius = getCellRadius();
 
-    const uint seed = getRandomSeed(ivec2(arrayIndex, 0), globalUniform.frameId);
+    uint h = uint(arrayIndex);
+    h ^= h >> 16u;
+    h *= 0x7feb352du;
+    h ^= h >> 15u;
+    h *= 0x846ca68bu;
+    h ^= h >> 16u;
+    const uint seed = packRandomSeed(
+        (globalUniform.frameId + (h >> 14u)) % BLUE_NOISE_TEXTURE_COUNT,
+        uvec2(h & (BLUE_NOISE_TEXTURE_SIZE - 1u), (h >> BLUE_NOISE_TEXTURE_SIZE_POW) & (BLUE_NOISE_TEXTURE_SIZE - 1u)));
     uint salt = RANDOM_SALT_LIGHT_GRID_BASE;
 
     Reservoir regularReservoir = emptyReservoir();

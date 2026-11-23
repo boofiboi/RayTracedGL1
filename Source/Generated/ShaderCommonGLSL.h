@@ -178,6 +178,7 @@
 #define VOLUME_ENABLE_NONE (0)
 #define VOLUME_ENABLE_SIMPLE (1)
 #define VOLUME_ENABLE_VOLUMETRIC (2)
+#define MAX_LIGHTSTYLES (64)
 
 #define SURFACE_POSITION_INCORRECT (10000000.0)
 
@@ -286,6 +287,7 @@ struct ShGlobalUniform
     ivec4 instanceGeomCount[12];
     mat4 viewProjCubemap[6];
     mat4 skyCubemapRotationTransform;
+    vec4 lightstyleValues[16];
 };
 
 struct ShGeometryInstance
@@ -319,7 +321,7 @@ struct ShGeometryInstance
     uint waterColorPacked;
     float waterDensity;
     float waterReflectivity;
-    uint _unused6;
+    int lightstyle;
     uint _unused7;
     uint _unused8;
     uint _unused9;

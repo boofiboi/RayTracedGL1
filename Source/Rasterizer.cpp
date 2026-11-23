@@ -183,9 +183,9 @@ namespace
     {
         memcpy( jitterredProj, originalProj, 16 * sizeof( float ) );
         jitterredProj[ 2 * 4 + 0 ] +=
-            jitter.data[ 0 ] / static_cast< float >( renderResolution.Width() );
+            2.0f * jitter.data[ 0 ] / static_cast< float >( renderResolution.Width() );
         jitterredProj[ 2 * 4 + 1 ] +=
-            jitter.data[ 1 ] / static_cast< float >( renderResolution.Height() );
+            2.0f * jitter.data[ 1 ] / static_cast< float >( renderResolution.Height() );
     }
 
 

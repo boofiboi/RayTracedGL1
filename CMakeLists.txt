@@ -89,14 +89,12 @@ set(Sources
     "Source/PortalList.cpp"
     "Source/RestirBuffers.cpp"
     "Source/Volumetric.cpp"
-    "Source/DebugWindows.cpp"
     "Source/ScratchImmediate.cpp"
     "Source/GltfExporter.cpp"
+    "Source/BspLightEstimator.cpp"
     "Source/GltfImporter.cpp"
-    "Source/FolderObserver.cpp"
     "Source/TextureExporter.cpp"
     "Source/TextureMeta.cpp"
-    "Source/VulkanDevice_Dev.cpp"
     "Source/JsonParser.cpp"
     "Source/SceneMeta.cpp"
 )
@@ -138,7 +136,7 @@ option(RG_WITH_SURFACE_METAL    "Build with Metal VkSurfaceKHR support"     OFF)
 option(RG_WITH_SURFACE_XCB      "Build with Xcb VkSurfaceKHR support"       OFF)
 
 option(RG_WITH_NVIDIA_DLSS      "Build RTGL1 with Nvidia DLSS"              ON)
-option(RG_WITH_IMGUI            "Build RTGL1 with ImGui debug windows"      ON)
+option(RG_WITH_DEVMODE          "Build RTGL1 with developer mode"           ON)
 option(RG_WITH_AMD_FSR3 "Build RTGL1 with AMD FSR3 Upscaling" ON)
 option(RG_WITH_NVIDIA_NRD       "Build RTGL1 with NVIDIA Real-Time Denoisers (NRD)" ON)
 
@@ -174,10 +172,9 @@ if (RG_WITH_SURFACE_XLIB)
 endif()
 
 
-# Imgui
-if (RG_WITH_IMGUI)
-    message(STATUS "RG_WITH_IMGUI enabled")
-    add_definitions(-DRG_USE_IMGUI)
+if (RG_WITH_DEVMODE)
+    message(STATUS "RG_WITH_DEVMODE enabled")
+    add_definitions(-DRG_USE_DEVMODE)
     set(ImGuiSourceFolder Source/imgui)
     add_library(ImGui STATIC)
     target_sources(ImGui PRIVATE 
@@ -379,8 +376,12 @@ if (RG_WITH_NVIDIA_NRD)
             "$<TARGET_FILE_DIR:RayTracedGL1>")
 endif()
 
-# Debug windows - ImGui
-if (RG_WITH_IMGUI)
+if (RG_WITH_DEVMODE)
+    target_sources(RayTracedGL1 PRIVATE
+        "Source/DebugWindows.cpp"
+        "Source/FolderObserver.cpp"
+        "Source/VulkanDevice_Dev.cpp"
+    )
     target_link_libraries(RayTracedGL1 PRIVATE ImGui)
     target_include_directories(RayTracedGL1 PRIVATE ImGui)
     target_link_libraries(RayTracedGL1 PRIVATE glfw)
@@ -393,6 +394,13 @@ target_link_libraries(RayTracedGL1 PRIVATE glaze::glaze)
 
 if (RG_WITH_EXAMPLES)
     message(STATUS "RG_WITH_EXAMPLES enabled")
+    if (NOT TARGET glfw)
+        set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+        set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+        add_subdirectory(Source/glfw)
+    endif()
     add_definitions(-DASSET_DIRECTORY="../")
     add_executable(RtglExample Tests/RtglTest.cpp)
     set_property(TARGET RtglExample PROPERTY CXX_STANDARD 20)

@@ -211,8 +211,7 @@ auto RTGL1::json_parser::detail::ReadSceneMetaArray( const std::filesystem::path
 
 // clang-format off
 JSON_TYPE( RTGL1::LibraryConfig )
-      "developerMode", &T::developerMode
-    , "vulkanValidation", &T::vulkanValidation
+      "vulkanValidation", &T::vulkanValidation
     , "dlssValidation", &T::dlssValidation
     , "fpsMonitor", &T::fpsMonitor
 JSON_TYPE_END;

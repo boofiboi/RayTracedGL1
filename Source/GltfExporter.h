@@ -23,10 +23,12 @@
 #include "Common.h"
 #include "Containers.h"
 #include "TextureManager.h"
+#include "TextureMeta.h"
 
 #include <filesystem>
 #include <functional>
 #include <set>
+#include <string_view>
 
 namespace RTGL1
 {
@@ -46,6 +48,13 @@ struct PositionNormal
 {
     RgFloat3D position;
     RgFloat3D normal;
+};
+
+struct AttachedLightPrimitive
+{
+    std::shared_ptr< DeepCopyOfPrimitive > primitive;
+    RgTransform                            transform;
+    RgEditorAttachedLightInfo              lightInfo;
 };
 }
 
@@ -77,7 +86,11 @@ public:
     void AddLight( const GenericLightPtr& light );
 
     void ExportToFiles( const std::filesystem::path& gltfPath,
-                        const TextureManager&        textureManager );
+                        const TextureManager&        textureManager,
+                        const TextureMetaManager&    textureMeta,
+                        const std::filesystem::path& bspPath,
+                        std::string_view             mapName,
+                        const std::filesystem::path& scenesFolder );
 
     void ExportTexturesOnly( const std::filesystem::path& gltfPath,
                              const TextureManager&        textureManager,
@@ -91,9 +104,13 @@ public:
         std::vector< RgSphericalLightUploadInfo >& resultStorage );
 
 private:
-    MeshesToTheirPrimitives     scene;
-    std::set< std::string >     sceneMaterials;
-    std::vector< GenericLight > sceneLights;
+    void ResolveAttachedPrimitiveLights();
+
+private:
+    MeshesToTheirPrimitives               scene;
+    std::set< std::string >               sceneMaterials;
+    std::vector< GenericLight >           sceneLights;
+    std::vector< AttachedLightPrimitive > attachedLightPrimitives;
 
     RgTransform worldTransform;
     float       oneGameUnitInMeters;

@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <chrono>
+
 #include "Common.h"
 #include "CommandBufferManager.h"
 #include "Swapchain.h"
@@ -48,16 +50,12 @@ public:
     // TODO: remove
     void Init( std::shared_ptr< DebugWindows > self );
 
-    bool PrepareForFrame( uint32_t frameIndex );
-    void SubmitForFrame( VkCommandBuffer cmd, uint32_t frameIndex );
-    void OnQueuePresent( VkResult queuePresentResult );
+    bool TryBeginDraw();
+    void EndDrawAndPresent();
+    bool ShouldClose() const;
 
     void OnSwapchainCreate( const Swapchain* pSwapchain ) override;
     void OnSwapchainDestroy() override;
-
-    VkSwapchainKHR GetSwapchainHandle() const;
-    uint32_t       GetSwapchainCurrentImageIndex() const;
-    VkSemaphore    GetSwapchainImageAvailableSemaphore( uint32_t frameIndex ) const;
 
     void SetAlwaysOnTop( bool onTop );
     bool IsMinimized() const { return isMinimized; }
@@ -65,15 +63,22 @@ public:
 private:
     VkInstance instance;
     VkDevice   device;
+    VkQueue    queue;
 
     GLFWwindow*                  customWindow;
     VkSurfaceKHR                 customSurface;
     std::unique_ptr< Swapchain > customSwapchain;
-    VkSemaphore                  swapchainImageAvailable[ MAX_FRAMES_IN_FLIGHT ];
+    VkCommandPool                cmdPool;
+    VkCommandBuffer              cmdBuffer;
+    VkFence                      renderFence;
+    VkSemaphore                  imageAvailableSem;
+    VkSemaphore                  renderFinishedSem;
 
     VkDescriptorPool             descPool;
     VkRenderPass                 renderPass;
     std::vector< VkFramebuffer > framebuffers;
+
+    std::chrono::steady_clock::time_point lastUpdate;
 
     bool alwaysOnTop;
 

@@ -10,7 +10,7 @@ namespace RTGL1
 class UpscalerFSR4 : public IUpscaler
 {
 public:
-    UpscalerFSR4( VkDevice device, VkPhysicalDevice physDevice );
+    UpscalerFSR4( VkDevice device, VkPhysicalDevice physDevice, float worldScale = 1.0f );
     ~UpscalerFSR4() override;
 
     UpscalerFSR4( const UpscalerFSR4& other )                = delete;
@@ -42,6 +42,7 @@ private:
 
     VkDevice                    device;
     VkPhysicalDevice            physDevice;
+    float                       viewSpaceToMeters{ 1.0f };
     std::unique_ptr< FfxState > ffxState;
     bool                        loaderAvailable{ false };
     bool                        isContextCreated{ false };

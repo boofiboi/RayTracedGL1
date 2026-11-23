@@ -55,7 +55,7 @@ public:
                     const std::filesystem::path&            dirtMaskTexturePath,
                     RgTextureSwizzling                      pbrSwizzling,
                     bool                                    forceNormalMapFilterLinear,
-                    const LibraryConfig&                    config );
+                    bool                                    isDevMode );
     ~TextureManager() override;
 
     TextureManager( const TextureManager& other )                = delete;

@@ -20,7 +20,7 @@
 
 #include "DebugWindows.h"
 
-#ifdef RG_USE_IMGUI
+#ifdef RG_USE_DEVMODE
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -35,6 +35,7 @@
 
 #include "CmdLabel.h"
 #include "RgException.h"
+#include "Utils.h"
 
 namespace
 {
@@ -196,9 +197,14 @@ RTGL1::DebugWindows::DebugWindows( VkInstance                               _ins
                                    std::shared_ptr< CommandBufferManager >& _cmdManager )
     : instance( _instance )
     , device( _device )
+    , queue( _queue )
     , customWindow( CreateGLFWWindow() )
     , customSurface( VK_NULL_HANDLE )
-    , swapchainImageAvailable{}
+    , cmdPool( VK_NULL_HANDLE )
+    , cmdBuffer( VK_NULL_HANDLE )
+    , renderFence( VK_NULL_HANDLE )
+    , imageAvailableSem( VK_NULL_HANDLE )
+    , renderFinishedSem( VK_NULL_HANDLE )
     , descPool( CreateDescPool( _device ) )
     , renderPass( VK_NULL_HANDLE )
     , alwaysOnTop( false )
@@ -213,10 +219,31 @@ RTGL1::DebugWindows::DebugWindows( VkInstance                               _ins
 
     renderPass = CreateRenderPass( device, customSwapchain->GetSurfaceFormat() );
 
-    for( auto& sm : swapchainImageAvailable )
-    {
-        sm = CreateSwapchainSemaphore( _device );
-    }
+    VkCommandPoolCreateInfo cmdPoolInfo = {
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .queueFamilyIndex = _queueFamiy,
+    };
+    r = vkCreateCommandPool( device, &cmdPoolInfo, nullptr, &cmdPool );
+    VK_CHECKERROR( r );
+
+    VkCommandBufferAllocateInfo allocInfo = {
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = cmdPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    r = vkAllocateCommandBuffers( device, &allocInfo, &cmdBuffer );
+    VK_CHECKERROR( r );
+
+    VkFenceCreateInfo fenceInfo = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+    r = vkCreateFence( device, &fenceInfo, nullptr, &renderFence );
+    VK_CHECKERROR( r );
+
+    imageAvailableSem = CreateSwapchainSemaphore( _device );
+    renderFinishedSem = CreateSwapchainSemaphore( _device );
 
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -266,10 +293,10 @@ RTGL1::DebugWindows::~DebugWindows()
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    for( auto& sm : swapchainImageAvailable )
-    {
-        vkDestroySemaphore( device, sm, nullptr );
-    }
+    vkDestroySemaphore( device, imageAvailableSem, nullptr );
+    vkDestroySemaphore( device, renderFinishedSem, nullptr );
+    vkDestroyFence( device, renderFence, nullptr );
+    vkDestroyCommandPool( device, cmdPool, nullptr );
     vkDestroyDescriptorPool( device, descPool, nullptr );
     vkDestroyRenderPass( device, renderPass, nullptr );
     for( auto f : framebuffers )
@@ -295,8 +322,23 @@ void RTGL1::DebugWindows::Init( std::shared_ptr< DebugWindows > self )
     customSwapchain->Subscribe( std::move( self ) );
 }
 
-bool RTGL1::DebugWindows::PrepareForFrame( uint32_t frameIndex )
+bool RTGL1::DebugWindows::ShouldClose() const
 {
+    return glfwWindowShouldClose( customWindow ) != 0;
+}
+
+bool RTGL1::DebugWindows::TryBeginDraw()
+{
+    const auto now      = std::chrono::steady_clock::now();
+    const auto interval = glfwGetWindowAttrib( customWindow, GLFW_FOCUSED )
+                              ? std::chrono::milliseconds( 33 )
+                              : std::chrono::milliseconds( 100 );
+    if( now - lastUpdate < interval )
+    {
+        return false;
+    }
+    lastUpdate = now;
+
     if( glfwWindowShouldClose( customWindow ) )
     {
         return false;
@@ -304,24 +346,22 @@ bool RTGL1::DebugWindows::PrepareForFrame( uint32_t frameIndex )
 
     glfwPollEvents();
 
-    isMinimized = IsSizeNull( customWindow );
-    if( isMinimized )
-    {
-        return true;
-    }
-
     int fbWidth  = 0;
     int fbHeight = 0;
     glfwGetFramebufferSize( customWindow, &fbWidth, &fbHeight );
-    if( fbWidth <= 0 || fbHeight <= 0 )
+
+    isMinimized = IsSizeNull( customWindow ) || fbWidth <= 0 || fbHeight <= 0;
+    if( isMinimized )
     {
-        isMinimized = true;
-        return true;
+        return false;
     }
+
+    VkResult r = vkWaitForFences( device, 1, &renderFence, VK_TRUE, UINT64_MAX );
+    VK_CHECKERROR( r );
 
     customSwapchain->RequestExtent( uint32_t( fbWidth ), uint32_t( fbHeight ) );
     customSwapchain->RequestVsync( false );
-    customSwapchain->AcquireImage( swapchainImageAvailable[ frameIndex ] );
+    customSwapchain->AcquireImage( imageAvailableSem );
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -330,14 +370,8 @@ bool RTGL1::DebugWindows::PrepareForFrame( uint32_t frameIndex )
     return true;
 }
 
-void RTGL1::DebugWindows::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameIndex )
+void RTGL1::DebugWindows::EndDrawAndPresent()
 {
-    if( isMinimized )
-    {
-        return;
-    }
-
-    CmdLabel label( cmd, "ImGui" );
     assert( framebuffers.size() == customSwapchain->GetImageCount() );
 
     ImGui::Render();
@@ -345,8 +379,19 @@ void RTGL1::DebugWindows::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameInd
     ImDrawData* mainDrawData = ImGui::GetDrawData();
     assert( mainDrawData );
 
-    if( mainDrawData->DisplaySize.x > 0.0f && mainDrawData->DisplaySize.y > 0.0f )
+    VkResult r = vkResetCommandPool( device, cmdPool, 0 );
+    VK_CHECKERROR( r );
+
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    r = vkBeginCommandBuffer( cmdBuffer, &beginInfo );
+    VK_CHECKERROR( r );
+
     {
+        CmdLabel label( cmdBuffer, "ImGui" );
+
         VkClearValue clearValue = {
             .color = { .float32 = { 0.0f, 0.0f, 0.0f, 1.0f } },
         };
@@ -361,30 +406,55 @@ void RTGL1::DebugWindows::SubmitForFrame( VkCommandBuffer cmd, uint32_t frameInd
             .pClearValues    = &clearValue,
         };
 
-        vkCmdBeginRenderPass( cmd, &info, VK_SUBPASS_CONTENTS_INLINE );
-        ImGui_ImplVulkan_RenderDrawData( mainDrawData, cmd );
-        vkCmdEndRenderPass( cmd );
+        vkCmdBeginRenderPass( cmdBuffer, &info, VK_SUBPASS_CONTENTS_INLINE );
+        if( mainDrawData->DisplaySize.x > 0.0f && mainDrawData->DisplaySize.y > 0.0f )
+        {
+            ImGui_ImplVulkan_RenderDrawData( mainDrawData, cmdBuffer );
+        }
+        vkCmdEndRenderPass( cmdBuffer );
     }
+
+    r = vkEndCommandBuffer( cmdBuffer );
+    VK_CHECKERROR( r );
+
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo         submitInfo = {
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount   = 1,
+        .pWaitSemaphores      = &imageAvailableSem,
+        .pWaitDstStageMask    = &waitStage,
+        .commandBufferCount   = 1,
+        .pCommandBuffers      = &cmdBuffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores    = &renderFinishedSem,
+    };
+
+    r = vkResetFences( device, 1, &renderFence );
+    VK_CHECKERROR( r );
+    r = vkQueueSubmit( queue, 1, &submitInfo, renderFence );
+    VK_CHECKERROR( r );
+
+    VkSwapchainKHR   debugSwapchainHandle = customSwapchain->GetHandle();
+    uint32_t         debugImageIndex      = customSwapchain->GetCurrentImageIndex();
+    VkResult         debugResult          = VK_SUCCESS;
+    VkPresentInfoKHR presentInfo          = {
+        .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores    = &renderFinishedSem,
+        .swapchainCount     = 1,
+        .pSwapchains        = &debugSwapchainHandle,
+        .pImageIndices      = &debugImageIndex,
+        .pResults           = &debugResult,
+    };
+
+    vkQueuePresentKHR( queue, &presentInfo );
+    customSwapchain->OnQueuePresent( debugResult );
 
     if( ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable )
     {
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault();
     }
-}
-
-void RTGL1::DebugWindows::OnQueuePresent( VkResult queuePresentResult )
-{
-    if( !isMinimized )
-    {
-        customSwapchain->OnQueuePresent( queuePresentResult );
-    }
-}
-
-VkSemaphore RTGL1::DebugWindows::GetSwapchainImageAvailableSemaphore( uint32_t frameIndex ) const
-{
-    assert( frameIndex < std::size( swapchainImageAvailable ) );
-    return swapchainImageAvailable[ frameIndex ];
 }
 
 void RTGL1::DebugWindows::SetAlwaysOnTop( bool onTop )
@@ -438,14 +508,4 @@ void RTGL1::DebugWindows::OnSwapchainDestroy()
     framebuffers.clear();
 }
 
-VkSwapchainKHR RTGL1::DebugWindows::GetSwapchainHandle() const
-{
-    return customSwapchain->GetHandle();
-}
-
-uint32_t RTGL1::DebugWindows::GetSwapchainCurrentImageIndex() const
-{
-    return customSwapchain->GetCurrentImageIndex();
-}
-
-#endif // RG_USE_IMGUI
+#endif

@@ -15,7 +15,8 @@ public:
                         VkPhysicalDevice                   physDevice,
                         std::shared_ptr< MemoryAllocator > allocator,
                         std::shared_ptr< Queues >          queues,
-                        VkFormat                           backBufferFormat );
+                        VkFormat                           backBufferFormat,
+                        float                              worldScale = 1.0f );
     ~FrameGeneratorFSR3() override;
 
     FrameGeneratorFSR3( const FrameGeneratorFSR3& other )                = delete;

@@ -410,19 +410,28 @@ void RTGL1::SceneImportExport::PrepareForFrame()
     }
 }
 
-bool RTGL1::SceneImportExport::CheckForNewScene( std::string_view    mapName,
-                                                 VkCommandBuffer     cmd,
-                                                 uint32_t            frameIndex,
-                                                 Scene&              scene,
-                                                 TextureManager&     textureManager,
-                                                 TextureMetaManager& textureMeta )
+bool RTGL1::SceneImportExport::CheckForNewScene( std::string_view             mapName,
+                                                 const std::filesystem::path& mapFilePath,
+                                                 VkCommandBuffer              cmd,
+                                                 uint32_t                     frameIndex,
+                                                 Scene&                       scene,
+                                                 TextureManager&              textureManager,
+                                                 TextureMetaManager&          textureMeta )
 {
+    if( !mapFilePath.empty() )
+    {
+        currentMapFilePath = mapFilePath;
+    }
     if( currentMap != mapName || reimportRequested )
     {
         reimportRequested = false;
         debug::Verbose( "Starting new scene..." );
 
         currentMap = mapName;
+        if( mapFilePath.empty() )
+        {
+            currentMapFilePath.clear();
+        }
 
         textureMeta.RereadFromFiles( GetImportMapName() );
 
@@ -438,7 +447,8 @@ bool RTGL1::SceneImportExport::CheckForNewScene( std::string_view    mapName,
     return false;
 }
 
-void RTGL1::SceneImportExport::TryExport( TextureManager& textureManager )
+void RTGL1::SceneImportExport::TryExport( TextureManager&           textureManager,
+                                          const TextureMetaManager& textureMeta )
 {
     if( exporter )
     {
@@ -449,7 +459,12 @@ void RTGL1::SceneImportExport::TryExport( TextureManager& textureManager )
         }
         else
         {
-            exporter->ExportToFiles( MakeGltfPath( GetExportMapName() ), textureManager );
+            exporter->ExportToFiles( MakeGltfPath( GetExportMapName() ),
+                                     textureManager,
+                                     textureMeta,
+                                     currentMapFilePath,
+                                     GetExportMapName(),
+                                     scenesFolder );
         }
         exporter.reset();
         exportOnlyTextures = false;

@@ -169,7 +169,7 @@ struct EffectNightVision_PushConst
     float gain;
     float noiseIntensity;
     float vignetteIntensity;
-    float pad;
+    uint32_t mode;
 };
 
 struct EffectNightVision final : public EffectSimple< EffectNightVision_PushConst >
@@ -186,9 +186,14 @@ struct EffectNightVision final : public EffectSimple< EffectNightVision_PushCons
         GetPush().gain              = params->gain > 0.0f ? params->gain : 8.0f;
         GetPush().noiseIntensity   = params->noiseIntensity >= 0.0f ? params->noiseIntensity : 0.15f;
         GetPush().vignetteIntensity = params->vignetteIntensity >= 0.0f ? params->vignetteIntensity : 1.0f;
-        GetPush().pad               = 0.0f;
+        GetPush().mode              = 0;
 
         return EffectSimple::Setup(args, params->isActive, params->transitionDurationIn, params->transitionDurationOut);
+    }
+
+    void SetMode(uint32_t m)
+    {
+        GetPush().mode = m;
     }
 };
 

@@ -275,6 +275,7 @@ typedef struct RgInstanceCreateInfo
     float                       worldScale;
 
     RgBool32                    enableFrameGeneration;
+    RgBool32                    enableDevMode;
 
 } RgInstanceCreateInfo;
 
@@ -613,6 +614,7 @@ typedef struct RgStartFrameInfo
     const char* pMapName;
     RgBool32    ignoreExternalGeometry;
     RgExtent2D  surfaceSize;
+    const char* pMapFilePath;
 } RgStartFrameInfo;
 
 RGAPI RgResult RGCONV rgStartFrame( RgInstance instance, const RgStartFrameInfo* pInfo );

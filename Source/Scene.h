@@ -141,13 +141,14 @@ public:
     SceneImportExport& operator=( SceneImportExport&& other ) noexcept = delete;
 
     void PrepareForFrame();
-    bool CheckForNewScene( std::string_view    mapName,
-                           VkCommandBuffer     cmd,
-                           uint32_t            frameIndex,
-                           Scene&              scene,
-                           TextureManager&     textureManager,
-                           TextureMetaManager& textureMetaManager );
-    void TryExport( TextureManager& textureManager );
+    bool CheckForNewScene( std::string_view             mapName,
+                           const std::filesystem::path& mapFilePath,
+                           VkCommandBuffer              cmd,
+                           uint32_t                     frameIndex,
+                           Scene&                       scene,
+                           TextureManager&              textureManager,
+                           TextureMetaManager&          textureMetaManager );
+    void TryExport( TextureManager& textureManager, const TextureMetaManager& textureMetaManager );
 
     void RequestReimport();
     void OnFileChanged( FileType type, const std::filesystem::path& filepath ) override;
@@ -176,8 +177,9 @@ private:
     bool                            exportOnlyTextures{ false };
     std::unique_ptr< GltfExporter > exporter{};
 
-    std::string currentMap{};
-    RgFloat3D   worldUp;
+    std::string           currentMap{};
+    std::filesystem::path currentMapFilePath{};
+    RgFloat3D             worldUp;
     RgFloat3D   worldForward;
     float       worldScale;
 

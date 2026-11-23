@@ -36,7 +36,6 @@ struct LibraryConfig
     constexpr static int Version{ 0 };
     constexpr static int RequiredVersion{ 0 };
 
-    bool developerMode    = false;
     bool vulkanValidation = false;
     bool dlssValidation   = false;
     bool fpsMonitor       = false;

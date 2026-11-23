@@ -136,6 +136,7 @@ struct RTGL1::FrameGeneratorFSR3::Impl
     std::shared_ptr< MemoryAllocator > allocator;
     std::shared_ptr< Queues >          queues;
     VkFormat                           backBufferFormat{ VK_FORMAT_UNDEFINED };
+    float                              viewSpaceToMeters{ 1.0f };
 
 #ifdef _WIN32
     HMODULE                            loaderModule{ nullptr };
@@ -439,14 +440,16 @@ RTGL1::FrameGeneratorFSR3::FrameGeneratorFSR3( VkDevice                         
                                                VkPhysicalDevice                   _physDevice,
                                                std::shared_ptr< MemoryAllocator > _allocator,
                                                std::shared_ptr< Queues >          _queues,
-                                               VkFormat                           _backBufferFormat )
+                                               VkFormat                           _backBufferFormat,
+                                               float                              _worldScale )
     : impl( std::make_unique< Impl >() )
 {
-    impl->device           = _device;
-    impl->physDevice       = _physDevice;
-    impl->allocator        = std::move( _allocator );
-    impl->queues           = std::move( _queues );
-    impl->backBufferFormat = _backBufferFormat;
+    impl->device            = _device;
+    impl->physDevice        = _physDevice;
+    impl->allocator         = std::move( _allocator );
+    impl->queues            = std::move( _queues );
+    impl->backBufferFormat  = _backBufferFormat;
+    impl->viewSpaceToMeters = _worldScale > 0.0f ? _worldScale : 1.0f;
 
 #ifdef _WIN32
     if( !LoadFfxApiFunctions( L"amd_fidelityfx_framegeneration_vk.dll",
@@ -895,7 +898,7 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     prepareDesc.cameraNear              = nearPlane;
     prepareDesc.cameraFar               = farPlane;
     prepareDesc.cameraFovAngleVertical  = fovVerticalRad;
-    prepareDesc.viewSpaceToMetersFactor = 1.0f;
+    prepareDesc.viewSpaceToMetersFactor = impl->viewSpaceToMeters;
     prepareDesc.depth                   = depthRes;
     prepareDesc.motionVectors           = motionRes;
     if( pView != nullptr )
@@ -926,7 +929,7 @@ void RTGL1::FrameGeneratorFSR3::PrepareFrame(
     prepareDesc.cameraNear              = nearPlane;
     prepareDesc.cameraFar               = farPlane;
     prepareDesc.cameraFovAngleVertical  = fovVerticalRad;
-    prepareDesc.viewSpaceToMetersFactor = 1.0f;
+    prepareDesc.viewSpaceToMetersFactor = impl->viewSpaceToMeters;
     prepareDesc.depth                   = depthRes;
     prepareDesc.motionVectors           = motionRes;
 
@@ -1175,7 +1178,8 @@ RTGL1::FrameGeneratorFSR3::FrameGeneratorFSR3( VkDevice                         
                                                VkPhysicalDevice                   _physDevice,
                                                std::shared_ptr< MemoryAllocator > _allocator,
                                                std::shared_ptr< Queues >          _queues,
-                                               VkFormat                           _backBufferFormat )
+                                               VkFormat                           _backBufferFormat,
+                                               float                              _worldScale )
 {
 }
 
