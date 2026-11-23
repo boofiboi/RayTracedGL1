@@ -52,6 +52,11 @@ void RTGL1::VertexPreprocessing::Preprocess( VkCommandBuffer            cmd,
                                              ASManager&                 asManager,
                                              const ShVertPreprocessing& push )
 {
+    if( push.tlasInstanceCount == 0 )
+    {
+        return;
+    }
+
     CmdLabel label( cmd, "Vertex preprocessing" );
 
 

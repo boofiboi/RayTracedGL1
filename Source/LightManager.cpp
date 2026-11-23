@@ -251,15 +251,53 @@ void RTGL1::LightManager::PrepareForFrame( VkCommandBuffer cmd, uint32_t frameIn
     // TODO: similar system to just swap desc sets, instead of actual copying
     if( GetLightArrayEnd( regLightCount_Prev, dirLightCount_Prev ) > 0 )
     {
+        VkDeviceSize prevCopySize = GetLightArrayEnd( regLightCount_Prev, dirLightCount_Prev ) *
+                                    sizeof( ShLightEncoded );
+
         VkBufferCopy info = {
             .srcOffset = 0,
             .dstOffset = 0,
-            .size      = GetLightArrayEnd( regLightCount_Prev, dirLightCount_Prev ) *
-                    sizeof( ShLightEncoded ),
+            .size      = prevCopySize,
         };
 
         vkCmdCopyBuffer(
             cmd, lightsBuffer->GetDeviceLocal(), lightsBuffer_Prev.GetBuffer(), 1, &info );
+
+        VkBufferMemoryBarrier prevBarriers[ 2 ] = {
+            {
+                .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+                .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .buffer              = lightsBuffer_Prev.GetBuffer(),
+                .offset              = 0,
+                .size                = prevCopySize,
+            },
+            {
+                .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+                .srcAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
+                .dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .buffer              = lightsBuffer->GetDeviceLocal(),
+                .offset              = 0,
+                .size                = prevCopySize,
+            },
+        };
+
+        vkCmdPipelineBarrier( cmd,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT |
+                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                                  VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                              0,
+                              0,
+                              nullptr,
+                              2,
+                              prevBarriers,
+                              0,
+                              nullptr );
     }
 
     memset( prevToCurIndex->GetMapped( frameIndex ),

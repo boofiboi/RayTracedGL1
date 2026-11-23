@@ -448,6 +448,12 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
     if( frameGenerator->IsAvailable() )
     {
         swapchain->SetFrameGenerator( frameGenerator->GetSwapchainHooks() );
+        cmdManager->SetPreWaitIdleCallback( [ fg = frameGenerator ]() {
+            if( fg && fg->GetSwapchainHooks() && fg->GetSwapchainHooks()->IsActive() )
+            {
+                fg->GetSwapchainHooks()->WaitForPresents();
+            }
+        } );
     }
 
     sharpening = std::make_shared< Sharpening >( 
@@ -540,7 +546,7 @@ RTGL1::VulkanDevice::VulkanDevice( const RgInstanceCreateInfo* info )
 
 RTGL1::VulkanDevice::~VulkanDevice()
 {
-    vkDeviceWaitIdle( device );
+    cmdManager->WaitDeviceIdle();
 
     effectSrgbEncode.reset();
     effectCrtDecode.reset();

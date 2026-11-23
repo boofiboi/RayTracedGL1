@@ -74,6 +74,7 @@ public:
     void                  WaitComputeIdle();
     void                  WaitTransferIdle();
     void                  WaitDeviceIdle();
+    void                  SetPreWaitIdleCallback( std::function< void() > callback );
 
 private:
     struct AllocatedCmds
@@ -95,12 +96,12 @@ private:
 
     const uint32_t                                 cmdAllocStep = 16;
 
-    // allocated cmds
     AllocatedCmds                                  graphicsCmds[ MAX_FRAMES_IN_FLIGHT ];
     AllocatedCmds                                  computeCmds[ MAX_FRAMES_IN_FLIGHT ];
     AllocatedCmds                                  transferCmds[ MAX_FRAMES_IN_FLIGHT ];
 
     std::shared_ptr< Queues >                      queues;
+    std::function< void() >                        preWaitIdle;
 };
 
 }

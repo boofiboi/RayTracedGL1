@@ -10,6 +10,17 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: release
+            devmode: 'OFF'
+            artifact_name: RayTracedGL1-Artifact
+          - variant: devmode
+            devmode: 'ON'
+            artifact_name: RayTracedGL1-Artifact-Dev
+    name: Build Windows (${{ matrix.variant }})
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,9 +58,15 @@ jobs:
             -DRG_WITH_SURFACE_WIN32=ON `
             -DRG_WITH_AMD_FSR3=ON `
             -DRG_WITH_NVIDIA_NRD=ON `
+            -DRG_WITH_DEVMODE=${{ matrix.devmode }} `
+            -DNRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS=OFF `
+            -DNRI_ENABLE_VALIDATION_SUPPORT=OFF `
             -DRG_WITH_SHADERS=OFF `
             -DRG_WITH_EXAMPLES=OFF `
-            -DCMAKE_CXX_FLAGS_RELEASE="/O2 /Ob3 /Ot /Oi /GL /Gw /Gy /fp:fast /arch:AVX2 /DNDEBUG"
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON `
+            -DCMAKE_CXX_FLAGS_RELEASE="/O2 /Ob3 /Ot /Oi /GL /Gw /Gy /fp:fast /arch:AVX2 /DNDEBUG" `
+            -DCMAKE_C_FLAGS_RELEASE="/O2 /Ob3 /Ot /Oi /GL /Gw /Gy /fp:fast /arch:AVX2 /DNDEBUG" `
+            -DCMAKE_SHARED_LINKER_FLAGS_RELEASE="/LTCG /OPT:REF /OPT:ICF"
 
       - name: Build
         shell: pwsh
@@ -79,7 +96,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RayTracedGL1-Artifact
+          name: ${{ matrix.artifact_name }}
           path: artifact_rtgl1
 
   build-linux:
@@ -126,8 +143,14 @@ jobs:
             -DRG_WITH_SURFACE_XLIB=ON \
             -DRG_WITH_AMD_FSR3=ON \
             -DRG_WITH_NVIDIA_NRD=ON \
+            -DRG_WITH_DEVMODE=OFF \
+            -DNRI_ENABLE_DEBUG_NAMES_AND_ANNOTATIONS=OFF \
+            -DNRI_ENABLE_VALIDATION_SUPPORT=OFF \
             -DRG_WITH_SHADERS=OFF \
-            -DRG_WITH_EXAMPLES=OFF
+            -DRG_WITH_EXAMPLES=OFF \
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+            -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -mavx2 -mfma -mf16c" \
+            -DCMAKE_C_FLAGS_RELEASE="-O3 -DNDEBUG -mavx2 -mfma -mf16c"
 
       - name: Build
         run: |

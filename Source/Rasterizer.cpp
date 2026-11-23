@@ -227,8 +227,8 @@ struct RasterDrawParams
     VkBuffer                          indexBuffer{ VK_NULL_HANDLE };
     std::span< VkDescriptorSet >      descSets{};
     float*                            defaultViewProj{ nullptr };
-    // not the best way to optionally draw lens flares with a world pass
     std::optional< RasterLensFlares > flaresParams{};
+    bool                              needClear{ false };
 };
 
 }
@@ -274,6 +274,7 @@ void RTGL1::Rasterizer::DrawSkyToAlbedo( VkCommandBuffer               cmd,
         .indexBuffer     = collector->GetIndexBuffer(),
         .descSets        = sets,
         .defaultViewProj = defaultSkyViewProj,
+        .needClear       = true,
     };
 
     Draw( cmd, frameIndex, params );
@@ -428,8 +429,8 @@ void RTGL1::Rasterizer::Draw( VkCommandBuffer         cmd,
         .renderPass      = drawParams.renderPass,
         .framebuffer     = drawParams.framebuffer,
         .renderArea      = defaultRenderArea,
-        .clearValueCount = std::size( clear ),
-        .pClearValues    = clear,
+        .clearValueCount = drawParams.needClear ? uint32_t( std::size( clear ) ) : 0,
+        .pClearValues    = drawParams.needClear ? clear : nullptr,
     };
 
     vkCmdBeginRenderPass( cmd, &beginInfo, VK_SUBPASS_CONTENTS_INLINE );

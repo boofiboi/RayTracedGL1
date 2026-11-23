@@ -676,7 +676,7 @@ void RTGL1::ASManager::SubmitStaticGeometry( StaticGeometryToken& token )
     assert( token );
     token = {};
 
-    vkDeviceWaitIdle( device );
+    cmdManager->WaitDeviceIdle();
 
     typedef VertexCollectorFilterTypeFlagBits FT;
 
@@ -1199,6 +1199,9 @@ void RTGL1::ASManager::CopyDynamicDataToPrevBuffers( VkCommandBuffer cmd, uint32
     uint32_t vertCount  = collectorDynamic[ frameIndex ]->GetCurrentVertexCount();
     uint32_t indexCount = collectorDynamic[ frameIndex ]->GetCurrentIndexCount();
 
+    std::array< VkBufferMemoryBarrier, 4 > barriers     = {};
+    uint32_t                               barrierCount = 0;
+
     if( vertCount > 0 )
     {
         VkBufferCopy vertRegion = {
@@ -1212,6 +1215,28 @@ void RTGL1::ASManager::CopyDynamicDataToPrevBuffers( VkCommandBuffer cmd, uint32
                          previousDynamicPositions.GetBuffer(),
                          1,
                          &vertRegion );
+
+        barriers[ barrierCount++ ] = {
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = previousDynamicPositions.GetBuffer(),
+            .offset              = 0,
+            .size                = vertCount * sizeof( ShVertex ),
+        };
+
+        barriers[ barrierCount++ ] = {
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
+            .dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = collectorDynamic[ frameIndex ]->GetVertexBuffer(),
+            .offset              = 0,
+            .size                = vertCount * sizeof( ShVertex ),
+        };
     }
 
     if( indexCount > 0 )
@@ -1227,6 +1252,44 @@ void RTGL1::ASManager::CopyDynamicDataToPrevBuffers( VkCommandBuffer cmd, uint32
                          previousDynamicIndices.GetBuffer(),
                          1,
                          &indexRegion );
+
+        barriers[ barrierCount++ ] = {
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = previousDynamicIndices.GetBuffer(),
+            .offset              = 0,
+            .size                = indexCount * sizeof( uint32_t ),
+        };
+
+        barriers[ barrierCount++ ] = {
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_READ_BIT,
+            .dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = collectorDynamic[ frameIndex ]->GetIndexBuffer(),
+            .offset              = 0,
+            .size                = indexCount * sizeof( uint32_t ),
+        };
+    }
+
+    if( barrierCount > 0 )
+    {
+        vkCmdPipelineBarrier( cmd,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT |
+                                  VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR |
+                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              0,
+                              0,
+                              nullptr,
+                              barrierCount,
+                              barriers.data(),
+                              0,
+                              nullptr );
     }
 }
 

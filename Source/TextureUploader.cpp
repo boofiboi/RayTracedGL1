@@ -399,7 +399,9 @@ void TextureUploader::PrepareImage( VkImage           image,
 
         Utils::BarrierImage( cmd,
                              image,
-                             VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT,
+                             curLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                                 ? VK_ACCESS_TRANSFER_READ_BIT
+                                 : VK_ACCESS_TRANSFER_WRITE_BIT,
                              VK_ACCESS_SHADER_READ_BIT,
                              curLayout,
                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

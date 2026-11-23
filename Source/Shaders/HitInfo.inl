@@ -283,8 +283,11 @@ ShHitInfo getHitInfoBounce(
     const float clipSpaceDepthAX = dot(globalUniform.projection[2], viewSpacePosAX);
     const float clipSpaceDepthAY = dot(globalUniform.projection[2], viewSpacePosAY);
 
-    const vec3 ndcCur            = clipSpacePosCur.xyz  / clipSpacePosCur.w;
-    const vec3 ndcPrev           = clipSpacePosPrev.xyz / clipSpacePosPrev.w;
+    const bool validMotionCur    = clipSpacePosCur.w > 1e-4;
+    const bool validMotionPrev   = clipSpacePosPrev.w > 1e-4;
+
+    const vec3 ndcCur            = validMotionCur  ? (clipSpacePosCur.xyz  / clipSpacePosCur.w)  : vec3(0.0, 0.0, 1.0);
+    const vec3 ndcPrev           = validMotionPrev ? (clipSpacePosPrev.xyz / clipSpacePosPrev.w) : vec3(0.0, 0.0, 1.0);
 
     const vec2 screenSpaceCur    = ndcCur.xy  * 0.5 + 0.5;
     const vec2 screenSpacePrev   = ndcPrev.xy * 0.5 + 0.5;
@@ -303,8 +306,12 @@ ShHitInfo getHitInfoBounce(
     const vec4 viewSpacePosPrev  = globalUniform.viewPrev * vec4(virtualPosForMotion, 1.0);
     const vec4 clipSpacePosCur   = globalUniform.projection     * viewSpacePosCur;
     const vec4 clipSpacePosPrev  = globalUniform.projectionPrev * viewSpacePosPrev;
-    const vec3 ndcCur            = clipSpacePosCur.xyz  / clipSpacePosCur.w;
-    const vec3 ndcPrev           = clipSpacePosPrev.xyz / clipSpacePosPrev.w;
+
+    const bool validMotionCur    = clipSpacePosCur.w > 1e-4;
+    const bool validMotionPrev   = clipSpacePosPrev.w > 1e-4;
+
+    const vec3 ndcCur            = validMotionCur  ? (clipSpacePosCur.xyz  / clipSpacePosCur.w)  : vec3(0.0, 0.0, 1.0);
+    const vec3 ndcPrev           = validMotionPrev ? (clipSpacePosPrev.xyz / clipSpacePosPrev.w) : vec3(0.0, 0.0, 1.0);
     const vec2 screenSpaceCur    = ndcCur.xy  * 0.5 + 0.5;
     const vec2 screenSpacePrev   = ndcPrev.xy * 0.5 + 0.5;
 
@@ -319,8 +326,11 @@ ShHitInfo getHitInfoBounce(
 
 
 #if defined(HITINFO_INL_PRIM) || defined(HITINFO_INL_RFL)
-    // difference in screen-space
-    motion = (screenSpacePrev - screenSpaceCur);
+    motion = (validMotionCur && validMotionPrev) ? (screenSpacePrev - screenSpaceCur) : vec2(2.0);
+    if (any(isnan(motion)) || any(isinf(motion)))
+    {
+        motion = vec2(2.0);
+    }
 #endif
 
 
@@ -332,7 +342,11 @@ ShHitInfo getHitInfoBounce(
 
 
 #if defined(HITINFO_INL_PRIM) || defined(HITINFO_INL_RFL)
-    motionViewZ = abs(viewSpacePosPrev.z) - abs(viewSpacePosCur.z);
+    motionViewZ = (validMotionCur && validMotionPrev) ? (abs(viewSpacePosPrev.z) - abs(viewSpacePosCur.z)) : 0.0;
+    if (isnan(motionViewZ) || isinf(motionViewZ))
+    {
+        motionViewZ = 0.0;
+    }
 #endif 
 
 

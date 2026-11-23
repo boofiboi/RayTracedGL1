@@ -110,6 +110,21 @@ VkCommandBuffer RTGL1::VulkanDevice::BeginFrame( const RgStartFrameInfo& info )
 #endif
 
     VkCommandBuffer cmd = cmdManager->StartGraphicsCmd();
+    {
+        VkMemoryBarrier2 frameSyncBarrier = {
+            .sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+        };
+        VkDependencyInfo frameSyncDep = {
+            .sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .memoryBarrierCount = 1,
+            .pMemoryBarriers    = &frameSyncBarrier,
+        };
+        svkCmdPipelineBarrier2KHR( cmd, &frameSyncDep );
+    }
     BeginCmdLabel( cmd, "Prepare for frame" );
 
     textureManager->TryHotReload( cmd, frameIndex );
@@ -574,6 +589,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 
     {
         lightGrid->Build( cmd, frameIndex, uniform, blueNoise, lightManager );
+        lightManager->BarrierLightGrid( cmd, frameIndex );
 
         decalManager->SubmitForFrame( cmd, frameIndex );
         portalList->SubmitForFrame( cmd, frameIndex );
@@ -602,8 +618,6 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         pathTracer->TracePrimaryRays( params );
 
         decalManager->Draw( cmd, frameIndex, uniform, framebuffers, textureManager );
-
-        lightManager->BarrierLightGrid( cmd, frameIndex );
 
         if( uniform->GetData()->reflectRefractMaxDepth > 0 )
         {
@@ -658,6 +672,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
 
     FramebufferImageIndex accum = FramebufferImageIndex::FB_IMAGE_INDEX_FINAL;
     bool                  upscaleTechniqueChanged = false;
+    bool                  resetUpscalerForFrame   = false;
     {
         const auto& params = AccessParams< RgDrawFrameRenderResolutionParams >( drawInfo );
         double      timeDelta = std::clamp< double >( currentFrameTime - previousFrameTime, 0.0005, 0.25 );
@@ -666,6 +681,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
         prevUpscaleTechnique    = renderResolution.GetUpscaleTechnique();
 
         const bool resetUpscaler = params.resetUpscalerHistory || forceUpscalerReset || forceHistoryReset || upscaleTechniqueChanged;
+        resetUpscalerForFrame    = resetUpscaler;
         forceUpscalerReset       = drawInfo.presentPrevFrame;
         forceHistoryReset        = false;
 
@@ -809,7 +825,7 @@ void RTGL1::VulkanDevice::Render( VkCommandBuffer cmd, const RgDrawFrameInfo& dr
                                           drawInfo.cameraNear,
                                           drawInfo.cameraFar,
                                           drawInfo.fovYRadians,
-                                          params.resetUpscalerHistory || drawInfo.presentPrevFrame || upscaleTechniqueChanged,
+                                          resetUpscalerForFrame || drawInfo.presentPrevFrame,
                                           uniform->GetData()->invView,
                                           frameId );
         }

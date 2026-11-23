@@ -437,6 +437,9 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
     VkAccessFlags swapchainAccessMask  = ( fgHooks && fgHooks->IsActive() )
                                               ? VK_ACCESS_SHADER_READ_BIT
                                               : 0;
+    VkPipelineStageFlags2 swapchainDstStage = ( fgHooks && fgHooks->IsActive() )
+                                                  ? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+                                                  : VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
 
     {
         VkImageMemoryBarrier2 bs[] = {
@@ -522,7 +525,7 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
                 .pNext               = nullptr,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_READ_BIT,
-                .dstStageMask        = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+                .dstStageMask        = swapchainDstStage,
                 .dstAccessMask       = static_cast< VkAccessFlags2 >( swapchainAccessMask ),
                 .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 .newLayout           = swapchainImageLayout,
@@ -540,7 +543,7 @@ void RTGL1::Swapchain::BlitPreviousForPresent( VkCommandBuffer cmd )
                 .pNext               = nullptr,
                 .srcStageMask        = VK_PIPELINE_STAGE_2_COPY_BIT,
                 .srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                .dstStageMask        = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+                .dstStageMask        = swapchainDstStage,
                 .dstAccessMask       = static_cast< VkAccessFlags2 >( swapchainAccessMask ),
                 .oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 .newLayout           = swapchainImageLayout,
@@ -588,6 +591,11 @@ bool RTGL1::Swapchain::TryRecreate( const VkExtent2D& newExtent, bool vsync, boo
         isVsync    = vsync;
         isFrameGen = frameGen;
         return false;
+    }
+
+    if( fgHooks && fgHooks->IsActive() )
+    {
+        fgHooks->WaitForPresents();
     }
 
     cmdManager->WaitDeviceIdle();
@@ -745,6 +753,11 @@ void RTGL1::Swapchain::Destroy()
 
 VkSwapchainKHR RTGL1::Swapchain::DestroyWithoutSwapchain()
 {
+    if( fgHooks && fgHooks->IsActive() )
+    {
+        fgHooks->WaitForPresents();
+    }
+
     vkDeviceWaitIdle( device );
 
     if( swapchain != VK_NULL_HANDLE )

@@ -138,10 +138,13 @@ void PathTracer::TraceReflectionRefractionRays( const TraceParams& params )
     using FI = FramebufferImageIndex;
     FI fs[]  = {
         FI::FB_IMAGE_INDEX_ALBEDO,
+        FI::FB_IMAGE_INDEX_IS_SKY,
         FI::FB_IMAGE_INDEX_NORMAL,
         FI::FB_IMAGE_INDEX_METALLIC_ROUGHNESS,
         FI::FB_IMAGE_INDEX_DEPTH_WORLD,
         FI::FB_IMAGE_INDEX_MOTION,
+        FI::FB_IMAGE_INDEX_MOTION_DLSS,
+        FI::FB_IMAGE_INDEX_REACTIVITY,
         FI::FB_IMAGE_INDEX_SURFACE_POSITION,
         FI::FB_IMAGE_INDEX_VISIBILITY_BUFFER,
         FI::FB_IMAGE_INDEX_VIEW_DIRECTION,
@@ -149,6 +152,8 @@ void PathTracer::TraceReflectionRefractionRays( const TraceParams& params )
         FI::FB_IMAGE_INDEX_GLASS_REFLECTION,
         FI::FB_IMAGE_INDEX_PRIMARY_TO_REFL_REFR,
         FI::FB_IMAGE_INDEX_WATER_PARAMS,
+        FI::FB_IMAGE_INDEX_SCREEN_EMIS_R_T,
+        FI::FB_IMAGE_INDEX_ACID_FOG_R_T,
     };
     params.framebuffers->BarrierMultiple( params.cmd, params.frameIndex, fs );
 

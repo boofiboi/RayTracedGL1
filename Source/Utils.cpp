@@ -126,12 +126,16 @@ void Utils::ASBuildMemoryBarrier( VkCommandBuffer cmd )
     barrier.sType           = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     barrier.srcAccessMask   = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
                             VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-    barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+    barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                            VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
+                            VK_ACCESS_SHADER_READ_BIT |
+                            VK_ACCESS_SHADER_WRITE_BIT;
 
-    // wait for all building
     vkCmdPipelineBarrier( cmd,
                           VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                          VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                          VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR |
+                              VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR |
+                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                           0,
                           1,
                           &barrier,

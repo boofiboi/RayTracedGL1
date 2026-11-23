@@ -130,7 +130,7 @@ void RTGL1::Denoiser::RecreateNrd( uint32_t width, uint32_t height )
     }
     integrationDesc.resourceWidth = static_cast< uint16_t >( width );
     integrationDesc.resourceHeight = static_cast< uint16_t >( height );
-    integrationDesc.queuedFrameNum = FRAMEBUFFERS_HISTORY_LENGTH;
+    integrationDesc.queuedFrameNum = MAX_FRAMES_IN_FLIGHT;
 
     const nrd::DenoiserDesc denoiserDescs[] = {
         { 0, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR },

@@ -582,7 +582,8 @@ bool RTGL1::VertexCollector::CopyFromStaging( VkCommandBuffer cmd )
             barriers[ barrierCount++ ] = {
                 .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                 .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+                                       VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .buffer              = bufVertices.deviceLocal->GetBuffer(),
@@ -597,7 +598,8 @@ bool RTGL1::VertexCollector::CopyFromStaging( VkCommandBuffer cmd )
             barriers[ barrierCount++ ] = {
                 .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
                 .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                .dstAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+                                       VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                 .buffer              = bufIndices.deviceLocal->GetBuffer(),
@@ -612,7 +614,8 @@ bool RTGL1::VertexCollector::CopyFromStaging( VkCommandBuffer cmd )
             vkCmdPipelineBarrier( cmd,
                                   VK_PIPELINE_STAGE_TRANSFER_BIT,
                                   VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-                                      VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                                      VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR |
+                                      VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
                                   0,
                                   0,
                                   nullptr,

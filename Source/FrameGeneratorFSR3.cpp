@@ -255,6 +255,12 @@ struct RTGL1::FrameGeneratorFSR3::Impl
             return;
         }
 
+        if( prevFrameGenEnabled )
+        {
+            DisableFgLocked( currentSwapchain );
+            prevFrameGenEnabled = false;
+        }
+
         ffxDispatchDescFrameGenerationSwapChainWaitForPresentsVK waitDesc = {};
         waitDesc.header.type = FFX_API_DISPATCH_DESC_TYPE_FGSWAPCHAIN_WAIT_FOR_PRESENTS_VK;
         DispatchCall( &swapchainContext, &waitDesc.header );
@@ -397,7 +403,7 @@ struct RTGL1::FrameGeneratorFSR3::Impl
         ffxCreateContextDescFrameGeneration createFg = {};
         createFg.header.type      = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
         createFg.header.pNext     = &hudlessDesc.header;
-        createFg.flags            = FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT;
+        createFg.flags            = 0;
 #ifndef NDEBUG
         createFg.flags |= FFX_FRAMEGENERATION_ENABLE_DEBUG_CHECKING;
 #endif
@@ -616,7 +622,7 @@ VkResult RTGL1::FrameGeneratorFSR3::CreateSwapchain( const VkSwapchainCreateInfo
 
     ffxCreateContextDescFrameGenerationSwapChainModeVK modeDesc = {};
     modeDesc.header.type           = FFX_API_CREATE_CONTEXT_DESC_TYPE_FGSWAPCHAIN_MODE_VK;
-    modeDesc.composeOnPresentQueue = true;
+    modeDesc.composeOnPresentQueue = false;
 
 #ifdef _WIN32
     ffxCreateContextDescFrameGenerationSwapChainVersionVK scVersionDesc = {};
@@ -1154,7 +1160,7 @@ void RTGL1::FrameGeneratorFSR3::ConfigureFrame( VkSwapchainKHR swapchain,
     };
     configDesc.frameGenerationCallbackUserContext = impl.get();
     configDesc.frameGenerationEnabled             = frameGenEnabled;
-    configDesc.allowAsyncWorkloads                = true;
+    configDesc.allowAsyncWorkloads                = false;
     configDesc.HUDLessColor                       = hudlessRes;
     configDesc.flags                              = 0;
     configDesc.onlyPresentGenerated               = false;

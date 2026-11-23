@@ -253,17 +253,26 @@ def main():
             print("> Building " + os.path.basename(filename))
 
             r = subprocess.run([
-                "glslc", "--target-env=vulkan1.2"
+                "glslc", "-O", "--target-env=vulkan1.2"
                 ] + getDependentFoldersProcArg() + [
                 filename, 
                 "-o", targetSpvFile], 
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-            if len(r.stdout) > 0:
+            if r.returncode != 0 and len(r.stdout) == 0:
+                r = subprocess.run([
+                    "glslc", "--target-env=vulkan1.2"
+                    ] + getDependentFoldersProcArg() + [
+                    filename,
+                    "-o", targetSpvFile],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+            if r.returncode != 0 or len(r.stdout) > 0:
+                errOut = r.stdout if len(r.stdout) > 0 else ("glslc failed with exit code " + str(r.returncode))
                 if powerShellOutput:
-                    printInPowerShell(r.stdout, "Red")
+                    printInPowerShell(errOut, "Red")
                 else:
-                    print(r.stdout)
+                    print(errOut)
 
                 msgErrorCount += 1
                 if filename in cache:

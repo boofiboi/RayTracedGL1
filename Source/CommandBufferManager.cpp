@@ -215,23 +215,44 @@ void RTGL1::CommandBufferManager::Submit( VkCommandBuffer      cmd,
 
 void RTGL1::CommandBufferManager::WaitGraphicsIdle()
 {
+    if( preWaitIdle )
+    {
+        preWaitIdle();
+    }
     VkResult r = vkQueueWaitIdle( queues->GetGraphics() );
     VK_CHECKERROR( r );
 }
 
 void RTGL1::CommandBufferManager::WaitComputeIdle()
 {
+    if( preWaitIdle )
+    {
+        preWaitIdle();
+    }
     VkResult r = vkQueueWaitIdle( queues->GetCompute() );
     VK_CHECKERROR( r );
 }
 
 void RTGL1::CommandBufferManager::WaitTransferIdle()
 {
+    if( preWaitIdle )
+    {
+        preWaitIdle();
+    }
     VkResult r = vkQueueWaitIdle( queues->GetTransfer() );
     VK_CHECKERROR( r );
 }
 
 void RTGL1::CommandBufferManager::WaitDeviceIdle()
 {
+    if( preWaitIdle )
+    {
+        preWaitIdle();
+    }
     vkDeviceWaitIdle( device );
+}
+
+void RTGL1::CommandBufferManager::SetPreWaitIdleCallback( std::function< void() > callback )
+{
+    preWaitIdle = std::move( callback );
 }

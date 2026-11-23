@@ -65,6 +65,10 @@ bool classicShading_PRIM();
 
 vec2 getMotionVectorForUpscaler(const vec2 motionCurToPrev)
 {
+    if (any(isnan(motionCurToPrev)) || any(isinf(motionCurToPrev)) || any(greaterThan(abs(motionCurToPrev), vec2(1.0))))
+    {
+        return vec2(0.0);
+    }
     return motionCurToPrev;
 }
 
@@ -81,7 +85,7 @@ vec2 getMotionForInfinitePoint(const ivec2 regularPix)
     vec4 clipSpacePosCur   = globalUniform.projection     * viewSpacePosCur;
     vec4 clipSpacePosPrev  = globalUniform.projectionPrev * viewSpacePosPrev;
 
-    if (clipSpacePosPrev.w <= 1e-4)
+    if (clipSpacePosCur.w <= 1e-4 || clipSpacePosPrev.w <= 1e-4)
     {
         return vec2(2.0);
     }
@@ -100,13 +104,12 @@ void storeSky(
 #ifdef RAYGEN_PRIMARY_SHADER
     float firstHitDepthNDC )
 #else
-    bool wasSplit )
+    bool wasSplit, bool isFirstPerson )
 #endif
 {
     imageStore( framebufIsSky, pix, ivec4( 1 ) );
 
     {
-        // check if was already in G-buffer after rasterization pass
         vec3 skyColor =
             calculateSkyAndStoreToAlbedo
                 ? getSkyAlbedo( rayDir )
@@ -114,7 +117,6 @@ void storeSky(
                 
         if( !classicShading_PRIM() )
         {
-            // to hdr
             skyColor = adjustSky( skyColor );
         }
 
@@ -127,7 +129,14 @@ void storeSky(
     imageStoreNormal(                       pix, vec3(0.0));
     imageStore(framebufMetallicRoughness,   pix, vec4(0.0));
     imageStore(framebufDepthWorld,          pix, vec4(MAX_RAY_LENGTH * 2.0));
+#ifdef RAYGEN_PRIMARY_SHADER
     imageStore(framebufMotion,              pix, vec4(m, 0.0, 0.0));
+#else
+    if (!isFirstPerson)
+    {
+        imageStore(framebufMotion,          pix, vec4(m, 0.0, 0.0));
+    }
+#endif
     imageStore(framebufSurfacePosition,     pix, vec4(SURFACE_POSITION_INCORRECT));
     imageStore(framebufVisibilityBuffer,    pix, vec4(UINT32_MAX));
     imageStore(framebufViewDirection,       pix, vec4(rayDir, 0.0));
@@ -136,14 +145,14 @@ void storeSky(
 #ifdef RAYGEN_PRIMARY_SHADER
     imageStore(framebufPrimaryToReflRefr,   pix, uvec4(0, 0, PORTAL_INDEX_NONE, 0));
     imageStore(framebufDepthGrad,           pix, vec4(0.0));
-    imageStore(framebufDepthNdc,            getRegularPixFromCheckerboardPix(pix), vec4(clamp(firstHitDepthNDC, 0.0, 1.0)));
+    imageStore(framebufDepthNdc,            getRegularPixFromCheckerboardPix(pix), vec4(isnan(firstHitDepthNDC) ? 1.0 : clamp(firstHitDepthNDC, 0.0, 1.0)));
     imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(m), 0.0, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, 0.0));
     imageStore(framebufGlassReflection,     getRegularPixFromCheckerboardPix(pix), vec4(0.0));
     imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(0.0));
 #else
     imageStore(framebufThroughput,          pix, vec4(throughput, wasSplit ? 1.0 : -1.0));
-    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(wasSplit ? UPSCALER_REACTIVITY_REFLREFR : 0.25));
+    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(UPSCALER_REACTIVITY_REFLREFR));
 #endif
 }
 
@@ -395,8 +404,8 @@ void main()
 
     // save info for rasterization and upscalers (FSR/DLSS), but only about primary surface,
     // as reflections/refraction only may be losely represented via rasterization
-    imageStore(framebufDepthNdc,            getRegularPixFromCheckerboardPix(pix), vec4(clamp(firstHitDepthNDC, 0.0, 1.0)));
-    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), motionViewZ, 0.0));
+    imageStore(framebufDepthNdc,            getRegularPixFromCheckerboardPix(pix), vec4(isnan(firstHitDepthNDC) ? 1.0 : clamp(firstHitDepthNDC, 0.0, 1.0)));
+    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), clamp(motionViewZ, -65000.0, 65000.0), 0.0));
     imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(0.0));
 }
 #endif
@@ -459,6 +468,9 @@ void main()
     vec3        throughput                  = texelFetch(framebufThroughput_Sampler, pix, 0).rgb;
     ShPayload currentPayload;
     currentPayload.instIdAndIndex           = primaryToReflRefrBuf.g;
+    const bool isFirstPerson =
+        ( unpackInstanceIdAndCustomIndex( primaryToReflRefrBuf.g ).y &
+          INSTANCE_CUSTOM_INDEX_FLAG_FIRST_PERSON ) != 0;
 
 
 
@@ -673,7 +685,7 @@ void main()
             fogAccum += getWaterVolumetricFog(currentRayMedia, currentWaterColor, trans) * throughput;
             throughput *= trans;
 
-            storeSky(pix, rayDir, true, throughput, fogAccum, wasSplit);
+            storeSky(pix, rayDir, true, throughput, fogAccum, wasSplit, isFirstPerson);
             imageStore(framebufScreenEmisRT, getRegularPixFromCheckerboardPix(pix), vec4(screenEmission, 0.0));
             imageStore(framebufGlassReflection, getRegularPixFromCheckerboardPix(pix), vec4(glassReflection, 0.0));
             return;  
@@ -716,13 +728,15 @@ void main()
     imageStoreNormal(                       pix, h.normal);
     imageStore(framebufMetallicRoughness,   pix, vec4(h.metallic, h.roughness, 0, 0));
     imageStore(framebufDepthWorld,          pix, vec4(fullPathLength));
-    imageStore(framebufMotion,              pix, vec4(motionCurToPrev, motionDepthLinearCurToPrev, 0.0));
+    if (!isFirstPerson)
+    {
+        imageStore(framebufMotion,          pix, vec4(motionCurToPrev, motionDepthLinearCurToPrev, 0.0));
+    }
     imageStore(framebufSurfacePosition,     pix, vec4(h.hitPosition, uintBitsToFloat(h.instCustomIndex)));
     imageStore(framebufVisibilityBuffer,    pix, packVisibilityBuffer(currentPayload));
     imageStore(framebufViewDirection,       pix, vec4(rayDir, 0.0));
     imageStore(framebufThroughput,          pix, vec4(throughput, wasSplit ? 1.0 : -1.0));
     imageStore(framebufGlassReflection,     getRegularPixFromCheckerboardPix(pix), vec4(glassReflection, 0.0));
-    imageStore(framebufMotionDlss,          getRegularPixFromCheckerboardPix(pix), vec4(getMotionVectorForUpscaler(motionCurToPrev), motionViewZ, 0.0));
-    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(wasSplit ? UPSCALER_REACTIVITY_REFLREFR : 0.25));
+    imageStore(framebufReactivity,          getRegularPixFromCheckerboardPix(pix), vec4(UPSCALER_REACTIVITY_REFLREFR));
 }
 #endif
